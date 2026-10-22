@@ -107,7 +107,7 @@ class Battle {
     const skills = h.skills.map((id) => ({ ...h.skillDefs[id], id, cdLeft: 0 }));
     return {
       id: 'hero', side: 'ally', isPlayer: true, name: '你', sprite: h.sprite,
-      x, y, hp: h.hp, maxHp: h.maxHp, atk: h.atk, def: h.def, spd: h.spd, mov: h.mov,
+      x, y, hp: h.hp, maxHp: h.maxHp, atk: h.atk, def: h.def, spd: h.spd, mov: h.mov + (this.opts.faith === 'hermes' ? 2 : 0),
       range: [1, 1], skills, charge: this.opts.startCharge || 0, facing: 1,
       ox: 0, oy: 0, flash: 0,
     };
@@ -115,9 +115,11 @@ class Battle {
 
   makeCompanion(x, y) {
     const c = COMPANION;
+    const cerb = this.opts.faith === 'cerberus';
+    const hp = c.hp + (cerb ? 10 : 0);
     return {
       id: 'dog', side: 'ally', isCompanion: true, name: c.name, sprite: c.sprite,
-      x, y, hp: c.hp, maxHp: c.hp, atk: c.atk, def: c.def, spd: c.spd, mov: c.mov,
+      x, y, hp, maxHp: hp, atk: c.atk + (cerb ? 3 : 0), def: c.def, spd: c.spd, mov: c.mov,
       range: c.range, skills: [], facing: 1, ox: 0, oy: 0, flash: 0,
     };
   }
@@ -137,7 +139,7 @@ class Battle {
       // 鏡中人：照著你的樣子長出來
       u.atk = this.heroBase.atk; u.def = this.heroBase.def; u.sprite = this.heroBase.sprite; u.mirror = true;
     }
-    u.stunned = 0; u.blind = 0;
+    u.stunned = 0; u.blind = 0; u.charmed = 0;
     u.cursed = 0; u.confused = 0; u.defending = false; u.soul = false; u.gone = false;
     this.units.push(u);
   }
@@ -238,6 +240,9 @@ class Battle {
         await sleep(300);
       }
     }
+    if (faith === 'sedna') {
+      for (const e of this.living('enemy').filter((e) => this.tile(e.x, e.y) === 'water')) await this.damage(e, 2, null, '#4a90d0');
+    }
     if (faith === 'apollo') this.ui.battleLog(this.isDay() ? '日輪升起：白天。' : '太陽落下：黑夜。');
   }
 
@@ -306,9 +311,19 @@ class Battle {
     for (const s of u.skills) if (s.cdLeft > 0) s.cdLeft--;
     if (u.side === 'ally' && u.isPlayer) {
       await this.playerTurn(u);
+      // 赫爾墨斯的大招：再行動一次
+      while (this.extraTurn && !this.ended && !u.soul) {
+        this.extraTurn = false;
+        this.ui.battleLog('神行：你再行動一次。');
+        await this.playerTurn(u);
+      }
     } else if (u.side === 'ally') {
       await sleep(250);
       await this.companionTurn(u);
+      if (u.charmed > 0) {
+        u.charmed--;
+        if (!u.charmed) { u.side = 'enemy'; this.ui.battleLog(`${u.name}清醒過來了。`); }
+      }
     } else {
       await sleep(250);
       await this.enemyTurn(u);
@@ -412,7 +427,10 @@ class Battle {
           if (d >= r[0] && d <= r[1] && this.tile(x, y) !== 'wall') add(x, y);
         }
       } else {
-        for (const e of this.living('enemy')) { const d = dist(u, e); if (d >= r[0] && d <= r[1]) add(e.x, e.y); }
+        for (const e of this.living('enemy')) {
+          if (this.opts.faith === 'asmo' && e.boss) continue;
+          const d = dist(u, e); if (d >= r[0] && d <= r[1]) add(e.x, e.y);
+        }
       }
     } else if (id.startsWith('skill:')) {
       const s = u.skills.find((k) => 'skill:' + k.id === id);
@@ -476,7 +494,7 @@ class Battle {
       await this.ultimate(u, x, y);
     } else if (id.startsWith('skill:')) {
       const s = u.skills.find((k) => 'skill:' + k.id === id);
-      s.cdLeft = s.cd + 1;
+      s.cdLeft = s.cd + (this.opts.faith === 'odin' ? 0 : 1);
       await this.useSkill(u, s, target);
     }
   }
@@ -535,6 +553,7 @@ class Battle {
     this.shake = Math.min(8, 2 + dmg / 3);
     this.floatText(u, '-' + dmg, color);
     if (source && source.isPlayer) source.charge = Math.min(100, (source.charge || 0) + 25);
+    if (source && source.isPlayer && this.opts.faith === 'asmo') this.heal(source, Math.max(1, Math.round(dmg * 0.2)));
     if (u.isPlayer) u.charge = Math.min(100, u.charge + 15);
     await sleep(200);
     if (u.hp <= 0) await this.down(u, source);
@@ -550,7 +569,9 @@ class Battle {
 
   async down(u, source) {
     if (this.opts.faith === 'cthulhu') this.abyss++;
+    if (u.charmed) { u.charmed = 0; u.side = 'enemy'; }
     if (u.side === 'enemy') {
+      if (source && source.isPlayer && this.opts.faith === 'maeve') { source.atk++; this.floatText(source, '攻擊+1', '#ff9a30'); }
       u.gone = true;
       this.kills++;
       this.expGained += u.exp;
@@ -670,6 +691,50 @@ class Battle {
       t.stunned = 2;
       this.floatText(t, '定身', '#ffb0d0');
       await this.damage(t, 6, u, '#ffb0d0');
+    } else if (faith === 'odin') {
+      this.ui.battleLog(`永恆之槍刺穿了${t.name}！`);
+      this.effects.push({ type: 'bolt', x: t.x, y: t.y, ttl: 300, max: 300 });
+      await this.damage(t, 12, u, '#a0d8ff');
+    } else if (faith === 'hermes') {
+      this.heal(u, 4);
+      this.extraTurn = true;
+      this.floatText(u, '神行', '#a0d8ff');
+      await sleep(300);
+    } else if (faith === 'sedna') {
+      this.ui.battleLog('深海之手從水裡伸了出來！');
+      for (const c of cross) {
+        this.tiles[c.y][c.x] = 'water';
+        this.effects.push({ type: 'wave', x: c.x, y: c.y, ttl: 500, max: 500 });
+      }
+      await sleep(250);
+      for (const c of cross) {
+        const e = this.unitAt(c.x, c.y);
+        if (!e || e.side !== 'enemy' || e.soul) continue;
+        e.stunned = Math.max(e.stunned, 1);
+        await this.damage(e, 5, u, '#4a90d0');
+      }
+    } else if (faith === 'asmo') {
+      this.ui.battleLog(`${t.name}被魅惑了，轉身替你作戰。`);
+      await this.lunge(u, t);
+      t.side = 'ally';
+      t.charmed = 2;
+      t.confused = 0;
+      this.floatText(t, '魅惑', '#ff80c0');
+      await sleep(300);
+    } else if (faith === 'cerberus') {
+      let dog = this.units.find((o) => o.isCompanion);
+      if (!dog) { const spot = this.findFreeTile(u.x, u.y); dog = this.makeCompanion(spot.x, spot.y); this.addUnit(dog); }
+      if (dog.gone) { const spot = this.findFreeTile(u.x, u.y); dog.x = spot.x; dog.y = spot.y; dog.gone = false; }
+      dog.soul = false; dog.hp = dog.maxHp; dog.flash = 300;
+      this.ui.battleLog('三頭咆哮！引魂犬露出了冥犬的樣子。');
+      this.shake = 8;
+      this.floatText(dog, '咆哮', '#ff6060');
+      await sleep(250);
+      for (const e of this.living('enemy').filter((e) => dist(dog, e) <= 2)) await this.damage(e, 6, u, '#ff6060');
+    } else if (faith === 'maeve') {
+      this.ui.battleLog('女王的斬首！');
+      await this.attack(u, t, 2.5);
+      if (t.gone) { u.charge = 50; this.ui.battleLog('大招回充了一半。'); }
     } else if (faith === 'cthulhu') {
       const dmg = 4 + this.abyss * 2;
       this.ui.battleLog(`深淵低語（深淵能量 ${this.abyss}）！`);
@@ -924,6 +989,7 @@ class Battle {
       if (u.confused > 0) this.drawLabel(px + T * S / 2, py, '?', '#c8a0f0');
       if (u.stunned > 0) this.drawLabel(px + T * S / 2, py, '…', '#ffb0d0');
       if (u.blind > 0) { g.fillStyle = 'rgba(255,230,120,0.25)'; g.fillRect(px, py, T * S, T * S); }
+      if (u.charmed > 0) this.drawLabel(px + T * S / 2, py, '♥', '#ff80c0');
       if (u.mirror) { g.fillStyle = 'rgba(160,216,255,0.35)'; g.fillRect(px, py, T * S, T * S); }
       if (u.defending) { g.strokeStyle = '#9cf'; g.lineWidth = S; g.strokeRect(px + S, py + S, T * S - 2 * S, T * S - 2 * S); }
       // 血條

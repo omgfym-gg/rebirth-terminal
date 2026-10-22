@@ -68,6 +68,21 @@ const FAITHS = {
     passive: '單數回合是白天：治療加五成、我方攻擊 +2。雙數回合是黑夜，沒有加成。',
     ult: { name: '日冕', target: 'self', range: [0, 0], desc: '身邊三格內的敵人受到 7 點傷害並目盲 2 回合（攻擊有一半會落空）' },
   },
+  odin: {
+    name: '奧丁', side: '神', domain: '智慧領域',
+    passive: '用一隻眼睛換來的智慧：技能冷卻少 1 回合。',
+    ult: { name: '永恆之槍', target: 'enemy', range: [1, 5], desc: '對遠方一個敵人造成 12 點傷害，必定命中' },
+  },
+  hermes: {
+    name: '赫爾墨斯', side: '神', domain: '信使領域',
+    passive: '腳上長著翅膀：你的移動 +2。',
+    ult: { name: '神行', target: 'self', range: [0, 0], desc: '回復 4 點生命，立刻再行動一次' },
+  },
+  sedna: {
+    name: '塞德娜', side: '神', domain: '深海領域',
+    passive: '每回合開始時，站在水面上的敵人被海底的手抓住，失去 2 點生命。',
+    ult: { name: '深海之手', target: 'tile', range: [1, 4], desc: '目標與周圍四格化為水面，上面的敵人受到 5 點傷害並動彈不得 1 回合' },
+  },
   loki: {
     name: '洛基', side: '魔', domain: '詭計領域',
     passive: '敵人攻擊我方時，有四分之一的機率只打到幻影。',
@@ -82,6 +97,21 @@ const FAITHS = {
     name: '克蘇魯', side: '魔', domain: '深淵領域',
     passive: '任何人倒下都會累積深淵能量。累積 4 點時，一個敵人會發瘋 1 回合。',
     ult: { name: '深淵低語', target: 'self', range: [0, 0], desc: '所有敵人受到 4 點傷害，每 1 點深淵能量再多 2 點' },
+  },
+  asmo: {
+    name: '阿斯蒙蒂斯', side: '魔', domain: '慾望領域',
+    passive: '你造成的傷害，有兩成會變成你的生命。',
+    ult: { name: '魅惑', target: 'enemy', range: [1, 3], desc: '一個非首領的敵人倒戈 2 回合，替你作戰' },
+  },
+  cerberus: {
+    name: '刻耳柏洛斯', side: '魔', domain: '冥犬領域',
+    passive: '引魂犬是冥犬的後代：牠的生命 +10、攻擊 +3。',
+    ult: { name: '三頭咆哮', target: 'self', range: [0, 0], desc: '引魂犬全滿復活，牠身邊兩格內的敵人受到 6 點傷害' },
+  },
+  maeve: {
+    name: '梅芙', side: '魔', domain: '戰爭領域',
+    passive: '戰爭女王越殺越勇：這場戰鬥中你每擊倒一個敵人，攻擊 +1。',
+    ult: { name: '女王的斬首', target: 'enemy', range: [1, 1], desc: '近身造成兩倍半的傷害，擊倒目標時大招回充一半' },
   },
 };
 
