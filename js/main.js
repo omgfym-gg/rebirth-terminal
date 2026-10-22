@@ -52,6 +52,7 @@ const Game = {
       boons: { soulExtra: 0, parcel: false },
       history: [],
       echoes: [],
+      vault: [],
       regulars: { zhang: { act: 0, choices: [] }, kai: { act: 0, choices: [] } },
       life: null,
       ended: false,
@@ -154,7 +155,7 @@ const Game = {
   showRebirth() {
     const s = this.save;
     const prev = s.history[s.history.length - 1];
-    const pick = { form: null, faith: null, inherit: null };
+    const pick = { form: null, faith: null, inherit: null, relic: null };
     const root = $('#rebirth .content');
 
     const render = () => {
@@ -202,6 +203,18 @@ const Game = {
         }
       }
 
+      const vault = s.vault || [];
+      if (vault.length) {
+        root.append(el('h3', {}, '喚醒一件神器（靈魂倉庫）'));
+        const box = el('div', { class: 'cards two' });
+        box.append(el('button', { class: 'card' + (!pick.relic ? ' selected' : ''), onclick: () => { pick.relic = null; render(); } }, el('b', {}, '不帶'), el('small', { class: 'muted' }, '讓神器繼續沉睡')));
+        for (const id of vault) {
+          box.append(el('button', { class: 'card' + (pick.relic === id ? ' selected' : ''), onclick: () => { pick.relic = id; render(); } },
+            el('b', {}, RELICS[id].name), el('small', {}, RELICS[id].desc)));
+        }
+        root.append(box);
+      }
+
       const ready = pick.form && pick.faith && (!prev || !options.length || pick.inherit);
       root.append(el('button', { class: 'btn primary wide', disabled: ready ? null : 'disabled', onclick: () => this.beginLife(pick) }, '轉生'));
     };
@@ -221,7 +234,7 @@ const Game = {
   beginLife(pick) {
     const s = this.save;
     s.life = {
-      form: pick.form, faith: pick.faith, inherit: pick.inherit,
+      form: pick.form, faith: pick.faith, inherit: pick.inherit, relic: pick.relic || null,
       level: s.boons.parcel ? 2 : 1, exp: 0, hp: null,
       floor: 0, kills: 0, rescued: 0, alive: true, companionAlive: true,
     };
@@ -239,6 +252,7 @@ const Game = {
   heroStats() {
     const s = this.save, L = s.life, f = FORMS[L.form];
     const lv = L.level - 1;
+    const r = RELICS[L.relic] || {};
     const statue = s.echoes.some((e) => e.type === 'statue') ? 1 : 0;
     const skills = [...f.skills];
     const skillDefs = {};
@@ -246,11 +260,11 @@ const Game = {
     if (L.inherit) { skills.push(L.inherit); skillDefs[L.inherit] = mutateSkill(L.inherit, L.form); }
     return {
       sprite: f.sprite,
-      maxHp: f.hp + s.perm.hp * 3 + lv * 4,
+      maxHp: f.hp + s.perm.hp * 3 + lv * 4 + (r.hp || 0),
       hp: L.hp,
-      atk: f.atk + s.perm.atk + lv + statue,
-      def: f.def + Math.floor(lv / 2),
-      spd: f.spd, mov: f.mov,
+      atk: f.atk + s.perm.atk + lv + statue + (L.bonusAtk || 0) + (r.atk || 0),
+      def: f.def + Math.floor(lv / 2) + (r.def || 0),
+      spd: f.spd + (r.spd || 0), mov: f.mov + (r.mov || 0),
       skills, skillDefs,
       companionAlive: L.companionAlive,
     };
@@ -269,7 +283,8 @@ const Game = {
       el('div', {},
         el('b', {}, `${FORMS[L.form].name}　Lv.${L.level}`),
         el('div', {}, `生命 ${L.hp}/${st.maxHp}　攻擊 ${st.atk}　防禦 ${st.def}`),
-        el('div', { class: 'muted' }, `信仰：${FAITHS[L.faith].name}　技能：${st.skills.map((id) => st.skillDefs[id].name).join('、')}`))));
+        el('div', { class: 'muted' }, `信仰：${FAITHS[L.faith].name}　技能：${st.skills.map((id) => st.skillDefs[id].name).join('、')}`),
+        L.relic ? el('div', { class: 'muted' }, `神器：${RELICS[L.relic].name}（${RELICS[L.relic].desc}）`) : null)));
 
     root.append(el('h3', {}, '前世回響'));
     if (!s.echoes.length) root.append(el('p', { class: 'muted' }, '這座城鎮還不認識你的靈魂。'));
@@ -283,24 +298,38 @@ const Game = {
   // ───────── 地城 ─────────
 
   enterDungeon() {
-    this.save.life.floor = 0;
-    this.save.life.hp = this.heroStats().maxHp;
-    this.save.life.companionAlive = true;
+    const L = this.save.life;
+    // 每次進地城都重新抽場景和首領
+    const themes = THEMES.map((t) => t.id).sort(() => Math.random() - 0.5).slice(0, DUNGEON_DEPTH - 1);
+    L.run = { themes, boss: BOSSES[randInt(0, BOSSES.length - 1)].type };
+    L.floor = 0;
+    L.bonusAtk = 0;
+    L.hp = this.heroStats().maxHp;
+    L.companionAlive = true;
     this.persist();
     this.fight();
   },
 
+  floorName(i, life = this.save.life) {
+    if (!life || !life.run) return `地下 ${i + 1} 層`;
+    if (i >= DUNGEON_DEPTH - 1) return `地下 ${i + 1} 層・${BOSSES.find((b) => b.type === life.run.boss).room}`;
+    return `地下 ${i + 1} 層・${THEMES.find((t) => t.id === life.run.themes[i]).name}`;
+  },
+
   async fight() {
     const s = this.save, L = s.life;
+    if (!L.run) return this.enterDungeon();
+    const isBoss = L.floor >= DUNGEON_DEPTH - 1;
+    const spec = generateFloor(L.floor, L.run.themes[L.floor], isBoss ? L.run.boss : null, s.debt >= 4 && L.floor === 2);
     this.show('battle');
-    $('#battle .floor-name').textContent = FLOORS[L.floor].name;
+    $('#battle .floor-name').textContent = spec.name;
     $('#battle .log').innerHTML = '';
     const opts = {
       faith: L.faith, form: L.form,
-      soulExtra: s.boons.soulExtra + s.perm.soul,
-      hunter: s.debt >= 4,
+      soulExtra: s.boons.soulExtra + s.perm.soul + ((RELICS[L.relic] || {}).soul || 0),
+      startCharge: (RELICS[L.relic] || {}).charge || 0,
     };
-    this.battle = new Battle($('#battle canvas'), BattleUI, L.floor, this.heroStats(), opts);
+    this.battle = new Battle($('#battle canvas'), BattleUI, spec, this.heroStats(), opts);
     const res = await this.battle.run();
     await sleep(700);
     if (!this.battle) return; // 戰鬥中離開了畫面
@@ -321,7 +350,7 @@ const Game = {
 
   afterWin(res) {
     const s = this.save, L = s.life;
-    const lines = [`${FLOORS[L.floor].name}　突破！`];
+    const lines = [`${this.floorName(L.floor)}　突破！`];
     L.exp += res.exp;
     let ups = 0;
     while (L.exp >= L.level * 20) { L.exp -= L.level * 20; L.level++; ups++; }
@@ -333,17 +362,81 @@ const Game = {
       s.echoes = s.echoes.filter((e) => e !== remnant);
       lines.push(`你在角落找到前世的殘魂。它把 ${remnant.frag} 個靈魂碎片交還給你，然後安心地散了。`);
     }
-    const maxHp = this.heroStats().maxHp;
-    L.hp = Math.min(maxHp, Math.max(res.hp, 1) + Math.ceil(maxHp * 0.4));
-    if (L.floor >= FLOORS.length - 1) {
+    L.hp = Math.max(res.hp, 1);
+    if (L.floor >= DUNGEON_DEPTH - 1) {
       this.persist();
-      lines.push('典獄長的鎖鏈斷了。地城深處傳來一聲很長的嘆息。');
-      return this.story(lines, () => this.victory(), { speaker: '地城' });
+      lines.push(L.run.boss === 'horus'
+        ? '荷魯斯之影散成一地黑沙。沙子裡有一張工牌，上面的照片是你。'
+        : '典獄長的鎖鏈斷了。地城深處傳來一聲很長的嘆息。');
+      return this.story(lines, () => this.bossLoot(), { speaker: '地城' });
     }
     L.floor++;
     this.persist();
-    lines.push('你喘了口氣，回復了一些生命，繼續往下走。');
-    this.story(lines, () => this.fight(), { speaker: '地城' });
+    // 下樓之前的岔路：營火一定在，另外隨機兩個事件
+    const others = Object.keys(EVENTS).filter((k) => k !== 'rest').sort(() => Math.random() - 0.5).slice(0, 2);
+    lines.push('往下的樓梯分成了三條路。');
+    this.story(lines, null, {
+      speaker: '地城',
+      choices: ['rest', ...others].map((k) => ({ label: `${EVENTS[k].name}：${EVENTS[k].desc}`, action: () => this.runEvent(k) })),
+    });
+  },
+
+  runEvent(kind) {
+    const L = this.save.life, maxHp = this.heroStats().maxHp;
+    const heal = (ratio) => { const before = L.hp; L.hp = Math.min(maxHp, L.hp + Math.ceil(maxHp * ratio)); return L.hp - before; };
+    const go = (lines) => { this.persist(); this.story(lines, () => this.fight(), { speaker: EVENTS[kind].name }); };
+    if (kind === 'rest') return go([`火光很暖。你回復了 ${heal(0.4)} 點生命。`]);
+    if (kind === 'spring') {
+      L.companionAlive = true;
+      return go(['泉水裡映出一隻黑色的小狗，牠甩甩水跳了出來。', `引魂犬回來了。你回復了 ${heal(0.2)} 點生命。`]);
+    }
+    if (kind === 'altar') {
+      const cost = Math.max(1, Math.floor(L.hp / 4));
+      L.hp = Math.max(1, L.hp - cost);
+      L.bonusAtk = (L.bonusAtk || 0) + 1;
+      return go([`你割開手掌，失去 ${cost} 點生命。`, '祭壇上的眼睛睜開了一下。這一世攻擊 +1。']);
+    }
+    if (kind === 'chest') {
+      if (Math.random() < 0.6) {
+        this.save.fragments += 3;
+        return go(['箱子裡有一瓶藥和幾片發光的碎片。', `你回復了 ${heal(0.3)} 點生命，靈魂碎片 +3。`]);
+      }
+      const hurt = Math.max(1, Math.ceil(maxHp * 0.2));
+      L.hp = Math.max(1, L.hp - hurt);
+      return go(['箱子張開嘴，咬了你一口。', `你失去 ${hurt} 點生命。`]);
+    }
+    if (kind === 'lost') {
+      const s = this.save;
+      return this.story(['一個透明的上班族一直在找出口。', '「請問……打卡機在哪裡？我今天好像還沒下班。」'], null, {
+        speaker: EVENTS.lost.name,
+        choices: [
+          { label: '幫忙：帶他到樓梯口', action: () => { s.nature = clampNature(s.nature - 5); s.fragments += 3; go(['他說謝謝，然後慢慢消失在樓梯上。', '（靈魂碎片 +3，靈魂偏向秩序）']); } },
+          { label: '保留：繞過他', action: () => go(['你繞了過去。身後一直傳來找東西的聲音。']) },
+          { label: '利用：把他吸收掉', action: () => { s.debt += 1; s.nature = clampNature(s.nature + 5); L.hp = maxHp; go(['他還來不及喊，就變成了你的一部分。', '（生命全滿，因果債 +1）']); } },
+        ],
+      });
+    }
+  },
+
+  bossLoot() {
+    const s = this.save, L = s.life;
+    s.vault = s.vault || [];
+    const pool = Object.keys(RELICS).filter((id) => RELICS[id].from === L.run.boss && !s.vault.includes(id));
+    if (!pool.length) {
+      s.fragments += 10;
+      this.persist();
+      return this.story(['首領身上什麼都沒有了。你把它的殘骸換成了 10 個靈魂碎片。'], () => this.victory(), { speaker: '戰利品' });
+    }
+    const offer = pool.sort(() => Math.random() - 0.5).slice(0, 2);
+    const take = (id) => {
+      s.vault.push(id);
+      this.persist();
+      this.story([`你拿起了「${RELICS[id].name}」。`, '它在你手裡慢慢變冷。這一世用不到了，但它會跟著你的靈魂，存進靈魂倉庫。', '（下一世轉生時可以喚醒它）'], () => this.victory(), { speaker: '戰利品' });
+    };
+    this.story(['首領倒下的地方，留下了發光的東西。', '你只拿得動一件。'], null, {
+      speaker: '戰利品',
+      choices: offer.map((id) => ({ label: `${RELICS[id].name}：${RELICS[id].desc}`, action: () => take(id) })),
+    });
   },
 
   victory() {
@@ -362,7 +455,7 @@ const Game = {
     const st = this.heroStats();
     const record = {
       life: this.lifeNo, form: L.form, faith: L.faith, skills: st.skills,
-      floor: L.floor, kills: L.kills, outcome, cause,
+      floor: L.floor, floorName: this.floorName(L.floor), kills: L.kills, outcome, cause,
     };
     s.history.push(record);
     L.alive = false;
@@ -382,10 +475,10 @@ const Game = {
     }
     if (outcome !== 'victory') {
       s.echoes = s.echoes.filter((e) => !(e.type === 'remnant' && e.floor === L.floor));
-      s.echoes.push({ type: 'remnant', floor: L.floor, frag: 5, title: '殘魂', text: `${FLOORS[L.floor].name}留著第 ${n} 世的殘魂。突破那一層就能取回 5 個碎片。` });
+      s.echoes.push({ type: 'remnant', floor: L.floor, frag: 5, title: '殘魂', text: `地下 ${L.floor + 1} 層留著第 ${n} 世的殘魂。突破那一層就能取回 5 個碎片。` });
     }
     if (s.debt >= 4 && !s.echoes.some((e) => e.type === 'bounty')) {
-      s.echoes.push({ type: 'bounty', title: '懸賞令', text: '你欠下的因果太多了。地城二層有追殺者在等你。打倒他可以減少因果債。' });
+      s.echoes.push({ type: 'bounty', title: '懸賞令', text: '你欠下的因果太多了。地下 3 層有追殺者在等你。打倒他可以減少因果債。' });
     }
     this.persist();
 
@@ -398,7 +491,7 @@ const Game = {
     const lines = [
       `第 ${n} 世・因果紀錄`,
       `形態：${FORMS[L.form].name}　信仰：${FAITHS[L.faith].name}`,
-      `到達：${FLOORS[L.floor].name}　擊倒：${L.kills}`,
+      `到達：${record.floorName}　擊倒：${L.kills}`,
       cause ? `死因：${cause}` : '死因：天年已盡',
       how,
       `獲得靈魂碎片 ${frag}。`,
@@ -519,7 +612,7 @@ const Game = {
     root.append(el('h3', {}, '前世'));
     const list = el('div', { class: 'history' });
     for (const h of [...s.history].reverse()) {
-      list.append(el('div', {}, corrupt(`第 ${h.life} 世：${FORMS[h.form].name}・${FAITHS[h.faith].name}・${FLOORS[h.floor].name.split('：')[0]}・${outcomeLabel(h.outcome)}`, this.glitch - 3)));
+      list.append(el('div', {}, corrupt(`第 ${h.life} 世：${FORMS[h.form].name}・${FAITHS[h.faith].name}・${(h.floorName || `地下 ${h.floor + 1} 層`).split('・')[0]}・${outcomeLabel(h.outcome)}`, this.glitch - 3)));
     }
     root.append(list);
     root.append(el('button', { class: 'btn primary wide', onclick: () => this.showRebirth() }, '前往轉生櫃台'));
@@ -553,7 +646,7 @@ const BattleUI = {
     log.prepend(el('div', {}, text));
     while (log.children.length > 4) log.lastChild.remove();
   },
-  battleRound(n) { $('#battle .round').textContent = `第 ${n} 回合`; },
+  battleRound(n, extra) { $('#battle .round').textContent = `第 ${n} 回合` + (extra ? `・${extra}` : ''); },
   showActions(u, actions) {
     const box = $('#battle .actions');
     box.innerHTML = '';

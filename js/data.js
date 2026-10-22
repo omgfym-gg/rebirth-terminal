@@ -45,79 +45,83 @@ const MUTATION = {
   demon: { prefix: '血', note: '額外吸取三成傷害', drain: 0.3 },
 };
 
+// ult.target：tile 選一格、enemy 選一個敵人、self 不用選
 const FAITHS = {
   thor: {
     name: '索爾', side: '神', domain: '雷霆領域',
     passive: '每兩回合在敵人腳下標記雷擊區，下一回合落雷。水面會把雷導開。',
-    ult: { name: '雷神之鎚', range: [1, 3], desc: '目標與周圍四格造成 10 點雷擊傷害，打到水面會擴散' },
+    ult: { name: '雷神之鎚', target: 'tile', range: [1, 3], desc: '目標與周圍四格造成 10 點雷擊，打到水面會擴散' },
+  },
+  mazu: {
+    name: '媽祖', side: '神', domain: '海潮領域',
+    passive: '我方在水面上移動不減速；隊友變成靈魂時多撐 2 回合。',
+    ult: { name: '海潮庇護', target: 'tile', range: [1, 3], desc: '目標與周圍四格化為水面，我方全體回復 8 點生命' },
+  },
+  apollo: {
+    name: '阿波羅', side: '神', domain: '日輪領域',
+    passive: '單數回合是白天：治療加五成、我方攻擊 +2。雙數回合是黑夜，沒有加成。',
+    ult: { name: '日冕', target: 'self', range: [0, 0], desc: '身邊三格內的敵人受到 7 點傷害並目盲 2 回合（攻擊有一半會落空）' },
   },
   loki: {
     name: '洛基', side: '魔', domain: '詭計領域',
     passive: '敵人攻擊我方時，有四分之一的機率只打到幻影。',
-    ult: { name: '惡作劇', range: [1, 4], desc: '目標陷入混亂 2 回合，會去攻擊自己的同伴，並受到 4 點傷害' },
+    ult: { name: '惡作劇', target: 'enemy', range: [1, 4], desc: '目標陷入混亂 2 回合，會去攻擊自己的同伴，並受到 4 點傷害' },
+  },
+  hachi: {
+    name: '八尺大人', side: '魔', domain: '凝視領域',
+    passive: '每回合開始時，場上最高大的敵人被她看見，失去 2 點生命。',
+    ult: { name: '凝視', target: 'enemy', range: [1, 4], desc: '目標動彈不得 2 回合，並受到 6 點傷害' },
+  },
+  cthulhu: {
+    name: '克蘇魯', side: '魔', domain: '深淵領域',
+    passive: '任何人倒下都會累積深淵能量。累積 4 點時，一個敵人會發瘋 1 回合。',
+    ult: { name: '深淵低語', target: 'self', range: [0, 0], desc: '所有敵人受到 4 點傷害，每 1 點深淵能量再多 2 點' },
   },
 };
 
 const ENEMIES = {
-  shade:  { name: '影子怪',   sprite: 'shade',  hp: 12, atk: 5, def: 1, spd: 4, mov: 3, range: [1, 1], exp: 10, grab: 0.4 },
-  wisp:   { name: '鬼火',     sprite: 'wisp',   hp: 8,  atk: 4, def: 0, spd: 6, mov: 2, range: [2, 3], exp: 10, grab: 0.1 },
-  husk:   { name: '空殼職員', sprite: 'husk',   hp: 18, atk: 6, def: 2, spd: 3, mov: 2, range: [1, 1], exp: 14, grab: 0.8 },
-  hunter: { name: '追殺者',   sprite: 'hunter', hp: 20, atk: 7, def: 2, spd: 6, mov: 4, range: [1, 1], exp: 20, grab: 1.0 },
-  boss:   { name: '無臉典獄長', sprite: 'boss', hp: 60, atk: 9, def: 3, spd: 4, mov: 2, range: [1, 1], exp: 60, grab: 1.0, boss: true,
-            chain: { range: [2, 3], every: 3, mult: 1.0 } },
+  shade:   { name: '影子怪',     sprite: 'shade',   hp: 12, atk: 5, def: 1, spd: 4, mov: 3, range: [1, 1], exp: 10, grab: 0.4 },
+  wisp:    { name: '鬼火',       sprite: 'wisp',    hp: 8,  atk: 4, def: 0, spd: 6, mov: 2, range: [2, 3], exp: 10, grab: 0.1 },
+  husk:    { name: '空殼職員',   sprite: 'husk',    hp: 18, atk: 6, def: 2, spd: 3, mov: 2, range: [1, 1], exp: 14, grab: 0.8 },
+  redgirl: { name: '紅衣小女孩', sprite: 'redgirl', hp: 10, atk: 5, def: 1, spd: 7, mov: 0, range: [1, 1], exp: 16, grab: 0.5, blink: true },
+  mirror:  { name: '鏡中人',     sprite: 'mirror',  hp: 16, atk: 0, def: 0, spd: 5, mov: 3, range: [1, 1], exp: 18, grab: 0.6, copy: true },
+  hunter:  { name: '追殺者',     sprite: 'hunter',  hp: 20, atk: 7, def: 2, spd: 6, mov: 4, range: [1, 1], exp: 20, grab: 1.0 },
+  boss:    { name: '無臉典獄長', sprite: 'boss',    hp: 60, atk: 9, def: 3, spd: 4, mov: 2, range: [1, 1], exp: 60, grab: 1.0, boss: true,
+             chain: { range: [2, 3], every: 3, mult: 1.0 } },
+  horus:   { name: '荷魯斯之影', sprite: 'horus',   hp: 64, atk: 8, def: 2, spd: 5, mov: 2, range: [1, 2], exp: 60, grab: 1.0, boss: true,
+             summon: { every: 3, type: 'shade', count: 2 } },
 };
+
+// 敵人在第幾層以後才會出現
+const ENEMY_DEPTH = { shade: 0, wisp: 0, husk: 1, redgirl: 2, mirror: 3 };
 
 const COMPANION = { name: '引魂犬', sprite: 'dog', hp: 20, atk: 5, def: 2, spd: 7, mov: 4, range: [1, 1] };
 
-// 地圖：# 牆、~ 水、. 地板、P 玩家、C 引魂犬、E 敵人、B 首領
-const FLOORS = [
-  {
-    name: '地城一層：迴廊',
-    map: [
-      '.E.E.E.',
-      '.......',
-      '..#....',
-      '..#.~~.',
-      '....~~.',
-      '.~~....',
-      '.~~.#..',
-      '.......',
-      '..P.C..',
-    ],
-    enemies: ['shade', 'shade', 'shade'],
-  },
-  {
-    name: '地城二層：積水的檔案室',
-    map: [
-      '.E.E.E.',
-      '...E...',
-      '#.....#',
-      '..~~~..',
-      '..~#~..',
-      '..~~~..',
-      '#.....#',
-      '.......',
-      '..P.C..',
-    ],
-    enemies: ['shade', 'wisp', 'shade', 'husk'],
-  },
-  {
-    name: '地城三層：典獄長的房間',
-    map: [
-      '.E...E.',
-      '...B...',
-      '.#...#.',
-      '.~...~.',
-      '.~...~.',
-      '.#...#.',
-      '.......',
-      '.......',
-      '..P.C..',
-    ],
-    enemies: ['wisp', 'wisp'],
-    boss: 'boss',
-  },
+const DUNGEON_DEPTH = 5; // 最後一層是首領
+
+// 每層的場景主題：地板顏色、牆和水的多寡
+const THEMES = [
+  { id: 'corridor', name: '迴廊',             floor: ['#1d1a26', '#211e2b'], speck: '#28243a', walls: [3, 5], water: [0, 1] },
+  { id: 'archive',  name: '積水的檔案室',     floor: ['#18202a', '#1b2430'], speck: '#26334a', walls: [2, 4], water: [2, 3] },
+  { id: 'office',   name: '沒有人的辦公室',   floor: ['#2a1a1e', '#2e1d22'], speck: '#3e262c', walls: [4, 6], water: [0, 0] },
+  { id: 'morgue',   name: '停屍間',           floor: ['#1c2422', '#202826'], speck: '#2c3834', walls: [3, 6], water: [0, 1] },
+  { id: 'shaft',    name: '電梯井',           floor: ['#1a1a1a', '#1f1f1f'], speck: '#2c2c2c', walls: [6, 8], water: [0, 1] },
+  { id: 'garden',   name: '淹水的空中花園',   floor: ['#18241c', '#1c2a20'], speck: '#28402e', walls: [1, 3], water: [2, 4] },
 ];
+
+const BOSSES = [
+  { type: 'boss',  room: '典獄長的房間' },
+  { type: 'horus', room: '荷魯斯之影的祭壇' },
+];
+
+// 每層之間的隨機事件
+const EVENTS = {
+  rest:   { name: '營火',       desc: '坐下來休息。回復四成生命。' },
+  altar:  { name: '血祭壇',     desc: '獻上目前生命的四分之一，這一世攻擊 +1。' },
+  lost:   { name: '迷途的靈魂', desc: '一個找不到出口的靈魂拉住你的衣角。' },
+  chest:  { name: '上鎖的箱子', desc: '可能是寶物，也可能是陷阱。' },
+  spring: { name: '靈泉',       desc: '引魂犬回到你身邊，你回復兩成生命。' },
+};
 
 // 常客：每一世死後在終端遇到一幕
 // effect 的鍵：frag 靈魂碎片、debt 因果債、nature 靈魂本質、boon 祝福
@@ -199,4 +203,14 @@ const TRUTHS = {
   D: { title: '飼料', text: ['你每一世累積的因果，不管善惡，都被收割走了。', '神與魔不是在打仗，他們是牧羊犬。', '真正在吃東西的，是終端頂樓的董事會。', '你，是飼料。'] },
   E: { title: '查無此人', text: ['終端的名冊裡，查無此人。', '你根本沒有死。你躺在某間醫院裡，昏迷了很久。', '你在地城裡聽見的那些聲音，是你的家人在床邊說話。', '你可以留下，也可以醒來。'] },
   F: { title: '死對頭才是同事', text: ['一直追殺你的那個人，也是轉生者。', '你們的仇恨，是董事會寫好的劇本。', '他和你一樣，一世一世被安排來互相殺死。', '這一次，你們可以一起逃走。'] },
+};
+
+// 神器：打倒首領取得，存進靈魂倉庫；轉生時可以喚醒一件帶著走
+const RELICS = {
+  chain:   { name: '典獄長的鎖鏈', from: 'boss',  desc: '攻擊 +2',                           atk: 2 },
+  lantern: { name: '藍火提燈',     from: 'boss',  desc: '最大生命 +8',                       hp: 8 },
+  key:     { name: '無臉者的鑰匙', from: 'boss',  desc: '變成靈魂時多撐 1 回合，防禦 +1',     soul: 1, def: 1 },
+  eye:     { name: '荷魯斯之眼',   from: 'horus', desc: '每場戰鬥開始時，大招已經充好一半',   charge: 50 },
+  badge:   { name: '黑沙工牌',     from: 'horus', desc: '防禦 +2',                           def: 2 },
+  feather: { name: '鷹羽',         from: 'horus', desc: '移動 +1，速度 +2',                  mov: 1, spd: 2 },
 };

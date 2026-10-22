@@ -25,14 +25,16 @@ function tween(ms, fn) {
 }
 
 class Battle {
-  // hero：本世角色的戰鬥數值；opts：{ faith, form, inheritedSkill, soulExtra, hunter }
-  constructor(canvas, ui, floorIndex, hero, opts) {
+  // spec：generateFloor() 產生的樓層；hero：本世角色的戰鬥數值；opts：{ faith, form, soulExtra }
+  constructor(canvas, ui, spec, hero, opts) {
     this.canvas = canvas;
     this.g = canvas.getContext('2d');
     this.ui = ui;
-    this.floor = FLOORS[floorIndex];
-    this.floorIndex = floorIndex;
+    this.floor = spec;
+    this.theme = THEMES.find((t) => t.id === spec.theme) || THEMES[0];
+    this.heroBase = hero;
     this.opts = opts;
+    this.abyss = 0;       // 克蘇魯的深淵能量
     this.round = 0;
     this.units = [];
     this.marks = [];      // 索爾的雷擊標記
@@ -71,7 +73,6 @@ class Battle {
   parseMap(hero) {
     this.tiles = [];
     const enemyQueue = [...this.floor.enemies];
-    if (this.opts.hunter && this.floorIndex === 1) enemyQueue.push('hunter');
     const spawns = [];
     for (let y = 0; y < ROWS; y++) {
       this.tiles.push([]);
@@ -107,7 +108,7 @@ class Battle {
     return {
       id: 'hero', side: 'ally', isPlayer: true, name: '你', sprite: h.sprite,
       x, y, hp: h.hp, maxHp: h.maxHp, atk: h.atk, def: h.def, spd: h.spd, mov: h.mov,
-      range: [1, 1], skills, charge: 0, facing: 1,
+      range: [1, 1], skills, charge: this.opts.startCharge || 0, facing: 1,
       ox: 0, oy: 0, flash: 0,
     };
   }
@@ -126,12 +127,17 @@ class Battle {
     return {
       id: type + '_' + this.units.length, type, side: 'enemy', name: e.name, sprite: e.sprite,
       x, y, hp: e.hp, maxHp: e.hp, atk: e.atk, def: e.def, spd: e.spd, mov: e.mov,
-      range: e.range, grab: e.grab, boss: !!e.boss, chain: e.chain, exp: e.exp,
+      range: e.range, grab: e.grab, boss: !!e.boss, chain: e.chain, summon: e.summon, blink: e.blink, exp: e.exp,
       skills: [], facing: -1, ox: 0, oy: 0, flash: 0,
     };
   }
 
   addUnit(u) {
+    if (u.side === 'enemy' && ENEMIES[u.type] && ENEMIES[u.type].copy) {
+      // 鏡中人：照著你的樣子長出來
+      u.atk = this.heroBase.atk; u.def = this.heroBase.def; u.sprite = this.heroBase.sprite; u.mirror = true;
+    }
+    u.stunned = 0; u.blind = 0;
     u.cursed = 0; u.confused = 0; u.defending = false; u.soul = false; u.gone = false;
     this.units.push(u);
   }
@@ -158,7 +164,8 @@ class Battle {
         if (!this.inBounds(nx, ny) || this.tile(nx, ny) === 'wall') continue;
         const occ = this.unitAt(nx, ny);
         if (occ && !ghost) continue;
-        const step = !ghost && this.tile(nx, ny) === 'water' ? 2 : 1;
+        const swim = this.opts.faith === 'mazu' && unit.side === 'ally';
+        const step = !ghost && !swim && this.tile(nx, ny) === 'water' ? 2 : 1;
         const cost = cur.cost + step;
         if (cost > mov) continue;
         const k = key(nx, ny);
@@ -183,7 +190,7 @@ class Battle {
     await sleep(400);
     while (!this.ended) {
       this.round++;
-      this.ui.battleRound(this.round);
+      this.ui.battleRound(this.round, this.opts.faith === 'apollo' ? (this.isDay() ? '白天' : '黑夜') : '');
       await this.startOfRound();
       if (this.ended) break;
       const order = this.units
@@ -205,11 +212,33 @@ class Battle {
     return this.result;
   }
 
+  isDay() { return this.round % 2 === 1; }
+
   async startOfRound() {
-    if (this.opts.faith === 'thor' && this.marks.length) {
+    const faith = this.opts.faith;
+    if (faith === 'thor' && this.marks.length) {
       await this.thunderStrike(this.marks, 5, true);
       this.marks = [];
     }
+    if (faith === 'hachi') {
+      const big = this.living('enemy').sort((a, b) => b.maxHp - a.maxHp)[0];
+      if (big) {
+        this.ui.battleLog(`八尺大人看見了${big.name}。`);
+        await this.damage(big, 2, null, '#ffb0d0');
+      }
+    }
+    if (faith === 'cthulhu' && this.abyss >= 4) {
+      const pool = this.living('enemy');
+      if (pool.length) {
+        this.abyss -= 4;
+        const t = pool[randInt(0, pool.length - 1)];
+        t.confused = 1;
+        this.floatText(t, '發瘋', '#70e0c0');
+        this.ui.battleLog(`深淵在${t.name}耳邊說了什麼，牠發瘋了。`);
+        await sleep(300);
+      }
+    }
+    if (faith === 'apollo') this.ui.battleLog(this.isDay() ? '日輪升起：白天。' : '太陽落下：黑夜。');
   }
 
   async endOfRound() {
@@ -266,6 +295,12 @@ class Battle {
 
   async takeTurn(u) {
     this.current = u;
+    if (u.stunned > 0 && !u.soul) {
+      u.stunned--;
+      this.floatText(u, '定身', '#ffb0d0');
+      await sleep(400);
+      return;
+    }
     u.defending = false;
     if (u.cursed > 0) u.cursed--;
     for (const s of u.skills) if (s.cdLeft > 0) s.cdLeft--;
@@ -278,6 +313,7 @@ class Battle {
       await sleep(250);
       await this.enemyTurn(u);
       if (u.confused > 0) u.confused--;
+      if (u.blind > 0) u.blind--;
     }
     this.highlights = null;
   }
@@ -333,6 +369,18 @@ class Battle {
       this.floatText(u, '防禦', '#9cf');
       return this.endPlayerTurn();
     }
+    if (id === 'ult' && FAITHS[this.opts.faith].ult.target === 'self') {
+      ts.busy = true;
+      this.highlights = null;
+      this.ui.hideActions();
+      (async () => {
+        await this.performAction(u, 'ult', u.x, u.y);
+        ts.busy = false;
+        await this.checkEnd();
+        this.endPlayerTurn();
+      })();
+      return;
+    }
     if (ts.mode === 'target' && ts.action === id) {
       // 再按一次同一個按鈕＝取消
       ts.mode = ts.moved ? null : 'move';
@@ -358,7 +406,7 @@ class Battle {
       for (const a of this.units) if (a.side === 'ally' && a.soul && !a.gone && dist(a, u) === 1) add(a.x, a.y);
     } else if (id === 'ult') {
       const r = FAITHS[this.opts.faith].ult.range;
-      if (this.opts.faith === 'thor') {
+      if (FAITHS[this.opts.faith].ult.target === 'tile') {
         for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
           const d = Math.abs(x - u.x) + Math.abs(y - u.y);
           if (d >= r[0] && d <= r[1] && this.tile(x, y) !== 'wall') add(x, y);
@@ -453,6 +501,7 @@ class Battle {
 
   calcDamage(att, def, mult) {
     let dmg = Math.round(att.atk * mult) - def.def + randInt(-1, 1);
+    if (this.opts.faith === 'apollo' && att.side === 'ally' && this.isDay()) dmg += 2;
     dmg = Math.max(1, dmg);
     if (def.cursed > 0) dmg = Math.round(dmg * 1.5);
     if (def.defending) dmg = Math.ceil(dmg / 2);
@@ -461,6 +510,11 @@ class Battle {
 
   async attack(att, def, mult, extra = {}) {
     await this.lunge(att, def);
+    if (att.blind > 0 && Math.random() < 0.5) {
+      this.floatText(def, '落空', '#ffe070');
+      await sleep(250);
+      return 0;
+    }
     if (att.side === 'enemy' && def.side === 'ally' && this.opts.faith === 'loki' && Math.random() < 0.25) {
       this.floatText(def, '幻影', '#c8a0f0');
       this.ui.battleLog(`${att.name}打中的只是${def.name === '你' ? '你' : def.name}的幻影。`);
@@ -488,12 +542,14 @@ class Battle {
 
   heal(u, amount) {
     if (u.gone || u.soul) return;
+    if (this.opts.faith === 'apollo' && this.isDay()) amount = Math.round(amount * 1.5);
     const before = u.hp;
     u.hp = Math.min(u.maxHp, u.hp + amount);
     if (u.hp > before) this.floatText(u, '+' + (u.hp - before), '#7f7');
   }
 
   async down(u, source) {
+    if (this.opts.faith === 'cthulhu') this.abyss++;
     if (u.side === 'enemy') {
       u.gone = true;
       this.kills++;
@@ -508,6 +564,7 @@ class Battle {
     let timer = 3;
     if (u.isPlayer) timer += this.opts.soulExtra || 0;
     if (!u.isPlayer && this.opts.form === 'angel') timer += 2;
+    if (!u.isPlayer && this.opts.faith === 'mazu') timer += 2;
     u.soulTimer = timer;
     if (u.isPlayer) {
       this.deathCause = source ? source.name : '雷擊';
@@ -578,18 +635,47 @@ class Battle {
   }
 
   async ultimate(u, x, y) {
-    if (this.opts.faith === 'thor') {
+    const faith = this.opts.faith;
+    const cross = [{ x, y }, { x: x + 1, y }, { x: x - 1, y }, { x, y: y + 1 }, { x, y: y - 1 }]
+      .filter((t) => this.inBounds(t.x, t.y) && this.tile(t.x, t.y) !== 'wall');
+    const t = this.unitAt(x, y);
+    if (faith === 'thor') {
       this.ui.battleLog('雷神之鎚！');
-      const tiles = [{ x, y }, { x: x + 1, y }, { x: x - 1, y }, { x, y: y + 1 }, { x, y: y - 1 }]
-        .filter((t) => this.inBounds(t.x, t.y) && this.tile(t.x, t.y) !== 'wall');
-      await this.thunderStrike(tiles, 10, false, u);
-    } else {
-      const t = this.unitAt(x, y);
+      await this.thunderStrike(cross, 10, false, u);
+    } else if (faith === 'mazu') {
+      this.ui.battleLog('海潮庇護！海水漫了上來。');
+      for (const c of cross) {
+        this.tiles[c.y][c.x] = 'water';
+        this.effects.push({ type: 'wave', x: c.x, y: c.y, ttl: 500, max: 500 });
+      }
+      await sleep(250);
+      for (const a of this.living('ally')) this.heal(a, 8);
+      await sleep(300);
+    } else if (faith === 'apollo') {
+      this.ui.battleLog('日冕！');
+      this.flashScreen = 350;
+      const targets = this.living('enemy').filter((e) => dist(u, e) <= 3);
+      for (const e of targets) {
+        e.blind = 2;
+        await this.damage(e, 7, u, '#ffe070');
+      }
+    } else if (faith === 'loki') {
       this.ui.battleLog(`惡作劇！${t.name}看不清楚誰是同伴了。`);
       await this.lunge(u, t);
       t.confused = 2;
       this.floatText(t, '混亂', '#c8a0f0');
       await this.damage(t, 4, u, '#c8a0f0');
+    } else if (faith === 'hachi') {
+      this.ui.battleLog(`凝視！${t.name}被高大的影子看住了，動彈不得。`);
+      t.stunned = 2;
+      this.floatText(t, '定身', '#ffb0d0');
+      await this.damage(t, 6, u, '#ffb0d0');
+    } else if (faith === 'cthulhu') {
+      const dmg = 4 + this.abyss * 2;
+      this.ui.battleLog(`深淵低語（深淵能量 ${this.abyss}）！`);
+      this.abyss = 0;
+      this.shake = 10;
+      for (const e of this.living('enemy')) await this.damage(e, dmg, u, '#70e0c0');
     }
   }
 
@@ -645,6 +731,40 @@ class Battle {
 
   async enemyTurn(u) {
     const hero = this.hero;
+    // 荷魯斯之影：每三回合召喚影子
+    if (u.summon && this.round % u.summon.every === 0 && !u.confused) {
+      let n = 0;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1]]) {
+        if (n >= u.summon.count) break;
+        if (!this.isFree(u.x + dx, u.y + dy)) continue;
+        const m = this.makeEnemy(u.summon.type, u.x + dx, u.y + dy);
+        m.exp = 4;
+        this.addUnit(m);
+        this.floatText(m, '召喚', '#d0a040');
+        n++;
+      }
+      if (n) { this.ui.battleLog(`${u.name}從影子裡拉出了同伴。`); await sleep(400); return; }
+    }
+    // 紅衣小女孩：一眨眼就站到最虛弱的人旁邊
+    if (u.blink && !u.confused) {
+      const prey = this.living('ally').sort((a, b) => a.hp - b.hp)[0];
+      if (prey) {
+        const spots = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([dx, dy]) => ({ x: prey.x + dx, y: prey.y + dy }))
+          .filter((p) => this.isFree(p.x, p.y));
+        if (spots.length && dist(u, prey) > 1) {
+          const p = spots[randInt(0, spots.length - 1)];
+          u.flash = 200;
+          u.x = p.x; u.y = p.y;
+          this.ui.battleLog(`${u.name}不見了……她站在${prey.isPlayer ? '你' : prey.name}旁邊。`);
+          await sleep(350);
+        }
+        if (dist(u, prey) === 1) {
+          const d = await this.attack(u, prey, 1.0);
+          if (d > 0 && !prey.soul) { prey.cursed = 2; this.floatText(prey, '詛咒', '#d070ff'); }
+        }
+        return;
+      }
+    }
     // 搶魂：玩家的靈魂在附近時，有機率去抓
     if (hero.soul && !u.confused && Math.random() < u.grab) {
       const node = this.bestApproach(u, hero, [1, 1]);
@@ -740,8 +860,8 @@ class Battle {
         g.fillRect(px + (w * 3 + 1) * S, py + 4 * S, 4 * S, S);
         g.fillRect(px + ((w + 2) % 4 * 3 + 2) * S, py + 11 * S, 4 * S, S);
       } else {
-        g.fillStyle = (x + y) % 2 ? '#1d1a26' : '#211e2b'; g.fillRect(px, py, sz, sz);
-        g.fillStyle = '#28243a';
+        g.fillStyle = this.theme.floor[(x + y) % 2]; g.fillRect(px, py, sz, sz);
+        g.fillStyle = this.theme.speck;
         g.fillRect(px + ((x * 7 + y * 3) % 12) * S, py + ((x * 5 + y * 11) % 12) * S, S * 2, S);
       }
     }
@@ -802,6 +922,9 @@ class Battle {
       }
       if (u.cursed > 0) { g.fillStyle = 'rgba(200,80,255,0.25)'; g.fillRect(px, py, T * S, T * S); }
       if (u.confused > 0) this.drawLabel(px + T * S / 2, py, '?', '#c8a0f0');
+      if (u.stunned > 0) this.drawLabel(px + T * S / 2, py, '…', '#ffb0d0');
+      if (u.blind > 0) { g.fillStyle = 'rgba(255,230,120,0.25)'; g.fillRect(px, py, T * S, T * S); }
+      if (u.mirror) { g.fillStyle = 'rgba(160,216,255,0.35)'; g.fillRect(px, py, T * S, T * S); }
       if (u.defending) { g.strokeStyle = '#9cf'; g.lineWidth = S; g.strokeRect(px + S, py + S, T * S - 2 * S, T * S - 2 * S); }
       // 血條
       const bw = 12 * S, bx = px + 2 * S, by = (u.y * T + u.oy + 14.5) * S;
@@ -833,6 +956,9 @@ class Battle {
         g.moveTo(x, y);
         while (y < cy) { y += 6 * S; x = cx + randInt(-6, 6) * S * (1 - y / cy); g.lineTo(x, Math.min(y, cy)); }
         g.stroke();
+      } else if (e.type === 'wave') {
+        g.fillStyle = `rgba(120,200,255,${k * 0.7})`;
+        g.fillRect(e.x * T * S, e.y * T * S, T * S, T * S);
       } else if (e.type === 'spark') {
         g.fillStyle = `rgba(255,230,80,${k * 0.6})`;
         g.fillRect(e.x * T * S, e.y * T * S, T * S, T * S);
@@ -863,4 +989,74 @@ class Battle {
     g.fillStyle = color;
     g.fillText(text, x, y);
   }
+}
+
+// ───────── 隨機樓層 ─────────
+
+// depth：0 開始；最後一層是首領
+function generateFloor(depth, themeId, bossType, withHunter) {
+  const theme = THEMES.find((t) => t.id === themeId) || THEMES[0];
+  const isBoss = !!bossType;
+  for (let attempt = 0; attempt < 80; attempt++) {
+    const g = [];
+    for (let y = 0; y < ROWS; y++) g.push(new Array(COLS).fill('.'));
+    g[8][2] = 'P'; g[8][4] = 'C';
+    const enemies = [];
+    const spots = [];
+    if (isBoss) {
+      g[1][3] = 'B';
+      spots.push({ x: 1, y: 0 }, { x: 5, y: 0 });
+      enemies.push('wisp', depth >= 4 ? 'husk' : 'shade');
+    } else {
+      const count = 3 + Math.floor(depth / 2);
+      const pool = Object.keys(ENEMY_DEPTH).filter((t) => ENEMY_DEPTH[t] <= depth);
+      const free = [];
+      for (let y = 0; y <= 1; y++) for (let x = 0; x < COLS; x++) free.push({ x, y });
+      free.sort(() => Math.random() - 0.5);
+      for (let i = 0; i < count; i++) {
+        spots.push(free[i]);
+        // 越深越容易抽到新的敵人
+        const fresh = pool.filter((t) => ENEMY_DEPTH[t] === depth);
+        enemies.push(fresh.length && Math.random() < 0.4 ? fresh[randInt(0, fresh.length - 1)] : pool[randInt(0, pool.length - 1)]);
+      }
+      if (withHunter) { spots.push(free[count]); enemies.push('hunter'); }
+    }
+    for (const p of spots) g[p.y][p.x] = 'E';
+    const empty = (x, y) => y >= 2 && y <= 7 && g[y][x] === '.';
+    // 水池：2×2 或 3×1
+    const pools = randInt(theme.water[0], theme.water[1]);
+    for (let i = 0; i < pools; i++) {
+      const w = Math.random() < 0.5 ? 2 : 3, h = w === 2 ? 2 : 1;
+      const ox = randInt(0, COLS - w), oy = randInt(2, 7 - h + 1);
+      for (let y = oy; y < oy + h; y++) for (let x = ox; x < ox + w; x++) if (empty(x, y)) g[y][x] = '~';
+    }
+    // 牆：一格或兩格的柱子
+    const walls = randInt(theme.walls[0], theme.walls[1]);
+    for (let i = 0; i < walls; i++) {
+      const x = randInt(0, COLS - 1), y = randInt(2, 6);
+      if (empty(x, y)) g[y][x] = '#';
+      if (Math.random() < 0.5 && empty(x, y + 1)) g[y + 1][x] = '#';
+    }
+    // 確認從玩家出發可以走到每個敵人
+    const seen = new Set(['2,8']), q = [{ x: 2, y: 8 }];
+    while (q.length) {
+      const c = q.shift();
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nx = c.x + dx, ny = c.y + dy;
+        if (nx < 0 || ny < 0 || nx >= COLS || ny >= ROWS || g[ny][nx] === '#' || seen.has(nx + ',' + ny)) continue;
+        seen.add(nx + ',' + ny); q.push({ x: nx, y: ny });
+      }
+    }
+    const ok = [...spots, ...(isBoss ? [{ x: 3, y: 1 }] : [])].every((p) => seen.has(p.x + ',' + p.y));
+    if (!ok) continue;
+    const boss = isBoss ? BOSSES.find((b) => b.type === bossType) : null;
+    return {
+      name: isBoss ? `地下 ${depth + 1} 層・${boss.room}` : `地下 ${depth + 1} 層・${theme.name}`,
+      theme: theme.id,
+      map: g.map((r) => r.join('')),
+      enemies,
+      boss: bossType || null,
+    };
+  }
+  throw new Error('樓層產生失敗');
 }
