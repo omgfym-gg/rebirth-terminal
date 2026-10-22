@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>橫向戰鬥試玩</title>
+<link rel="stylesheet" href="style.css?v=20261022f">
+<style>
+  .stage { width: 100%; height: auto; border: 2px solid var(--line); background: #0b0a12; touch-action: manipulation; }
+  .bar { display: flex; justify-content: space-between; margin: 6px 0; font-size: 14px; }
+  .acts { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+  .acts .btn { padding: 10px 4px; font-size: 15px; }
+  .acts .btn.active { border-color: var(--gold); background: #3a3420; }
+  .acts .btn.glow { border-color: var(--gold); animation: glow 0.8s infinite alternate; }
+  .desc { min-height: 44px; font-size: 13px; line-height: 1.5; margin-top: 8px; color: var(--muted); }
+  .log { font-size: 13px; color: var(--muted); margin-top: 6px; min-height: 40px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <h2>橫向戰鬥・試玩</h2>
+  <p class="muted" style="font-size:13px">用月老試試看「左右對站」的打法。敵人和小狗還是舊圖，新圖畫好會換上。</p>
+  <canvas class="stage" width="384" height="216"></canvas>
+  <div class="bar"><span class="hp"></span><span class="who"></span></div>
+  <div class="acts"></div>
+  <div class="desc"></div>
+  <div class="log"></div>
+  <a class="btn wide" href="./" style="display:block;text-align:center;text-decoration:none;margin-top:10px">回遊戲</a>
+</div>
+<script src="js/data.js?v=20261022f"></script>
+<script src="js/jobs.js?v=20261022f"></script>
+<script src="js/sprites.js?v=20261022f"></script>
+<script>
+'use strict';
+// 橫向回合制原型：我方站左邊、敵人站右邊，各自有前後排。點技能，再點目標。
+const W = 384, H = 216, GROUND = 196;
+const cv = document.querySelector('.stage'), g = cv.getContext('2d');
+g.imageSmoothingEnabled = false;
+const $ = (s) => document.querySelector(s);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const rnd = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+const tween = (ms, fn) => new Promise((res) => { const t0 = performance.now(); const f = (n) => { const t = Math.min(1, (n - t0) / ms); fn(t); t < 1 ? requestAnimationFrame(f) : res(); }; requestAnimationFrame(f); });
+
+const ACTIONS = {
+  attack: { name: '攻擊', desc: '衝上去揍前兩排的一個敵人。', target: 'enemyFront' },
+  pull:   { name: '情感牽線', desc: '甩紅線綁住任一個敵人：詛咒 2 回合（受到的傷害加五成），把它拉到最前排。冷卻 3', target: 'enemy', cd: 3 },
+  heal:   { name: '社群經營', desc: '自己或引魂犬回復 6 點生命，護盾 1 回合（受到的傷害減半）。冷卻 2', target: 'ally', cd: 2 },
+  ult:    { name: '人口普查', desc: '神力滿 100% 才能用。全場敵人受到 3 點傷害（無視防禦），定身 1 回合。', target: 'none' },
+};
+
+let units, turnQueue, current, picking, busy, charge, cds, effects, shake, over;
+
+function reset() {
+  units = [
+    { id: 'hero', side: 'ally', name: '月老', art: 'yuelao', hp: 30, maxHp: 30, atk: 5, def: 2, spd: 5, rank: 0 },
+    { id: 'dog', side: 'ally', name: '引魂犬', sprite: 'dog', hp: 20, maxHp: 20, atk: 5, def: 1, spd: 7, rank: 1 },
+    { id: 'e1', side: 'enemy', name: '影子怪', sprite: 'shade', hp: 12, maxHp: 12, atk: 5, def: 1, spd: 4, rank: 0 },
+    { id: 'e2', side: 'enemy', name: '空殼職員', sprite: 'husk', hp: 18, maxHp: 18, atk: 6, def: 2, spd: 3, rank: 1 },
+    { id: 'e3', side: 'enemy', name: '鬼火', sprite: 'wisp', hp: 8, maxHp: 8, atk: 4, def: 0, spd: 6, rank: 2, ranged: true },
+  ];
+  for (const u of units) Object.assign(u, { ox: 0, oy: 0, flash: 0, anim: null, curse: 0, stun: 0, shield: 0, dead: false });
+  charge = 0; cds = { pull: 0, heal: 0 }; effects = []; shake = 0; over = false; picking = null; busy = false;
+  $('.log').textContent = '輪到誰行動，畫面下方會顯示。';
+  nextRound();
+}
+
+// ───── 位置與畫 ─────
+const home = (u) => u.side === 'ally' ? 150 - u.rank * 62 : 236 + u.rank * 58;
+const alive = (side) => units.filter((u) => u.side === side && !u.dead);
+
+function drawBackground(now) {
+  // 後牆：辦公大樓的走廊，門、公告欄、閃爍的燈
+  g.fillStyle = '#211d2b'; g.fillRect(0, 0, W, 150);
+  g.fillStyle = '#2a2536';
+  for (let x = 0; x < W; x += 48) g.fillRect(x, 0, 2, 150);
+  for (let i = 0; i < 4; i++) {
+    const dx = 20 + i * 96;
+    g.fillStyle = '#16131e'; g.fillRect(dx, 62, 40, 88);
+    g.fillStyle = '#3a3448'; g.fillRect(dx - 3, 59, 46, 3); g.fillRect(dx - 3, 59, 3, 91); g.fillRect(dx + 40, 59, 3, 91);
+    g.fillStyle = '#c8b860'; g.fillRect(dx + 32, 104, 4, 2);
+    g.fillStyle = '#3c5a3a'; g.fillRect(dx + 8, 40, 24, 8); g.fillStyle = '#7ae07a'; g.fillRect(dx + 11, 43, 18, 2);
+  }
+  g.fillStyle = '#4a3a2a'; g.fillRect(126, 70, 36, 26); g.fillStyle = '#d8d0b0';
+  for (let k = 0; k < 5; k++) g.fillRect(130 + (k % 3) * 10, 74 + Math.floor(k / 3) * 10, 7, 7);
+  // 天花板燈
+  for (let i = 0; i < 4; i++) {
+    const on = !(i === 2 && Math.floor(now / 140) % 9 === 0);
+    g.fillStyle = on ? '#e8f0d0' : '#4a4a40'; g.fillRect(36 + i * 96, 6, 32, 3);
+    if (on) { const grd = g.createRadialGradient(52 + i * 96, 10, 2, 52 + i * 96, 60, 90); grd.addColorStop(0, 'rgba(230,240,200,0.10)'); grd.addColorStop(1, 'rgba(230,240,200,0)'); g.fillStyle = grd; g.fillRect(i * 96, 0, 104, 160); }
+  }
+  // 牆腳＋地板（往前透視的磁磚）
+  g.fillStyle = '#3a3448'; g.fillRect(0, 146, W, 4);
+  g.fillStyle = '#2a2632'; g.fillRect(0, 150, W, H - 150);
+  g.fillStyle = '#221f2a';
+  for (let y = 150, k = 0; y < H; y += 8 + k * 2, k++) g.fillRect(0, y, W, 1);
+  for (let i = -8; i <= 8; i++) { g.strokeStyle = '#221f2a'; g.beginPath(); g.moveTo(W / 2 + i * 30, 150); g.lineTo(W / 2 + i * 60, H); g.stroke(); }
+  // 地上的水漬反光
+  g.fillStyle = 'rgba(120,160,220,0.08)'; g.fillRect(60, 200, 90, 4); g.fillRect(250, 206, 70, 3);
+}
+
+function drawUnit(u, now) {
+  if (u.dead && !u.anim) return;
+  const x = home(u) + u.ox, flip = u.side === 'enemy';
+  const white = u.flash > now && Math.floor((u.flash - now) / 60) % 2 === 0;
+  // 影子
+  g.fillStyle = 'rgba(0,0,0,0.4)'; g.beginPath(); g.ellipse(x, GROUND, u.art ? 22 : 18, 4, 0, 0, Math.PI * 2); g.fill();
+  if (u.art) {
+    let sheet = 'pose', i = 0;
+    const A = { walk: ['walk', [100, 100, 100, 100], true], punch: ['punch', [70, 80, 260, 120]], cast: ['cast', [110, 110, 110, 380]], hurt: ['hurt', [150, 300]], down: ['hurt', [150, 200, 99999]] };
+    if (u.anim && A[u.anim.name]) {
+      const [s, ms, loop] = A[u.anim.name]; let t = now - u.anim.t0; const tot = ms.reduce((a, b) => a + b, 0);
+      if (loop) t %= tot;
+      if (t < tot) { sheet = s; while (t >= ms[i]) t -= ms[i++]; } else u.anim = null;
+    } else if (!u.dead) i = 0;
+    if (u.dead && !u.anim) return;
+    drawArt(g, u.art, sheet, i, x, GROUND + u.oy, 1, { white });
+    // 飄愛心
+    for (let k = 0; k < 2; k++) { const p = (now / 1800 + k / 2) % 1; drawMark(g, 'heart', x + (k ? 18 : -28) + Math.sin(p * 6) * 3, GROUND - 50 - p * 40, 2, p < 0.2 ? p * 5 : 1 - (p - 0.2) / 0.8); }
+  } else {
+    const bob = Math.floor(now / 500 + u.rank) % 2;
+    const sz = 64, img = getSprite(u.sprite, { flip: !flip ? false : true, white });
+    if (u.dead) g.globalAlpha = 0.4;
+    g.drawImage(img, Math.round(x - sz / 2), GROUND - sz + 4 - bob * 2 + u.oy, sz, sz);
+    g.globalAlpha = 1;
+  }
+  // 血條、狀態
+  const top = GROUND - (u.art ? 84 : 66);
+  g.fillStyle = '#000'; g.fillRect(x - 17, top - 1, 34, 5);
+  g.fillStyle = u.side === 'ally' ? '#5fd35f' : '#e05050'; g.fillRect(x - 16, top, Math.max(0, 32 * u.hp / u.maxHp), 3);
+  g.font = 'bold 10px sans-serif'; g.textAlign = 'center';
+  const tags = [u.curse > 0 ? ['詛', '#d070ff'] : null, u.stun > 0 ? ['定', '#ffb0d0'] : null, u.shield > 0 ? ['盾', '#ffe070'] : null].filter(Boolean);
+  tags.forEach(([t, c], k) => { g.fillStyle = c; g.fillText(t, x - 10 + k * 12, top - 4); });
+  // 現在輪到誰、能不能被選
+  if (current === u && !over) { g.fillStyle = '#ffe070'; g.beginPath(); g.moveTo(x - 5, top - 16); g.lineTo(x + 5, top - 16); g.lineTo(x, top - 10); g.fill(); }
+  if (picking && validTargets().includes(u)) {
+    const pulse = 0.5 + 0.5 * Math.sin(now / 150);
+    g.strokeStyle = `rgba(255,${u.side === 'ally' ? 230 : 90},${u.side === 'ally' ? 120 : 90},${0.5 + pulse * 0.5})`; g.lineWidth = 2;
+    g.strokeRect(x - 26, top - 6, 52, GROUND - top + 10);
+  }
+}
+
+function draw(now) {
+  g.save();
+  if (shake > 0) { g.translate(rnd(-1, 1) * shake, rnd(-1, 1) * shake); shake = Math.max(0, shake - 0.3); }
+  drawBackground(now);
+  for (const u of [...units].sort((a, b) => b.rank - a.rank)) drawUnit(u, now);
+  // 特效：紅線、飄字、閃光
+  effects = effects.filter((e) => now < e.t0 + e.ms);
+  for (const e of effects) {
+    const k = (now - e.t0) / e.ms;
+    if (e.type === 'text') { g.globalAlpha = 1 - k; g.font = 'bold 14px sans-serif'; g.textAlign = 'center'; g.fillStyle = '#000'; g.fillText(e.text, e.x + 1, e.y - k * 20 + 1); g.fillStyle = e.color; g.fillText(e.text, e.x, e.y - k * 20); g.globalAlpha = 1; }
+    if (e.type === 'thread') {
+      g.strokeStyle = '#ff3048'; g.lineWidth = 2; g.beginPath();
+      const p = Math.min(1, k * 2);
+      for (let s = 0; s <= 20; s++) { const t = s / 20 * p; const xx = e.x1 + (e.x2 - e.x1) * t, yy = e.y1 + (e.y2 - e.y1) * t - Math.sin(t * Math.PI) * 30 + Math.sin(t * 20 + now / 50) * 2; s ? g.lineTo(xx, yy) : g.moveTo(xx, yy); }
+      g.stroke();
+    }
+    if (e.type === 'flash') { g.fillStyle = `rgba(255,240,200,${(1 - k) * 0.6})`; g.fillRect(0, 0, W, H); }
+  }
+  // 暗角
+  const v = g.createRadialGradient(W / 2, H * 0.6, 80, W / 2, H * 0.6, 260); v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,0.55)');
+  g.fillStyle = v; g.fillRect(0, 0, W, H);
+  g.restore();
+  requestAnimationFrame(draw);
+}
+
+// ───── 規則 ─────
+function float(u, text, color = '#fff') { effects.push({ type: 'text', x: home(u) + u.ox, y: GROUND - 90, text, color, t0: performance.now(), ms: 900 }); }
+
+async function hit(src, dst, dmg, fixed = false) {
+  if (!fixed) dmg = Math.max(1, dmg - dst.def + rnd(-1, 1));
+  if (dst.curse > 0) dmg = Math.round(dmg * 1.5);
+  if (dst.shield > 0) dmg = Math.ceil(dmg / 2);
+  dst.hp -= dmg; dst.flash = performance.now() + 300; shake = Math.min(6, 2 + dmg / 3);
+  float(dst, '-' + dmg);
+  if (dst.art) dst.anim = { name: 'hurt', t0: performance.now() };
+  if (src && src.id === 'hero') charge = Math.min(100, charge + 25);
+  if (dst.id === 'hero') charge = Math.min(100, charge + 15);
+  if (dst.hp <= 0) {
+    dst.hp = 0; dst.dead = true;
+    if (dst.art) dst.anim = { name: 'down', t0: performance.now() };
+    float(dst, '倒下', '#ff9090');
+    // 後面的人往前補位
+    const row = alive(dst.side).sort((a, b) => a.rank - b.rank);
+    await sleep(250);
+    await tween(250, () => {}); row.forEach((u, k) => { u.rank = k; });
+  }
+}
+
+async function dashTo(u, target, fn) {
+  const dx = home(target) - home(u) + (u.side === 'ally' ? -40 : 40);
+  if (u.art) u.anim = { name: 'walk', t0: performance.now() };
+  await tween(220, (t) => { u.ox = dx * t; });
+  await fn();
+  if (u.art) u.anim = { name: 'walk', t0: performance.now() };
+  await tween(220, (t) => { u.ox = dx * (1 - t); });
+  if (u.art) u.anim = null;
+}
+
+function validTargets() {
+  const a = ACTIONS[picking];
+  if (!a) return [];
+  if (a.target === 'enemyFront') return alive('enemy').filter((u) => u.rank <= 1);
+  if (a.target === 'enemy') return alive('enemy');
+  if (a.target === 'ally') return alive('ally');
+  return [];
+}
+
+async function perform(act, target) {
+  busy = true; picking = null; renderActs();
+  const hero = units[0];
+  if (act === 'attack') {
+    $('.log').textContent = `月老揍了${target.name}一拳。`;
+    await dashTo(hero, target, async () => { hero.anim = { name: 'punch', t0: performance.now() }; await sleep(150); await hit(hero, target, hero.atk); await sleep(250); });
+  } else if (act === 'pull') {
+    $('.log').textContent = `月老甩出紅線，綁住了${target.name}！`;
+    hero.anim = { name: 'cast', t0: performance.now() }; await sleep(330);
+    effects.push({ type: 'thread', x1: home(hero) + 20, y1: GROUND - 40, x2: home(target), y2: GROUND - 40, t0: performance.now(), ms: 700 });
+    await sleep(380);
+    target.curse = 2; float(target, '詛咒', '#d070ff');
+    // 拉到最前排
+    const row = alive('enemy').sort((a, b) => a.rank - b.rank).filter((u) => u !== target);
+    const from = home(target); target.rank = 0; row.forEach((u, k) => { u.rank = k + 1; });
+    const d = from - home(target); target.ox = d; await tween(300, (t) => { target.ox = d * (1 - t); });
+    cds.pull = ACTIONS.pull.cd + 1;
+    charge = Math.min(100, charge + 25);
+  } else if (act === 'heal') {
+    $('.log').textContent = `月老替${target.name}經營了一下人脈。`;
+    hero.anim = { name: 'cast', t0: performance.now() }; await sleep(500);
+    target.hp = Math.min(target.maxHp, target.hp + 9); target.shield = 2; float(target, '+9', '#7fe07f'); float(target, '護盾', '#ffe070');
+    cds.heal = ACTIONS.heal.cd + 1;
+  } else if (act === 'ult') {
+    $('.log').textContent = '人口普查！全場敵人都被登記在案。';
+    charge = 0; hero.anim = { name: 'cast', t0: performance.now() }; await sleep(400);
+    effects.push({ type: 'flash', t0: performance.now(), ms: 400 }); shake = 6;
+    for (const e of alive('enemy')) { effects.push({ type: 'thread', x1: home(hero) + 20, y1: GROUND - 40, x2: home(e), y2: GROUND - 40, t0: performance.now(), ms: 600 }); await hit(hero, e, 3, true); if (!e.dead) { e.stun = 1; float(e, '定身', '#ffb0d0'); } await sleep(120); }
+  }
+  await sleep(300);
+  busy = false;
+  endTurn();
+}
+
+async function aiTurn(u) {
+  if (u.stun > 0) { float(u, '定身中', '#ffb0d0'); u.stun--; await sleep(600); return endTurn(); }
+  const foes = alive(u.side === 'ally' ? 'enemy' : 'ally');
+  const reach = u.ranged ? foes : foes.filter((f) => f.rank <= 1);
+  const t = reach[rnd(0, reach.length - 1)] || foes[0];
+  if (!t) return endTurn();
+  $('.log').textContent = `${u.name}攻擊了${t.name}。`;
+  if (u.ranged) { u.oy = -6; await sleep(200); u.oy = 0; await hit(u, t, u.atk); await sleep(400); }
+  else await dashTo(u, t, async () => { await hit(u, t, u.atk); await sleep(250); });
+  endTurn();
+}
+
+function nextRound() {
+  turnQueue = units.filter((u) => !u.dead).sort((a, b) => b.spd - a.spd);
+  for (const u of units) { if (u.curse > 0) u.curse--; if (u.shield > 0) u.shield--; }
+  for (const k in cds) if (cds[k] > 0) cds[k]--;
+  endTurn(true);
+}
+
+function endTurn(fresh) {
+  if (!alive('enemy').length) return finish(true);
+  if (!alive('ally').some((u) => u.id === 'hero')) return finish(false);
+  if (!fresh) turnQueue.shift();
+  while (turnQueue.length && turnQueue[0].dead) turnQueue.shift();
+  if (!turnQueue.length) return nextRound();
+  current = turnQueue[0];
+  if (current.id === 'hero') {
+    if (current.stun > 0) { current.stun--; float(current, '定身中'); return setTimeout(() => endTurn(), 600); }
+    $('.who').textContent = '輪到你了'; renderActs();
+  } else {
+    $('.who').textContent = `${current.name}行動中…`; renderActs();
+    setTimeout(() => aiTurn(current), 500);
+  }
+}
+
+function finish(win) {
+  over = true; current = null; picking = null;
+  $('.who').textContent = win ? '勝利！' : '月老倒下了';
+  $('.log').textContent = win ? '整層樓的姻緣都登記完畢。' : '（正式版這裡會變成靈魂，等引魂犬來救。）';
+  const box = $('.acts'); box.innerHTML = '';
+  const b = document.createElement('button'); b.className = 'btn primary'; b.textContent = '再打一次'; b.onclick = reset; box.append(b);
+}
+
+function renderActs() {
+  const hero = units[0];
+  $('.hp').textContent = `月老 生命 ${hero.hp}/${hero.maxHp}・神力 ${charge}%`;
+  const box = $('.acts'); box.innerHTML = '';
+  const myTurn = current && current.id === 'hero' && !busy && !over;
+  for (const [id, a] of Object.entries(ACTIONS)) {
+    const cd = cds[id] || 0, ready = myTurn && cd === 0 && (id !== 'ult' || charge >= 100);
+    const b = document.createElement('button');
+    b.className = 'btn' + (picking === id ? ' active' : '') + (id === 'ult' && charge >= 100 ? ' glow' : '');
+    b.textContent = a.name + (cd ? `(${cd})` : '') + (id === 'ult' ? ` ${charge}%` : '');
+    b.disabled = !ready;
+    b.onclick = () => {
+      if (a.target === 'none') return perform(id);
+      picking = picking === id ? null : id; renderActs();
+      $('.desc').textContent = picking ? a.desc + '　→ 點畫面上發光的目標。' : '';
+    };
+    box.append(b);
+  }
+  const wait = document.createElement('button'); wait.className = 'btn'; wait.textContent = '跳過'; wait.disabled = !myTurn;
+  wait.onclick = () => { picking = null; endTurn(); }; box.append(wait);
+  if (!picking) $('.desc').textContent = myTurn ? '選一個行動。按下技能會先顯示說明，再點目標。' : '';
+}
+
+cv.addEventListener('pointerdown', (ev) => {
+  if (!picking || busy) return;
+  const r = cv.getBoundingClientRect(), x = (ev.clientX - r.left) * W / r.width;
+  const t = validTargets().sort((a, b) => Math.abs(home(a) - x) - Math.abs(home(b) - x))[0];
+  if (t && Math.abs(home(t) - x) < 34) perform(picking, t);
+});
+
+let loaded = 0;
+preloadArt();
+const need = Object.values(ART.yuelao.sheets).length;
+const check = setInterval(() => {
+  if (Object.keys(ART.yuelao.sheets).every((s) => artSheet('yuelao', s))) { clearInterval(check); reset(); requestAnimationFrame(draw); }
+}, 50);
+</script>
+</body>
+</html>
