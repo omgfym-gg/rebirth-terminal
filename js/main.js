@@ -283,7 +283,7 @@ const Game = {
     for (const id of skills) skillDefs[id] = getSkill(id);
     if (L.inherit) { skills.push(L.inherit); skillDefs[L.inherit] = mutateSkill(L.inherit, L.form); }
     return {
-      sprite: f.sprite,
+      sprite: f.sprite, art: ART[L.faith] ? L.faith : null,
       maxHp: f.hp + s.perm.hp * 3 + lv * 4 + (r.hp || 0) + (p.hp || 0),
       hp: L.hp,
       atk: f.atk + s.perm.atk + lv + statue + (L.bonusAtk || 0) + (r.atk || 0) + (p.atk || 0),
@@ -303,7 +303,7 @@ const Game = {
     root.innerHTML = '';
     root.append(el('h2', {}, `第 ${this.lifeNo} 世・邊境城鎮`));
     root.append(el('div', { class: 'hero-card' },
-      spriteImg(st.sprite),
+      st.art ? artImg(st.art, 64) : spriteImg(st.sprite),
       el('div', {},
         el('b', {}, `${FORMS[L.form].name}　Lv.${L.level}`),
         el('div', {}, `生命 ${L.hp}/${st.maxHp}　攻擊 ${st.atk}　防禦 ${st.def}`),
@@ -666,6 +666,7 @@ function jobCard(id, g, showSide) {
   const j = JOBS[id];
   const rival = JOBS[j.rival];
   return [
+    ART[id] ? artImg(id) : null,
     el('b', {}, `${j.name}${showSide ? `（${j.side}族）` : ''}`),
     el('small', { class: 'muted' }, `${j.title}　死對頭：${rival ? rival.name : '？'}`),
     el('small', { class: 'quote' }, `「${j.quote}」`),
@@ -702,21 +703,36 @@ const BattleUI = {
       }, a.name));
     }
     $('#battle .hint').textContent = '點藍色格子移動，或直接選擇行動。';
+    this.showSkillDesc(u);
     this.showHero(u);
+  },
+  // 按鈕下面列出每招在做什麼；選中的那招會亮起來
+  showSkillDesc(u) {
+    const box = $('#battle .skill-desc');
+    box.innerHTML = '';
+    const g = Game.battle ? Game.battle.gauge : '能量';
+    for (const s of u.skills) {
+      box.append(el('div', { 'data-id': 'skill:' + s.id }, el('span', { class: 'tag' }, '技能'), `「${s.n}」${describeSkill(s, g)}`));
+    }
+    box.append(el('div', { 'data-id': 'ult' }, el('span', { class: 'tag ult' }, '大招'), `「${u.ult.n}」${describeSkill(u.ult, g)}（${g}滿 100% 才能用）`));
+    box.append(el('div', { class: 'muted' }, `攻擊：打相鄰的一個敵人。防禦：受到的傷害減半到下回合。結束：這回合不做事。`));
   },
   showSoulActions() {
     const box = $('#battle .actions');
     box.innerHTML = '';
     box.append(el('button', { class: 'btn act', onclick: () => Game.battle && Game.battle.chooseAction('wait') }, '等待救援'));
+    $('#battle .skill-desc').innerHTML = '';
     $('#battle .hint').textContent = '點藍色格子讓靈魂飄過去。紫色裂縫可以逃走。';
     if (Game.battle) $('#battle .hero-hp').textContent = `靈魂 剩 ${Game.battle.hero.soulTimer} 回合`;
   },
   setActiveAction(id) {
     for (const b of document.querySelectorAll('#battle .actions .btn')) b.classList.toggle('active', b.dataset.id === id);
+    for (const d of document.querySelectorAll('#battle .skill-desc [data-id]')) d.classList.toggle('active', d.dataset.id === id);
     $('#battle .hint').textContent = id ? '點紅色格子選擇目標。再按一次按鈕取消。' : '點藍色格子移動，或直接選擇行動。';
   },
   hideActions() {
     $('#battle .actions').innerHTML = '';
+    $('#battle .skill-desc').innerHTML = '';
     $('#battle .hint').textContent = '';
   },
   showHero(u) {

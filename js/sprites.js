@@ -343,3 +343,88 @@ function drawPortrait(canvas, name, scale = 6) {
   g.clearRect(0, 0, canvas.width, canvas.height);
   g.drawImage(getSprite(name), 0, 0, canvas.width, canvas.height);
 }
+
+// ───────── 職業專屬像素圖（Gemini 畫的，有連續動作）─────────
+// big：轉生櫃台、城鎮用的大圖；mini：戰鬥格子用的縮小版。每張是一排等寬格子，腳底對齊底邊。
+// pose 那張的格子順序：站、走、坐、睡、出拳（出拳朝左）。
+const ART = {
+  yuelao: {
+    dir: 'assets/yuelao/',
+    mark: 'heart', // 身邊飄愛心，一眼認得出是月老
+    big: { pose: ['sheet.png', 49, 78] },
+    mini: { pose: ['mini/pose.png', 18, 28], walk: ['mini/walk.png', 16, 28], punch: ['mini/punch.png', 22, 28], cast: ['mini/cast.png', 29, 28], hurt: ['mini/hurt.png', 27, 27] },
+  },
+};
+// 動作：用哪張、每格停多久（毫秒）
+const ART_ANIMS = {
+  walk: { sheet: 'walk', ms: [110, 110, 110, 110], loop: true },
+  punch: { sheet: 'punch', ms: [60, 70, 220, 90] },
+  cast: { sheet: 'cast', ms: [90, 90, 90, 260] },
+  hurt: { sheet: 'hurt', ms: [140, 240] },
+};
+
+const ArtImages = {};
+function artSheet(job, size, sheet) {
+  const a = ART[job], spec = a && a[size][sheet];
+  if (!spec) return null;
+  const key = a.dir + spec[0];
+  if (!ArtImages[key]) { const im = new Image(); im.src = key; ArtImages[key] = im; }
+  const img = ArtImages[key];
+  return img.complete && img.naturalWidth ? { img, fw: spec[1], fh: spec[2] } : null;
+}
+function preloadArt() {
+  for (const job in ART) for (const size of ['big', 'mini']) for (const sheet in ART[job][size]) artSheet(job, size, sheet);
+}
+preloadArt();
+
+// 把第 i 格畫到 g 上，(cx, bottom) 是腳底中心
+const artTmp = document.createElement('canvas');
+function drawArt(g, job, size, sheet, i, cx, bottom, scale, { flip = false, white = false } = {}) {
+  const s = artSheet(job, size, sheet);
+  if (!s) return false;
+  const { img, fw, fh } = s;
+  artTmp.width = fw; artTmp.height = fh;
+  const tg = artTmp.getContext('2d');
+  tg.drawImage(img, i * fw, 0, fw, fh, 0, 0, fw, fh);
+  if (white) { tg.globalCompositeOperation = 'source-atop'; tg.fillStyle = '#fff'; tg.fillRect(0, 0, fw, fh); }
+  const w = fw * scale, h = fh * scale, x = Math.round(cx - w / 2), y = Math.round(bottom - h);
+  g.save();
+  g.imageSmoothingEnabled = false;
+  if (flip) { g.translate(x + w, y); g.scale(-1, 1); g.drawImage(artTmp, 0, 0, w, h); }
+  else g.drawImage(artTmp, x, y, w, h);
+  g.restore();
+  return true;
+}
+
+// 職業記號：小像素圖，戰鬥時飄在角色身邊
+const MARKS = {
+  heart: { color: '#ff5c8d', light: '#ffc0d4', rows: ['.x.x.', 'xxxxx', 'xxxxx', '.xxx.', '..x..'] },
+};
+function drawMark(g, name, x, y, s, alpha = 1) {
+  const m = MARKS[name];
+  g.globalAlpha = alpha;
+  // 先畫一圈深色外框，在深色地板上也看得清楚
+  const o = Math.max(1, s / 2);
+  g.fillStyle = '#1a1418';
+  m.rows.forEach((row, yy) => [...row].forEach((ch, xx) => {
+    if (ch === 'x') g.fillRect(Math.round(x + xx * s - o), Math.round(y + yy * s - o), s + 2 * o, s + 2 * o);
+  }));
+  m.rows.forEach((row, yy) => [...row].forEach((ch, xx) => {
+    if (ch !== 'x') return;
+    g.fillStyle = yy === 1 && xx === 1 ? m.light : m.color;
+    g.fillRect(Math.round(x + xx * s), Math.round(y + yy * s), s, s);
+  }));
+  g.globalAlpha = 1;
+}
+
+// 卡片上的職業大圖（圖還沒載入就等載入後再畫）
+function artImg(job, height = 72) {
+  const c = document.createElement('canvas');
+  c.className = 'art';
+  const spec = ART[job].big.pose;
+  c.width = spec[1]; c.height = spec[2];
+  c.style.height = height + 'px';
+  const paint = () => drawArt(c.getContext('2d'), job, 'big', 'pose', 0, spec[1] / 2, spec[2], 1);
+  if (!paint()) ArtImages[ART[job].dir + spec[0]].addEventListener('load', paint, { once: true });
+  return c;
+}

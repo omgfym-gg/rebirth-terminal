@@ -120,3 +120,8 @@ div.card.job { cursor: default; margin-top: 8px; }
 .tag { display: inline-block; font-size: 11px; padding: 0 4px; margin-right: 4px; border: 1px solid var(--accent); color: var(--accent); }
 .tag.ult { border-color: var(--gold); color: var(--gold); }
 .small-note { font-size: 13px; margin-top: -4px; }
+canvas.art { image-rendering: pixelated; width: auto; align-self: center; }
+.skill-desc { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; font-size: 13px; line-height: 1.45; }
+.skill-desc > div { padding: 4px 6px; border: 1px solid transparent; }
+.skill-desc > div.active { border-color: var(--gold); background: #3a3420; }
+.skill-desc .muted { font-size: 12px; }

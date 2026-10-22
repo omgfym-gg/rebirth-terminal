@@ -110,7 +110,7 @@ class Battle {
   makeHero(h, x, y) {
     const skills = h.skills.map((id) => ({ ...h.skillDefs[id], id, cdLeft: 0 }));
     return {
-      id: 'hero', side: 'ally', isPlayer: true, name: '你', sprite: h.sprite,
+      id: 'hero', side: 'ally', isPlayer: true, name: '你', sprite: h.sprite, art: h.art,
       x, y, hp: h.hp, maxHp: h.maxHp, atk: h.atk, def: h.def, spd: h.spd, mov: h.mov,
       range: [1, 1], skills, ult: { ...this.job.ult, id: 'ult' },
       charge: Math.min(100, (this.opts.startCharge || 0) + (this.pp.charge || 0)), facing: 1,
@@ -156,7 +156,7 @@ class Battle {
   addUnit(u) {
     if (u.side === 'enemy' && ENEMIES[u.type] && ENEMIES[u.type].copy) {
       // 鏡中人：照著你的樣子長出來
-      u.atk = this.heroBase.atk; u.def = this.heroBase.def; u.sprite = this.heroBase.sprite; u.mirror = true;
+      u.atk = this.heroBase.atk; u.def = this.heroBase.def; u.sprite = this.heroBase.sprite; u.art = this.heroBase.art; u.mirror = true;
     }
     u.stunned = 0; u.blind = 0; u.charmed = 0; u.shield = 0;
     u.cursed = 0; u.confused = 0; u.defending = false; u.soul = false; u.gone = false;
@@ -547,17 +547,25 @@ class Battle {
 
   // ───────── 行動 ─────────
 
+  // 有專屬圖的單位播一段動作；loop 的要自己用 stopAnim 停
+  playAnim(u, name) {
+    if (u.art) u.anim = { name, t0: performance.now() };
+  }
+
   async walk(u, path) {
+    if (path.length) this.playAnim(u, 'walk');
     for (const step of path) {
       if (step.x !== u.x) u.facing = step.x > u.x ? 1 : -1;
       const fx = u.x, fy = u.y;
       await tween(90, (t) => { u.ox = (step.x - fx) * TILE * t; u.oy = (step.y - fy) * TILE * t; });
       u.x = step.x; u.y = step.y; u.ox = 0; u.oy = 0;
     }
+    if (u.anim && u.anim.name === 'walk') u.anim = null;
   }
 
   async lunge(u, target) {
     if (target.x !== u.x) u.facing = target.x > u.x ? 1 : -1;
+    if (!u.anim) this.playAnim(u, 'punch');
     const dx = Math.sign(target.x - u.x) * 5, dy = Math.sign(target.y - u.y) * 5;
     await tween(80, (t) => { u.ox = dx * t; u.oy = dy * t; });
     await tween(100, (t) => { u.ox = dx * (1 - t); u.oy = dy * (1 - t); });
@@ -628,6 +636,7 @@ class Battle {
     }
     u.hp -= dmg;
     u.flash = 160;
+    this.playAnim(u, 'hurt');
     this.shake = Math.min(8, 2 + dmg / 3);
     this.floatText(u, '-' + dmg, color);
     // 每個行動只充一次能量，大招打出去的傷害不回充
@@ -774,6 +783,7 @@ class Battle {
     const isUlt = sk === u.ult;
     this.ui.battleLog(isUlt ? `${sk.n}！` : `你使出「${sk.n}」。`);
     if (isUlt) { this.flashScreen = 250; this.shake = 6; }
+    if (u.art) { this.playAnim(u, 'cast'); await sleep(280); }
     let tiles = this.areaTiles(center, a);
     const killsBefore = this.kills;
 
@@ -1090,6 +1100,34 @@ class Battle {
     this.effects.push({ type: 'text', x: u.x, y: u.y, text, color, ttl: 900, max: 900 });
   }
 
+  // 專屬圖：腳底踩在格子下緣，比格子高一點；沒在播動作就站著（防禦時坐著）
+  drawArtUnit(g, u, px, py, now, flip, white) {
+    let sheet = 'pose', i = u.defending ? 2 : 0;
+    const a = u.anim && ART_ANIMS[u.anim.name];
+    if (a) {
+      let t = now - u.anim.t0;
+      const total = a.ms.reduce((m, n) => m + n, 0);
+      if (a.loop) t %= total;
+      if (t < total) {
+        sheet = a.sheet; i = 0;
+        while (t >= a.ms[i]) t -= a.ms[i++];
+      } else u.anim = null;
+    }
+    const S = SCALE, ok = drawArt(g, u.art, 'mini', sheet, i, px + TILE * S / 2, py + (TILE + 1) * S, S, { flip, white });
+    // 記號：兩顆小東西從肩膀往頭上飄
+    const mark = ok && ART[u.art].mark;
+    if (mark) {
+      const ps = S;
+      for (let k = 0; k < 2; k++) {
+        const p = (now / 1800 + k / 2 + u.x * 0.13) % 1;
+        const x = px + (8 + (k ? 7 : -7) + Math.sin(p * 6.3) * 1.5 - 2.5) * S;
+        const y = py + (0 - p * 12) * S;
+        drawMark(g, mark, x, y, ps, p < 0.2 ? p * 5 : 1 - (p - 0.2) / 0.8);
+      }
+    }
+    return ok;
+  }
+
   draw() {
     const g = this.g;
     const S = SCALE, T = TILE;
@@ -1178,7 +1216,9 @@ class Battle {
       const white = u.flash > 0 && Math.floor(u.flash / 60) % 2 === 0;
       if (u.flash > 0) u.flash -= dt;
       const flip = u.facing < 0;
-      if (u.boss) {
+      if (u.art && this.drawArtUnit(g, u, px, py, now, flip, white)) {
+        // 專屬圖畫好了
+      } else if (u.boss) {
         g.drawImage(getSprite(u.sprite, { flip, white }), px - 4 * S, py - 8 * S, (T + 8) * S, (T + 8) * S);
       } else {
         g.drawImage(getSprite(u.sprite, { flip, white }), px, py, T * S, T * S);
