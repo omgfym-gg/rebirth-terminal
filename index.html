@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <meta name="theme-color" content="#0b0a12">
+  <title>轉生終端</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main id="app">
+    <section id="title" class="screen active">
+      <canvas class="banner"></canvas>
+      <h1>轉生終端</h1>
+      <p class="subtitle">死亡不是結束，而是另一種開始。</p>
+      <div class="menu"></div>
+      <p class="muted small">第一版測試・存檔只存在這支手機的瀏覽器裡</p>
+    </section>
+
+    <section id="story" class="screen">
+      <div class="story-head">
+        <canvas class="portrait"></canvas>
+        <div class="speaker"></div>
+      </div>
+      <div class="story-text"></div>
+      <div class="story-buttons"></div>
+    </section>
+
+    <section id="rebirth" class="screen">
+      <div class="content"></div>
+    </section>
+
+    <section id="terminal" class="screen">
+      <canvas class="banner"></canvas>
+      <div class="content"></div>
+    </section>
+
+    <section id="town" class="screen">
+      <canvas class="banner"></canvas>
+      <div class="content"></div>
+    </section>
+
+    <section id="battle" class="screen">
+      <div class="battle-top">
+        <span class="floor-name"></span>
+        <span class="round"></span>
+      </div>
+      <canvas class="board"></canvas>
+      <div class="battle-info">
+        <span class="hero-hp"></span>
+        <span class="hint"></span>
+      </div>
+      <div class="actions"></div>
+      <div class="log"></div>
+    </section>
+  </main>
+
+  <script src="js/data.js"></script>
+  <script src="js/sprites.js"></script>
+  <script src="js/battle.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
