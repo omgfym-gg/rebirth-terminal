@@ -3,9 +3,9 @@
  "frameW": 49,
  "frameH": 78,
  "frames": 5,
- "smallW": 12,
+ "smallW": 11,
  "smallH": 10,
- "smalls": 5,
+ "smalls": 9,
  "names": [
   "stand",
   "walk",
@@ -13,18 +13,18 @@
   "sleep",
   "punch"
  ],
- "punchFacesLeft": true,
- "source": "Gemini 生成，小黑提供（2026-10-22）",
+ "punchFacesLeft": false,
+ "source": "Gemini 生成（拿姻緣簿版，2026-10-22），原圖在 gemini-book/；舊版原圖在 ref/ 與 gemini/",
  "anims": {
   "walk": {
    "file": "walk.png",
-   "frameW": 44,
+   "frameW": 42,
    "frameH": 78,
    "frames": 4
   },
   "punch": {
    "file": "punch.png",
-   "frameW": 60,
+   "frameW": 56,
    "frameH": 78,
    "frames": 4
   },
@@ -36,10 +36,31 @@
   },
   "hurt": {
    "file": "hurt.png",
-   "frameW": 77,
-   "frameH": 76,
-   "frames": 3,
-   "note": "第 2 格原本朝左，已翻轉；多出來的愛心已拿掉"
+   "frameW": 81,
+   "frameH": 78,
+   "frames": 3
   }
+ },
+ "mini": {
+  "pose": [
+   18,
+   28
+  ],
+  "walk": [
+   16,
+   28
+  ],
+  "punch": [
+   21,
+   28
+  ],
+  "cast": [
+   28,
+   28
+  ],
+  "hurt": [
+   29,
+   28
+  ]
  }
 }

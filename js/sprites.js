@@ -346,13 +346,13 @@ function drawPortrait(canvas, name, scale = 6) {
 
 // ───────── 職業專屬像素圖（Gemini 畫的，有連續動作）─────────
 // big：轉生櫃台、城鎮用的大圖；mini：戰鬥格子用的縮小版。每張是一排等寬格子，腳底對齊底邊。
-// pose 那張的格子順序：站、走、坐、睡、出拳（出拳朝左）。
+// pose 那張的格子順序：站、走、坐、睡、出拳。
 const ART = {
   yuelao: {
     dir: 'assets/yuelao/',
     mark: 'heart', // 身邊飄愛心，一眼認得出是月老
     big: { pose: ['sheet.png', 49, 78] },
-    mini: { pose: ['mini/pose.png', 18, 28], walk: ['mini/walk.png', 16, 28], punch: ['mini/punch.png', 22, 28], cast: ['mini/cast.png', 29, 28], hurt: ['mini/hurt.png', 27, 27] },
+    mini: { pose: ['mini/pose.png', 18, 28], walk: ['mini/walk.png', 16, 28], punch: ['mini/punch.png', 21, 28], cast: ['mini/cast.png', 28, 28], hurt: ['mini/hurt.png', 29, 28] },
   },
 };
 // 動作：用哪張、每格停多久（毫秒）

@@ -32,8 +32,8 @@ g.imageSmoothingEnabled = false;
 const sheet = new Image(), hearts = new Image();
 // Gemini 補的動作：每張是一排等寬格子，腳底對齊底邊
 const SHEETS = {
-  walk: { fw: 44, fh: 78, n: 4 }, punch: { fw: 60, fh: 78, n: 4 },
-  cast: { fw: 80, fh: 78, n: 4 }, hurt: { fw: 77, fh: 76, n: 3 },
+  walk: { fw: 42, fh: 78, n: 4 }, punch: { fw: 56, fh: 78, n: 4 },
+  cast: { fw: 80, fh: 78, n: 4 }, hurt: { fw: 81, fh: 78, n: 3 },
 };
 for (const [k, v] of Object.entries(SHEETS)) v.img = new Image();
 const GROUND = 100;
@@ -57,11 +57,11 @@ function frame(i, x, { flip = false, white = false, dy = 0, breath = 0 } = {}) {
   g.restore();
 }
 // 從動作圖畫第 i 格，x 是腳的中心
-const tmp2 = document.createElement('canvas'); tmp2.width = 80; tmp2.height = 78;
+const tmp2 = document.createElement('canvas'); tmp2.width = 81; tmp2.height = 78;
 const tg2 = tmp2.getContext('2d');
 function anim(k, i, x, { flip = false, white = false, dy = 0 } = {}) {
   const { img, fw, fh } = SHEETS[k];
-  tg2.clearRect(0, 0, 80, 78);
+  tg2.clearRect(0, 0, 81, 78);
   tg2.drawImage(img, i * fw, 0, fw, fh, 0, 0, fw, fh);
   if (white) { tg2.globalCompositeOperation = 'source-atop'; tg2.fillStyle = '#fff'; tg2.fillRect(0, 0, fw, fh); tg2.globalCompositeOperation = 'source-over'; }
   const left = Math.round(x - fw / 2), top = GROUND - fh + dy;

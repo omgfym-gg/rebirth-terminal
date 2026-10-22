@@ -1114,6 +1114,16 @@ class Battle {
       } else u.anim = null;
     }
     const S = SCALE, ok = drawArt(g, u.art, 'mini', sheet, i, px + TILE * S / 2, py + (TILE + 1) * S, S, { flip, white });
+    // 縮小版的紅線太細會不見，甩出去那兩格另外畫一條粗一點的
+    if (ok && sheet === 'cast' && i >= 2) {
+      const dir = flip ? -1 : 1, hx = px + (8 + dir * 7) * S, hy = py + 4 * S;
+      g.fillStyle = '#e8283c';
+      if (i === 2) for (let k = 0; k < 7; k++) g.fillRect(hx + dir * k * S, hy + Math.round(Math.sin(k * 1.4 + now / 60)) * S, S, S);
+      else for (let k = 0; k < 16; k++) {
+        const a = k / 16 * Math.PI * 2;
+        g.fillRect(Math.round(hx + dir * (5 + 4 * Math.cos(a)) * S), Math.round(hy + 4 * Math.sin(a) * S), S, S);
+      }
+    }
     // 記號：兩顆小東西從肩膀往頭上飄
     const mark = ok && ART[u.art].mark;
     if (mark) {
