@@ -129,3 +129,11 @@ canvas.art { image-rendering: pixelated; width: auto; align-self: center; }
 .tip-card { width: 100%; max-width: 480px; background: var(--panel); border: 2px solid var(--gold); padding: 14px; line-height: 1.6; }
 .tip-card .tip-title { color: var(--gold); font-weight: bold; margin-bottom: 6px; }
 .tip-card p { margin: 0 0 8px; font-size: 15px; }
+/* 終端故障：字還在，只是會閃、會偏移、帶紅藍殘影 */
+.glitch { display: inline-block; color: #ff8a8a; text-shadow: -1px 0 #3cf, 1px 0 #f36; animation: glitch 2.2s steps(1) infinite; }
+@keyframes glitch {
+  0%, 88%, 100% { transform: none; opacity: 1; }
+  90% { transform: translate(-2px, 1px) skewX(-12deg); opacity: 0.4; }
+  93% { transform: translate(2px, -1px); opacity: 0.8; }
+  96% { transform: translate(-1px, 0) scaleY(0.6); opacity: 0.3; }
+}

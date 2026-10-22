@@ -21,12 +21,16 @@ function el(tag, attrs = {}, ...children) {
   return node;
 }
 
-// 終端越來越不對勁：轉生次數越多，文字越容易出現亂碼
+// 終端越來越不對勁：轉生次數越多，越多字會閃爍、錯位（字本身不換掉，還是讀得懂）
 function corrupt(text, level) {
   if (level <= 0) return text;
-  const glyphs = '█▓▒░#?¿■□';
-  const p = Math.min(0.18, level * 0.025);
-  return [...text].map((ch) => (ch.trim() && Math.random() < p ? glyphs[randInt(0, glyphs.length - 1)] : ch)).join('');
+  const p = Math.min(0.15, level * 0.02);
+  const out = document.createElement('span');
+  for (const ch of text) {
+    if (ch.trim() && Math.random() < p) out.append(el('span', { class: 'glitch', style: `animation-delay:-${randInt(0, 2000)}ms` }, ch));
+    else out.append(ch);
+  }
+  return out;
 }
 
 const SHOP = [

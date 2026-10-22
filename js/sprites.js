@@ -345,14 +345,13 @@ function drawPortrait(canvas, name, scale = 6) {
 }
 
 // ───────── 職業專屬像素圖（Gemini 畫的，有連續動作）─────────
-// big：轉生櫃台、城鎮用的大圖；mini：戰鬥格子用的縮小版。每張是一排等寬格子，腳底對齊底邊。
+// 每張是一排等寬格子，腳底對齊底邊。戰鬥裡用 1 倍畫（不跟著格子放大），細節才不會糊掉。
 // pose 那張的格子順序：站、走、坐、睡、出拳。
 const ART = {
   yuelao: {
     dir: 'assets/yuelao/',
     mark: 'heart', // 身邊飄愛心，一眼認得出是月老
-    big: { pose: ['sheet.png', 49, 78] },
-    mini: { pose: ['mini/pose.png', 18, 28], walk: ['mini/walk.png', 16, 28], punch: ['mini/punch.png', 21, 28], cast: ['mini/cast.png', 28, 28], hurt: ['mini/hurt.png', 29, 28] },
+    sheets: { pose: ['sheet.png', 49, 78], walk: ['walk.png', 42, 78], punch: ['punch.png', 56, 78], cast: ['cast.png', 80, 78], hurt: ['hurt.png', 81, 78] },
   },
 };
 // 動作：用哪張、每格停多久（毫秒）
@@ -364,8 +363,8 @@ const ART_ANIMS = {
 };
 
 const ArtImages = {};
-function artSheet(job, size, sheet) {
-  const a = ART[job], spec = a && a[size][sheet];
+function artSheet(job, sheet) {
+  const a = ART[job], spec = a && a.sheets[sheet];
   if (!spec) return null;
   const key = a.dir + spec[0];
   if (!ArtImages[key]) { const im = new Image(); im.src = key; ArtImages[key] = im; }
@@ -373,14 +372,14 @@ function artSheet(job, size, sheet) {
   return img.complete && img.naturalWidth ? { img, fw: spec[1], fh: spec[2] } : null;
 }
 function preloadArt() {
-  for (const job in ART) for (const size of ['big', 'mini']) for (const sheet in ART[job][size]) artSheet(job, size, sheet);
+  for (const job in ART) for (const sheet in ART[job].sheets) artSheet(job, sheet);
 }
 preloadArt();
 
 // 把第 i 格畫到 g 上，(cx, bottom) 是腳底中心
 const artTmp = document.createElement('canvas');
-function drawArt(g, job, size, sheet, i, cx, bottom, scale, { flip = false, white = false } = {}) {
-  const s = artSheet(job, size, sheet);
+function drawArt(g, job, sheet, i, cx, bottom, scale, { flip = false, white = false } = {}) {
+  const s = artSheet(job, sheet);
   if (!s) return false;
   const { img, fw, fh } = s;
   artTmp.width = fw; artTmp.height = fh;
@@ -421,10 +420,10 @@ function drawMark(g, name, x, y, s, alpha = 1) {
 function artImg(job, height = 72) {
   const c = document.createElement('canvas');
   c.className = 'art';
-  const spec = ART[job].big.pose;
+  const spec = ART[job].sheets.pose;
   c.width = spec[1]; c.height = spec[2];
   c.style.height = height + 'px';
-  const paint = () => drawArt(c.getContext('2d'), job, 'big', 'pose', 0, spec[1] / 2, spec[2], 1);
+  const paint = () => drawArt(c.getContext('2d'), job, 'pose', 0, spec[1] / 2, spec[2], 1);
   if (!paint()) ArtImages[ART[job].dir + spec[0]].addEventListener('load', paint, { once: true });
   return c;
 }
