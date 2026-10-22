@@ -1,16 +1,22 @@
 // 遊戲資料：生命形態、技能、神魔、敵人、地圖、常客、隱藏真相
 'use strict';
 
+// 轉生櫃台的三條路：升仙、入魔、為人
+const PATH_ORDER = ['angel', 'demon', 'human'];
+
+// 人類的叫「信仰」，升仙、入魔的叫「職業」
+const faithLabel = (form) => (form === 'human' ? '信仰' : '職業');
+
 const FORMS = {
   human: {
-    name: '人類', sprite: 'human',
+    name: '人類', path: '為人', pathDesc: '留在人間。神族、魔族都能信仰', side: null, sprite: 'human',
     hp: 30, atk: 7, def: 3, spd: 5, mov: 3,
     skills: ['slash', 'stone'],
     innate: '未定之人：繼承技能時，可以從所有前世的技能裡挑選',
     allowed: () => true,
   },
   angel: {
-    name: '神使', sprite: 'angel',
+    name: '神使', path: '升仙', pathDesc: '成為神使，擔任神族職業', side: '神', sprite: 'angel',
     hp: 26, atk: 5, def: 3, spd: 5, mov: 3,
     skills: ['heal', 'lightbolt'],
     innate: '代禱：隊友變成靈魂時，可以多撐 2 回合',
@@ -18,7 +24,7 @@ const FORMS = {
     lockText: '靈魂太偏混沌',
   },
   demon: {
-    name: '惡魔', sprite: 'demon',
+    name: '惡魔', path: '入魔', pathDesc: '墮為惡魔，擔任魔族職業', side: '魔', sprite: 'demon',
     hp: 28, atk: 8, def: 2, spd: 6, mov: 3,
     skills: ['claw', 'curse'],
     innate: '吞噬：擊倒敵人時回復 4 點生命',

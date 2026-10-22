@@ -107,7 +107,7 @@ const Game = {
       '歡迎來到「靈魂結算終端」。',
       '人間的祈禱與詛咒堆積如山，神界與魔界都缺人手。',
       '你被分配為「轉生外包職員」。',
-      '請選擇你的第一個生命形態與信仰。祝你這一世工作順利。',
+      '請選擇升仙、入魔，或者繼續為人。祝你這一世工作順利。',
     ], () => this.showRebirth(), { speaker: '終端廣播', sprite: null });
   },
 
@@ -163,13 +163,20 @@ const Game = {
       root.append(el('h2', {}, `第 ${this.lifeNo} 世・轉生櫃台`));
       root.append(el('p', { class: 'muted' }, `靈魂本質：${natureLabel(s.nature)}（${s.nature}）　因果債：${s.debt}`));
 
-      root.append(el('h3', {}, '生命形態'));
+      root.append(el('h3', {}, '升仙・入魔・為人'));
       const forms = el('div', { class: 'cards' });
-      for (const [id, f] of Object.entries(FORMS)) {
+      for (const id of PATH_ORDER) {
+        const f = FORMS[id];
         const ok = f.allowed(s.nature);
-        const c = el('button', { class: 'card' + (pick.form === id ? ' selected' : '') + (ok ? '' : ' locked'), onclick: () => { if (ok) { pick.form = id; pick.inherit = null; render(); } } },
+        const c = el('button', { class: 'card' + (pick.form === id ? ' selected' : '') + (ok ? '' : ' locked'), onclick: () => {
+          if (!ok) return;
+          // 換路的時候，原本選的職業／信仰如果不屬於這條路就清掉
+          if (pick.faith && f.side && FAITHS[pick.faith].side !== f.side) pick.faith = null;
+          pick.form = id; pick.inherit = null; render();
+        } },
           spriteImg(f.sprite),
-          el('b', {}, f.name),
+          el('b', {}, f.path),
+          el('small', {}, f.pathDesc),
           el('small', {}, ok ? `生命 ${f.hp}　攻擊 ${f.atk}` : f.lockText),
           ok ? el('small', {}, `防禦 ${f.def}　速度 ${f.spd}`) : null,
           el('small', { class: 'muted' }, f.innate));
@@ -177,11 +184,14 @@ const Game = {
       }
       root.append(forms);
 
-      root.append(el('h3', {}, '信仰'));
+      const side = pick.form ? FORMS[pick.form].side : null;
+      root.append(el('h3', {}, !pick.form ? '職業／信仰' : side === '神' ? '神族職業' : side === '魔' ? '魔族職業' : '信仰（神族、魔族都可以）'));
+      if (!pick.form) root.append(el('p', { class: 'muted' }, '先選升仙、入魔或為人。'));
       const faiths = el('div', { class: 'cards two' });
       for (const [id, f] of Object.entries(FAITHS)) {
+        if (!pick.form || (side && f.side !== side)) continue;
         faiths.append(el('button', { class: 'card' + (pick.faith === id ? ' selected' : ''), onclick: () => { pick.faith = id; render(); } },
-          el('b', {}, `${f.name}（${f.side}）`),
+          el('b', {}, side ? f.name : `${f.name}（${f.side}族）`),
           el('small', {}, f.domain + '：' + f.passive),
           el('small', { class: 'muted' }, '大招「' + f.ult.name + '」：' + f.ult.desc)));
       }
@@ -243,7 +253,9 @@ const Game = {
     this.persist();
     const f = FORMS[pick.form];
     this.story([
-      `你轉生成了${f.name}，信仰${FAITHS[pick.faith].name}。`,
+      pick.form === 'angel' ? `你升仙成為神使，擔任${FAITHS[pick.faith].name}的職業。`
+        : pick.form === 'demon' ? `你入魔成為惡魔，擔任${FAITHS[pick.faith].name}的職業。`
+        : `你轉生為人，信仰${FAITHS[pick.faith].name}。`,
       pick.inherit ? `前世的「${SKILLS[pick.inherit].name}」在你身上變成了「${mutateSkill(pick.inherit, pick.form).name}」。` : '這是你的第一世。什麼都還沒有。',
       '一隻黑色的小狗從終端的門縫鑽出來，跟在你腳邊。牠是引魂犬。',
     ], () => this.showTown(), { speaker: '轉生櫃台', sprite: f.sprite });
@@ -283,7 +295,7 @@ const Game = {
       el('div', {},
         el('b', {}, `${FORMS[L.form].name}　Lv.${L.level}`),
         el('div', {}, `生命 ${L.hp}/${st.maxHp}　攻擊 ${st.atk}　防禦 ${st.def}`),
-        el('div', { class: 'muted' }, `信仰：${FAITHS[L.faith].name}　技能：${st.skills.map((id) => st.skillDefs[id].name).join('、')}`),
+        el('div', { class: 'muted' }, `${faithLabel(L.form)}：${FAITHS[L.faith].name}　技能：${st.skills.map((id) => st.skillDefs[id].name).join('、')}`),
         L.relic ? el('div', { class: 'muted' }, `神器：${RELICS[L.relic].name}（${RELICS[L.relic].desc}）`) : null)));
 
     root.append(el('h3', {}, '前世回響'));
@@ -490,7 +502,7 @@ const Game = {
     }[outcome];
     const lines = [
       `第 ${n} 世・因果紀錄`,
-      `形態：${FORMS[L.form].name}　信仰：${FAITHS[L.faith].name}`,
+      `形態：${FORMS[L.form].name}　${faithLabel(L.form)}：${FAITHS[L.faith].name}`,
       `到達：${record.floorName}　擊倒：${L.kills}`,
       cause ? `死因：${cause}` : '死因：天年已盡',
       how,
