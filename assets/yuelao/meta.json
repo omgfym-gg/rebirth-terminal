@@ -14,5 +14,32 @@
   "punch"
  ],
  "punchFacesLeft": true,
- "source": "Gemini 生成，小黑提供（2026-10-22）"
+ "source": "Gemini 生成，小黑提供（2026-10-22）",
+ "anims": {
+  "walk": {
+   "file": "walk.png",
+   "frameW": 44,
+   "frameH": 78,
+   "frames": 4
+  },
+  "punch": {
+   "file": "punch.png",
+   "frameW": 60,
+   "frameH": 78,
+   "frames": 4
+  },
+  "cast": {
+   "file": "cast.png",
+   "frameW": 80,
+   "frameH": 78,
+   "frames": 4
+  },
+  "hurt": {
+   "file": "hurt.png",
+   "frameW": 77,
+   "frameH": 76,
+   "frames": 3,
+   "note": "第 2 格原本朝左，已翻轉；多出來的愛心已拿掉"
+  }
+ }
 }

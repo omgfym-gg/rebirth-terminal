@@ -35,3 +35,7 @@
 - `js/main.js`：遊戲流程與存檔
 - `yuelao.html`：月老像素動畫測試頁；素材在 `assets/yuelao/`
 - `tools/sprite_pipeline.py`：把 Gemini 白底像素圖去背、縮成真正的像素格、拼成 spritesheet
+  - 格子整齊的原圖：`--frame 49 78`（自動偵測像素格大小）
+  - Gemini 補的動作圖格子不整齊：`--height 76` 等比例縮到這個高度
+  - `--merge-small` 小碎片併進角色；`--flip 1` 翻轉第 1 格；`--holes` 線圈圍住的白洞也去背（只給甩紅線用，不然白鬍子會被挖掉）
+  - 月老實際用的指令：walk/punch `--height 76`，cast `--height 76 --merge-small --holes`，hurt `--height 74 --flip 1`

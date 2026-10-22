@@ -7,19 +7,19 @@
 <link rel="stylesheet" href="style.css">
 <style>
   .stage { width: 100%; height: auto; border: 2px solid var(--line); background: #1d1a26; }
-  .acts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 10px; }
+  .acts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 10px; }
   .acts .btn.active { border-color: var(--gold); background: #3a3420; }
-  .sheet { width: 100%; height: auto; margin-top: 12px; background: #2a2638; }
+  .sheets canvas { display: block; max-width: 100%; image-rendering: pixelated; height: auto; margin-top: 12px; background: #2a2638; }
 </style>
 </head>
 <body>
 <div id="app">
   <h2>月老・動畫測試</h2>
-  <p class="muted">用一張圖的 5 個姿勢，靠程式補動作。點下面的按鈕切換。</p>
+  <p class="muted">走路、出拳、甩紅線、受傷是 Gemini 補的連續動作；待機、打坐、睡覺用原圖姿勢。點下面的按鈕切換。</p>
   <canvas class="stage" width="160" height="110"></canvas>
   <div class="acts"></div>
-  <p class="muted" style="font-size:13px">原始 spritesheet（每格 49×78）：</p>
-  <canvas class="sheet"></canvas>
+  <p class="muted" style="font-size:13px">所有 spritesheet：</p>
+  <div class="sheets"></div>
   <a class="btn wide" href="./" style="display:block;text-align:center;text-decoration:none">回遊戲</a>
 </div>
 <script>
@@ -30,6 +30,12 @@ const stage = document.querySelector('.stage');
 const g = stage.getContext('2d');
 g.imageSmoothingEnabled = false;
 const sheet = new Image(), hearts = new Image();
+// Gemini 補的動作：每張是一排等寬格子，腳底對齊底邊
+const SHEETS = {
+  walk: { fw: 44, fh: 78, n: 4 }, punch: { fw: 60, fh: 78, n: 4 },
+  cast: { fw: 80, fh: 78, n: 4 }, hurt: { fw: 77, fh: 76, n: 3 },
+};
+for (const [k, v] of Object.entries(SHEETS)) v.img = new Image();
 const GROUND = 100;
 
 // 畫一格：flip 左右翻轉，white 受擊閃白，dy 往下移，breath 上半身下沉 1 格
@@ -50,6 +56,20 @@ function frame(i, x, { flip = false, white = false, dy = 0, breath = 0 } = {}) {
   else g.drawImage(tmp, left, top);
   g.restore();
 }
+// 從動作圖畫第 i 格，x 是腳的中心
+const tmp2 = document.createElement('canvas'); tmp2.width = 80; tmp2.height = 78;
+const tg2 = tmp2.getContext('2d');
+function anim(k, i, x, { flip = false, white = false, dy = 0 } = {}) {
+  const { img, fw, fh } = SHEETS[k];
+  tg2.clearRect(0, 0, 80, 78);
+  tg2.drawImage(img, i * fw, 0, fw, fh, 0, 0, fw, fh);
+  if (white) { tg2.globalCompositeOperation = 'source-atop'; tg2.fillStyle = '#fff'; tg2.fillRect(0, 0, fw, fh); tg2.globalCompositeOperation = 'source-over'; }
+  const left = Math.round(x - fw / 2), top = GROUND - fh + dy;
+  g.save();
+  if (flip) { g.translate(left + fw, top); g.scale(-1, 1); g.drawImage(tmp2, 0, 0, fw, fh, 0, 0, fw, fh); }
+  else g.drawImage(tmp2, 0, 0, fw, fh, left, top, fw, fh);
+  g.restore();
+}
 function heart(i, x, y, alpha = 1) {
   g.globalAlpha = alpha;
   g.drawImage(hearts, (i % 5) * HW, 0, HW, HH, Math.round(x), Math.round(y), HW, HH);
@@ -60,18 +80,27 @@ let mode = 'idle', t0 = performance.now();
 const ANIMS = {
   idle: { name: '待機', draw(t) { frame(F.stand, 80, { breath: Math.floor(t / 600) % 2 }); } },
   walk: { name: '走路', draw(t) {
-    // 站姿和走路姿勢交替，加上一點彈跳，來回走
-    const step = Math.floor(t / 180), span = 100, p = (t / 25) % (span * 2);
+    // 4 格走路循環，來回走
+    const span = 100, p = (t / 25) % (span * 2);
     const dir = p < span ? 1 : -1, x = 30 + (p < span ? p : span * 2 - p);
-    frame(step % 2 ? F.walk : F.stand, x, { flip: dir < 0, dy: step % 2 ? -1 : 0 });
+    anim('walk', Math.floor(t / 150) % 4, x, { flip: dir < 0 });
   } },
   punch: { name: '出拳', draw(t) {
-    // 蓄力 → 前衝 → 命中停頓 → 回位
-    const c = t % 1400;
-    if (c < 400) frame(F.stand, 70 - Math.min(3, c / 100), { breath: 1 });
-    else if (c < 520) frame(F.punch, 72 + (c - 400) / 15, { flip: true });
-    else if (c < 800) { frame(F.punch, 80, { flip: true }); if (c < 640) { g.fillStyle = '#ffe070'; g.fillRect(118, 52, 3, 3); g.fillRect(122, 48, 2, 2); g.fillRect(122, 57, 2, 2); } }
-    else frame(F.stand, 80 - Math.min(10, (c - 800) / 30));
+    // 預備 → 蓄力 → 出拳（停久一點）→ 收拳 → 待機
+    const c = t % 1500, times = [250, 250, 450, 250];
+    let acc = 0, i = 0;
+    for (; i < 4; i++) { acc += times[i]; if (c < acc) break; }
+    if (i >= 4) { frame(F.stand, 70); return; }
+    anim('punch', i, 70 + (i === 2 ? 4 : 0));
+    if (i === 2 && c < 800) { g.fillStyle = '#ffe070'; g.fillRect(108, 50, 3, 3); g.fillRect(112, 46, 2, 2); g.fillRect(112, 55, 2, 2); }
+  } },
+  cast: { name: '甩紅線', draw(t) {
+    // 4 格甩線，最後一格停住讓紅線圈多看一下
+    const c = t % 1700, times = [250, 250, 250, 650];
+    let acc = 0, i = 0;
+    for (; i < 4; i++) { acc += times[i]; if (c < acc) break; }
+    if (i >= 4) { frame(F.stand, 80); return; }
+    anim('cast', i, 80);
   } },
   sit: { name: '打坐', draw(t) {
     frame(F.sit, 80, { breath: Math.floor(t / 900) % 2 });
@@ -90,10 +119,11 @@ const ANIMS = {
     }
   } },
   hurt: { name: '受傷', draw(t) {
-    // 受傷暫時用站姿：閃白、往後退，再倒地
-    const c = t % 2200;
-    if (c < 500) frame(F.stand, 80 - Math.min(6, c / 40), { white: Math.floor(c / 80) % 2 === 0 });
-    else if (c < 1700) frame(F.sleep, 76, { dy: c < 600 ? -2 : 0 });
+    // 被打閃白 → 後仰 → 倒地 → 站起來
+    const c = t % 2400;
+    if (c < 450) anim('hurt', 0, 84 - Math.min(4, c / 60), { white: Math.floor(c / 80) % 2 === 0 });
+    else if (c < 800) anim('hurt', 1, 78);
+    else if (c < 2000) anim('hurt', 2, 76, { dy: c < 900 ? -2 : 0 });
     else frame(F.stand, 80);
   } },
 };
@@ -114,17 +144,24 @@ function loop(now) {
   requestAnimationFrame(loop);
 }
 
+const imgs = [sheet, hearts, ...Object.values(SHEETS).map(v => v.img)];
 let loaded = 0;
 const ready = () => {
-  if (++loaded < 2) return;
-  const s = document.querySelector('.sheet');
-  s.width = sheet.width; s.height = sheet.height;
-  const sg = s.getContext('2d'); sg.imageSmoothingEnabled = false; sg.drawImage(sheet, 0, 0);
+  if (++loaded < imgs.length) return;
+  const box = document.querySelector('.sheets');
+  for (const im of [sheet, ...Object.values(SHEETS).map(v => v.img)]) {
+    const c = document.createElement('canvas'); c.width = im.width; c.height = im.height;
+    c.style.width = Math.min(im.width * 2, 640) + 'px';
+    c.style.background = '#2a2638'; c.style.marginTop = '8px';
+    const cg = c.getContext('2d'); cg.imageSmoothingEnabled = false; cg.drawImage(im, 0, 0);
+    box.append(c);
+  }
   requestAnimationFrame(loop);
 };
-sheet.onload = ready; hearts.onload = ready;
+for (const im of imgs) im.onload = ready;
 sheet.src = 'assets/yuelao/sheet.png';
 hearts.src = 'assets/yuelao/small.png';
+for (const k in SHEETS) SHEETS[k].img.src = `assets/yuelao/${k}.png`;
 </script>
 </body>
 </html>
