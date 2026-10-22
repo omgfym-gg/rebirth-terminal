@@ -156,6 +156,14 @@ const Game = {
     const s = this.save;
     const prev = s.history[s.history.length - 1];
     const pick = { form: null, faith: null, inherit: null, relic: null };
+    // 每一世只抽一次：每條路隨機三個職業／信仰，存進存檔，重新整理不會重抽
+    if (!s.offer || s.offer.life !== this.lifeNo) {
+      const draw = (side) => Object.keys(FAITHS).filter((id) => !side || FAITHS[id].side === side)
+        .sort(() => Math.random() - 0.5).slice(0, 3);
+      s.offer = { life: this.lifeNo, paths: {} };
+      for (const id of PATH_ORDER) s.offer.paths[id] = draw(FORMS[id].side);
+      this.persist();
+    }
     const root = $('#rebirth .content');
 
     const render = () => {
@@ -171,7 +179,7 @@ const Game = {
         const c = el('button', { class: 'card' + (pick.form === id ? ' selected' : '') + (ok ? '' : ' locked'), onclick: () => {
           if (!ok) return;
           // 換路的時候，原本選的職業／信仰如果不屬於這條路就清掉
-          if (pick.faith && f.side && FAITHS[pick.faith].side !== f.side) pick.faith = null;
+          if (pick.faith && !s.offer.paths[id].includes(pick.faith)) pick.faith = null;
           pick.form = id; pick.inherit = null; render();
         } },
           spriteImg(f.sprite),
@@ -185,11 +193,12 @@ const Game = {
       root.append(forms);
 
       const side = pick.form ? FORMS[pick.form].side : null;
-      root.append(el('h3', {}, !pick.form ? '職業／信仰' : side === '神' ? '神族職業' : side === '魔' ? '魔族職業' : '信仰（神族、魔族都可以）'));
+      root.append(el('h3', {}, !pick.form ? '職業／信仰' : side === '神' ? '神族職業' : side === '魔' ? '魔族職業' : '信仰（神族、魔族都可能出現）'));
+      if (pick.form) root.append(el('p', { class: 'muted' }, '這一世櫃台隨機給你三個選擇。'));
       if (!pick.form) root.append(el('p', { class: 'muted' }, '先選升仙、入魔或為人。'));
       const faiths = el('div', { class: 'cards two' });
-      for (const [id, f] of Object.entries(FAITHS)) {
-        if (!pick.form || (side && f.side !== side)) continue;
+      for (const id of pick.form ? s.offer.paths[pick.form] : []) {
+        const f = FAITHS[id];
         faiths.append(el('button', { class: 'card' + (pick.faith === id ? ' selected' : ''), onclick: () => { pick.faith = id; render(); } },
           el('b', {}, side ? f.name : `${f.name}（${f.side}族）`),
           el('small', {}, f.domain + '：' + f.passive),
