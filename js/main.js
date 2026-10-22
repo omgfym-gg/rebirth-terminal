@@ -170,6 +170,7 @@ const Game = {
       root.innerHTML = '';
       root.append(el('h2', {}, `第 ${this.lifeNo} 世・轉生櫃台`));
       root.append(el('p', { class: 'muted' }, `靈魂本質：${natureLabel(s.nature)}（${s.nature}）　因果債：${s.debt}`));
+      root.append(el('p', { class: 'muted small-note' }, '靈魂本質越偏混沌越難升仙，越偏秩序越難入魔。擔任神族會往秩序走，魔族會往混沌走。'));
 
       root.append(el('h3', {}, '升仙・入魔・為人'));
       const forms = el('div', { class: 'cards' });
@@ -197,16 +198,15 @@ const Game = {
       if (pick.form) root.append(el('p', { class: 'muted' }, '這一世櫃台隨機給你三個選擇。'));
       if (!pick.form) root.append(el('p', { class: 'muted' }, '先選升仙、入魔或為人。'));
       const faiths = el('div', { class: 'cards two' });
+      const g = pick.form ? gaugeName(pick.form) : '能量';
       for (const id of pick.form ? s.offer.paths[pick.form] : []) {
-        const f = FAITHS[id];
-        faiths.append(el('button', { class: 'card' + (pick.faith === id ? ' selected' : ''), onclick: () => { pick.faith = id; render(); } },
-          el('b', {}, side ? f.name : `${f.name}（${f.side}族）`),
-          el('small', {}, f.domain + '：' + f.passive),
-          el('small', { class: 'muted' }, '大招「' + f.ult.name + '」：' + f.ult.desc)));
+        faiths.append(el('button', { class: 'card job' + (pick.faith === id ? ' selected' : ''), onclick: () => { pick.faith = id; render(); } },
+          ...jobCard(id, g, !side)));
       }
       root.append(faiths);
 
-      const options = pick.form ? this.inheritOptions(pick.form) : [];
+      const options = pick.form ? this.inheritOptions(pick.form, pick.faith) : [];
+      if (pick.inherit && !options.includes(pick.inherit)) pick.inherit = null;
       if (prev) {
         root.append(el('h3', {}, '繼承一個前世技能'));
         if (!pick.form) root.append(el('p', { class: 'muted' }, '先選生命形態，才知道技能會怎麼變異。'));
@@ -215,8 +215,9 @@ const Game = {
           const box = el('div', { class: 'cards two' });
           for (const id of options) {
             const sk = mutateSkill(id, pick.form);
+            const from = JOBS[id.split('.')[0]];
             box.append(el('button', { class: 'card' + (pick.inherit === id ? ' selected' : ''), onclick: () => { pick.inherit = id; render(); } },
-              el('b', {}, sk.name), el('small', {}, sk.desc), el('small', { class: 'muted' }, MUTATION[pick.form].note)));
+              el('b', {}, sk.n + (from ? `（${from.name}）` : '')), el('small', {}, describeSkill(sk, g)), el('small', { class: 'muted' }, MUTATION[pick.form].note)));
           }
           root.append(box);
         }
@@ -241,12 +242,12 @@ const Game = {
     this.show('rebirth');
   },
 
-  inheritOptions(form) {
+  // 可以繼承的前世技能：人類能挑所有前世，其他只能挑上一世；這一世職業本來就有的不算
+  inheritOptions(form, faith) {
     const s = this.save;
-    const own = new Set(FORMS[form].skills);
     const lives = form === 'human' ? s.history : s.history.slice(-1);
     const ids = new Set();
-    for (const h of lives) for (const id of h.skills || []) if (!own.has(id)) ids.add(id);
+    for (const h of lives) for (const id of h.skills || []) if (!faith || !id.startsWith(faith + '.')) ids.add(id);
     return [...ids];
   },
 
@@ -265,7 +266,8 @@ const Game = {
       pick.form === 'angel' ? `你升仙成為神使，擔任${FAITHS[pick.faith].name}的職業。`
         : pick.form === 'demon' ? `你入魔成為惡魔，擔任${FAITHS[pick.faith].name}的職業。`
         : `你轉生為人，信仰${FAITHS[pick.faith].name}。`,
-      pick.inherit ? `前世的「${SKILLS[pick.inherit].name}」在你身上變成了「${mutateSkill(pick.inherit, pick.form).name}」。` : '這是你的第一世。什麼都還沒有。',
+      `${FAITHS[pick.faith].title}・${FAITHS[pick.faith].name}：「${FAITHS[pick.faith].quote}」`,
+      pick.inherit ? `前世的「${getSkill(pick.inherit).n}」在你身上變成了「${mutateSkill(pick.inherit, pick.form).n}」。` : '這一世沒有帶著前世的技能。',
       '一隻黑色的小狗從終端的門縫鑽出來，跟在你腳邊。牠是引魂犬。',
     ], () => this.showTown(), { speaker: '轉生櫃台', sprite: f.sprite });
   },
@@ -275,17 +277,18 @@ const Game = {
     const lv = L.level - 1;
     const r = RELICS[L.relic] || {};
     const statue = s.echoes.some((e) => e.type === 'statue') ? 1 : 0;
-    const skills = [...f.skills];
+    const p = JOBS[L.faith].passive.p;
+    const skills = [`${L.faith}.0`, `${L.faith}.1`];
     const skillDefs = {};
-    for (const id of skills) skillDefs[id] = { ...SKILLS[id] };
+    for (const id of skills) skillDefs[id] = getSkill(id);
     if (L.inherit) { skills.push(L.inherit); skillDefs[L.inherit] = mutateSkill(L.inherit, L.form); }
     return {
       sprite: f.sprite,
-      maxHp: f.hp + s.perm.hp * 3 + lv * 4 + (r.hp || 0),
+      maxHp: f.hp + s.perm.hp * 3 + lv * 4 + (r.hp || 0) + (p.hp || 0),
       hp: L.hp,
-      atk: f.atk + s.perm.atk + lv + statue + (L.bonusAtk || 0) + (r.atk || 0),
-      def: f.def + Math.floor(lv / 2) + (r.def || 0),
-      spd: f.spd + (r.spd || 0), mov: f.mov + (r.mov || 0),
+      atk: f.atk + s.perm.atk + lv + statue + (L.bonusAtk || 0) + (r.atk || 0) + (p.atk || 0),
+      def: f.def + Math.floor(lv / 2) + (r.def || 0) + (p.def || 0),
+      spd: f.spd + (r.spd || 0) + (p.spd || 0), mov: f.mov + (r.mov || 0) + (p.mov || 0),
       skills, skillDefs,
       companionAlive: L.companionAlive,
     };
@@ -304,8 +307,12 @@ const Game = {
       el('div', {},
         el('b', {}, `${FORMS[L.form].name}　Lv.${L.level}`),
         el('div', {}, `生命 ${L.hp}/${st.maxHp}　攻擊 ${st.atk}　防禦 ${st.def}`),
-        el('div', { class: 'muted' }, `${faithLabel(L.form)}：${FAITHS[L.faith].name}　技能：${st.skills.map((id) => st.skillDefs[id].name).join('、')}`),
+        el('div', { class: 'muted' }, `${faithLabel(L.form)}：${FAITHS[L.faith].title}・${FAITHS[L.faith].name}`),
+        el('div', { class: 'muted' }, `技能：${st.skills.map((id) => st.skillDefs[id].n).join('、')}　大招：${FAITHS[L.faith].ult.n}`),
         L.relic ? el('div', { class: 'muted' }, `神器：${RELICS[L.relic].name}（${RELICS[L.relic].desc}）`) : null)));
+
+    root.append(el('div', { class: 'card job' }, ...jobCard(L.faith, gaugeName(L.form), false)));
+    if (L.inherit) root.append(el('div', { class: 'echo' }, el('b', {}, `前世技能「${st.skillDefs[L.inherit].n}」`), el('div', {}, describeSkill(st.skillDefs[L.inherit], gaugeName(L.form)))));
 
     root.append(el('h3', {}, '前世回響'));
     if (!s.echoes.length) root.append(el('p', { class: 'muted' }, '這座城鎮還不認識你的靈魂。'));
@@ -349,12 +356,15 @@ const Game = {
       faith: L.faith, form: L.form,
       soulExtra: s.boons.soulExtra + s.perm.soul + ((RELICS[L.relic] || {}).soul || 0),
       startCharge: (RELICS[L.relic] || {}).charge || 0,
+      gauge: gaugeName(L.form),
     };
     this.battle = new Battle($('#battle canvas'), BattleUI, spec, this.heroStats(), opts);
     const res = await this.battle.run();
     await sleep(700);
     if (!this.battle) return; // 戰鬥中離開了畫面
     L.kills += res.kills;
+    const jp = JOBS[L.faith].passive.p;
+    if (jp.fragPerKill && res.kills) s.fragments += jp.fragPerKill * res.kills;
     L.rescued += this.battle.rescued || 0;
     L.companionAlive = res.companionAlive;
     if (res.result === 'win') {
@@ -376,6 +386,9 @@ const Game = {
     let ups = 0;
     while (L.exp >= L.level * 20) { L.exp -= L.level * 20; L.level++; ups++; }
     if (ups) lines.push(`等級提升到 Lv.${L.level}。`);
+    const jp = JOBS[L.faith].passive.p;
+    if (jp.fragPerKill && res.kills) lines.push(`「${JOBS[L.faith].passive.n}」：多得 ${jp.fragPerKill * res.kills} 個靈魂碎片。`);
+    if (jp.debtHeal && s.debt > 0) { s.debt--; lines.push(`「${JOBS[L.faith].passive.n}」：因果債 -1。`); }
     // 取回前世殘魂
     const remnant = s.echoes.find((e) => e.type === 'remnant' && e.floor === L.floor);
     if (remnant) {
@@ -485,7 +498,9 @@ const Game = {
     if (outcome === 'escaped') frag += 5;
     if (outcome === 'victory') frag += 10;
     s.fragments += frag;
-    s.nature = clampNature(s.nature + (L.form === 'angel' ? -5 : L.form === 'demon' ? 5 : 0) + (outcome === 'sealed' ? 5 : 0));
+    // 靈魂本質跟著這一世站在哪一邊走：神族往秩序、魔族往混沌
+    const lean = FAITHS[L.faith].side === '神' ? -5 : 5;
+    s.nature = clampNature(s.nature + lean + (outcome === 'sealed' ? 5 : 0));
     s.boons.soulExtra = 0;
 
     // 留下前世回響
@@ -646,11 +661,18 @@ function clampNature(n) { return Math.max(-100, Math.min(100, n)); }
 function natureLabel(n) { return n <= -30 ? '秩序' : n >= 30 ? '混沌' : n < 0 ? '偏秩序' : n > 0 ? '偏混沌' : '中立'; }
 function outcomeLabel(o) { return { faded: '靈魂消散', sealed: '被搶魂', escaped: '逃魂', victory: '壽終正寢' }[o] || o; }
 
-function mutateSkill(id, form) {
-  const base = SKILLS[id], m = MUTATION[form];
-  const def = { ...base, mutation: m };
-  def.name = m.prefix ? m.prefix + base.name : base.name;
-  return def;
+// 轉生櫃台和城鎮裡的職業卡片內容
+function jobCard(id, g, showSide) {
+  const j = JOBS[id];
+  const rival = JOBS[j.rival];
+  return [
+    el('b', {}, `${j.name}${showSide ? `（${j.side}族）` : ''}`),
+    el('small', { class: 'muted' }, `${j.title}　死對頭：${rival ? rival.name : '？'}`),
+    el('small', { class: 'quote' }, `「${j.quote}」`),
+    el('small', {}, el('span', { class: 'tag' }, '被動'), `「${j.passive.n}」${describePassive(j.passive.p, g)}`),
+    ...j.skills.map((sk) => el('small', {}, el('span', { class: 'tag' }, '技能'), `「${sk.n}」${describeSkill(sk, g)}`)),
+    el('small', {}, el('span', { class: 'tag ult' }, '大招'), `「${j.ult.n}」${describeSkill(j.ult, g)}`),
+  ];
 }
 
 function spriteImg(name) {
@@ -698,7 +720,8 @@ const BattleUI = {
     $('#battle .hint').textContent = '';
   },
   showHero(u) {
-    $('#battle .hero-hp').textContent = `生命 ${u.hp}/${u.maxHp}`;
+    const g = Game.battle ? Game.battle.gauge : '能量';
+    $('#battle .hero-hp').textContent = `生命 ${u.hp}/${u.maxHp}・${g} ${u.charge}%`;
   },
 };
 

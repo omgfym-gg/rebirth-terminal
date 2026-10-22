@@ -112,3 +112,11 @@ canvas.board { width: 100%; height: auto; border: 2px solid var(--line); touch-a
 @keyframes glow { from { box-shadow: 0 0 0 transparent; } to { box-shadow: 0 0 10px var(--gold); } }
 .log { margin-top: 8px; font-size: 13px; color: var(--muted); min-height: 80px; }
 .log div:first-child { color: var(--text); }
+
+/* 職業卡片 */
+.card.job { align-items: flex-start; text-align: left; gap: 4px; cursor: pointer; }
+div.card.job { cursor: default; margin-top: 8px; }
+.card.job .quote { color: var(--muted); font-style: italic; }
+.tag { display: inline-block; font-size: 11px; padding: 0 4px; margin-right: 4px; border: 1px solid var(--accent); color: var(--accent); }
+.tag.ult { border-color: var(--gold); color: var(--gold); }
+.small-note { font-size: 13px; margin-top: -4px; }

@@ -11,14 +11,12 @@ const FORMS = {
   human: {
     name: '人類', path: '為人', pathDesc: '留在人間。神族、魔族都能信仰', side: null, sprite: 'human',
     hp: 30, atk: 7, def: 3, spd: 5, mov: 3,
-    skills: ['slash', 'stone'],
     innate: '未定之人：繼承技能時，可以從所有前世的技能裡挑選',
     allowed: () => true,
   },
   angel: {
     name: '神使', path: '升仙', pathDesc: '成為神使，擔任神族職業', side: '神', sprite: 'angel',
     hp: 26, atk: 5, def: 3, spd: 5, mov: 3,
-    skills: ['heal', 'lightbolt'],
     innate: '代禱：隊友變成靈魂時，可以多撐 2 回合',
     allowed: (nature) => nature <= 20,
     lockText: '靈魂太偏混沌',
@@ -26,92 +24,9 @@ const FORMS = {
   demon: {
     name: '惡魔', path: '入魔', pathDesc: '墮為惡魔，擔任魔族職業', side: '魔', sprite: 'demon',
     hp: 28, atk: 8, def: 2, spd: 6, mov: 3,
-    skills: ['claw', 'curse'],
     innate: '吞噬：擊倒敵人時回復 4 點生命',
     allowed: (nature) => nature >= -20,
     lockText: '靈魂太偏秩序',
-  },
-};
-
-// kind: dmg 傷害 / heal 治療 / curse 詛咒
-// range: [最小, 最大]（曼哈頓距離），target: enemy / ally
-const SKILLS = {
-  slash:     { name: '斬擊', kind: 'dmg', mult: 1.5, range: [1, 1], cd: 2, target: 'enemy', desc: '近身重擊' },
-  stone:     { name: '投石', kind: 'dmg', mult: 0.8, range: [2, 3], cd: 1, target: 'enemy', desc: '遠距離攻擊' },
-  heal:      { name: '治癒', kind: 'heal', amount: 9, range: [0, 2], cd: 2, target: 'ally', desc: '回復自己或隊友 9 點生命' },
-  lightbolt: { name: '光矢', kind: 'dmg', mult: 1.0, range: [2, 3], cd: 1, target: 'enemy', desc: '遠距離光屬性攻擊' },
-  claw:      { name: '裂爪', kind: 'dmg', mult: 1.3, range: [1, 1], cd: 2, target: 'enemy', drain: 0.5, desc: '近身攻擊，吸取一半傷害' },
-  curse:     { name: '詛咒', kind: 'curse', range: [1, 3], cd: 3, target: 'enemy', desc: '目標 2 回合內受到的傷害加五成' },
-};
-
-// 前世技能帶到新的形態時會變異
-const MUTATION = {
-  human: { prefix: '', note: '原樣繼承' },
-  angel: { prefix: '聖', note: '使用後自己回復 3 點生命', selfHeal: 3 },
-  demon: { prefix: '血', note: '額外吸取三成傷害', drain: 0.3 },
-};
-
-// ult.target：tile 選一格、enemy 選一個敵人、self 不用選
-const FAITHS = {
-  thor: {
-    name: '索爾', side: '神', domain: '雷霆領域',
-    passive: '每兩回合在敵人腳下標記雷擊區，下一回合落雷。水面會把雷導開。',
-    ult: { name: '雷神之鎚', target: 'tile', range: [1, 3], desc: '目標與周圍四格造成 10 點雷擊，打到水面會擴散' },
-  },
-  mazu: {
-    name: '媽祖', side: '神', domain: '海潮領域',
-    passive: '我方在水面上移動不減速；隊友變成靈魂時多撐 2 回合。',
-    ult: { name: '海潮庇護', target: 'tile', range: [1, 3], desc: '目標與周圍四格化為水面，我方全體回復 8 點生命' },
-  },
-  apollo: {
-    name: '阿波羅', side: '神', domain: '日輪領域',
-    passive: '單數回合是白天：治療加五成、我方攻擊 +2。雙數回合是黑夜，沒有加成。',
-    ult: { name: '日冕', target: 'self', range: [0, 0], desc: '身邊三格內的敵人受到 7 點傷害並目盲 2 回合（攻擊有一半會落空）' },
-  },
-  odin: {
-    name: '奧丁', side: '神', domain: '智慧領域',
-    passive: '用一隻眼睛換來的智慧：技能冷卻少 1 回合。',
-    ult: { name: '永恆之槍', target: 'enemy', range: [1, 5], desc: '對遠方一個敵人造成 12 點傷害，必定命中' },
-  },
-  hermes: {
-    name: '赫爾墨斯', side: '神', domain: '信使領域',
-    passive: '腳上長著翅膀：你的移動 +2。',
-    ult: { name: '神行', target: 'self', range: [0, 0], desc: '回復 4 點生命，立刻再行動一次' },
-  },
-  sedna: {
-    name: '塞德娜', side: '神', domain: '深海領域',
-    passive: '每回合開始時，站在水面上的敵人被海底的手抓住，失去 2 點生命。',
-    ult: { name: '深海之手', target: 'tile', range: [1, 4], desc: '目標與周圍四格化為水面，上面的敵人受到 5 點傷害並動彈不得 1 回合' },
-  },
-  loki: {
-    name: '洛基', side: '魔', domain: '詭計領域',
-    passive: '敵人攻擊我方時，有四分之一的機率只打到幻影。',
-    ult: { name: '惡作劇', target: 'enemy', range: [1, 4], desc: '目標陷入混亂 2 回合，會去攻擊自己的同伴，並受到 4 點傷害' },
-  },
-  hachi: {
-    name: '八尺大人', side: '魔', domain: '凝視領域',
-    passive: '每回合開始時，場上最高大的敵人被她看見，失去 2 點生命。',
-    ult: { name: '凝視', target: 'enemy', range: [1, 4], desc: '目標動彈不得 2 回合，並受到 6 點傷害' },
-  },
-  cthulhu: {
-    name: '克蘇魯', side: '魔', domain: '深淵領域',
-    passive: '任何人倒下都會累積深淵能量。累積 4 點時，一個敵人會發瘋 1 回合。',
-    ult: { name: '深淵低語', target: 'self', range: [0, 0], desc: '所有敵人受到 4 點傷害，每 1 點深淵能量再多 2 點' },
-  },
-  asmo: {
-    name: '阿斯蒙蒂斯', side: '魔', domain: '慾望領域',
-    passive: '你造成的傷害，有兩成會變成你的生命。',
-    ult: { name: '魅惑', target: 'enemy', range: [1, 3], desc: '一個非首領的敵人倒戈 2 回合，替你作戰' },
-  },
-  cerberus: {
-    name: '刻耳柏洛斯', side: '魔', domain: '冥犬領域',
-    passive: '引魂犬是冥犬的後代：牠的生命 +10、攻擊 +3。',
-    ult: { name: '三頭咆哮', target: 'self', range: [0, 0], desc: '引魂犬全滿復活，牠身邊兩格內的敵人受到 6 點傷害' },
-  },
-  maeve: {
-    name: '梅芙', side: '魔', domain: '戰爭領域',
-    passive: '戰爭女王越殺越勇：這場戰鬥中你每擊倒一個敵人，攻擊 +1。',
-    ult: { name: '女王的斬首', target: 'enemy', range: [1, 1], desc: '近身造成兩倍半的傷害，擊倒目標時大招回充一半' },
   },
 };
 
