@@ -1,0 +1,18 @@
+{
+ "pixel": 8,
+ "frameW": 49,
+ "frameH": 78,
+ "frames": 5,
+ "smallW": 12,
+ "smallH": 10,
+ "smalls": 5,
+ "names": [
+  "stand",
+  "walk",
+  "sit",
+  "sleep",
+  "punch"
+ ],
+ "punchFacesLeft": true,
+ "source": "Gemini 生成，小黑提供（2026-10-22）"
+}

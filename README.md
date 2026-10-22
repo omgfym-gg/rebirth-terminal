@@ -33,3 +33,5 @@
 - `js/sprites.js`：佔位用的像素圖
 - `js/battle.js`：戰鬥系統
 - `js/main.js`：遊戲流程與存檔
+- `yuelao.html`：月老像素動畫測試頁；素材在 `assets/yuelao/`
+- `tools/sprite_pipeline.py`：把 Gemini 白底像素圖去背、縮成真正的像素格、拼成 spritesheet
