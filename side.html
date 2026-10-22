@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>橫向戰鬥試玩</title>
-<link rel="stylesheet" href="style.css?v=20261022f">
+<link rel="stylesheet" href="style.css?v=20261022g">
 <style>
   .stage { width: 100%; height: auto; border: 2px solid var(--line); background: #0b0a12; touch-action: manipulation; }
   .bar { display: flex; justify-content: space-between; margin: 6px 0; font-size: 14px; }
@@ -19,7 +19,7 @@
 <body>
 <div id="app">
   <h2>橫向戰鬥・試玩</h2>
-  <p class="muted" style="font-size:13px">用月老試試看「左右對站」的打法。敵人和小狗還是舊圖，新圖畫好會換上。</p>
+  <p class="muted" style="font-size:13px">用月老試試看「左右對站」的打法。打完可以換下一批敵人，最後一批是首領。</p>
   <canvas class="stage" width="384" height="216"></canvas>
   <div class="bar"><span class="hp"></span><span class="who"></span></div>
   <div class="acts"></div>
@@ -27,9 +27,9 @@
   <div class="log"></div>
   <a class="btn wide" href="./" style="display:block;text-align:center;text-decoration:none;margin-top:10px">回遊戲</a>
 </div>
-<script src="js/data.js?v=20261022f"></script>
-<script src="js/jobs.js?v=20261022f"></script>
-<script src="js/sprites.js?v=20261022f"></script>
+<script src="js/data.js?v=20261022g"></script>
+<script src="js/jobs.js?v=20261022g"></script>
+<script src="js/sprites.js?v=20261022g"></script>
 <script>
 'use strict';
 // 橫向回合制原型：我方站左邊、敵人站右邊，各自有前後排。點技能，再點目標。
@@ -50,22 +50,35 @@ const ACTIONS = {
 
 let units, turnQueue, current, picking, busy, charge, cds, effects, shake, over;
 
-function reset() {
+// 每一批敵人；最後一批是首領
+const FOES = {
+  shade:   { name: '影子怪',     hp: 12, atk: 5, def: 1, spd: 4 },
+  husk:    { name: '空殼職員',   hp: 18, atk: 6, def: 2, spd: 3 },
+  wisp:    { name: '鬼火',       hp: 8,  atk: 4, def: 0, spd: 6, ranged: true },
+  redgirl: { name: '紅衣小女孩', hp: 10, atk: 5, def: 1, spd: 7 },
+  mirror:  { name: '鏡中人',     hp: 16, atk: 5, def: 0, spd: 5 },
+  hunter:  { name: '追殺者',     hp: 20, atk: 7, def: 2, spd: 6 },
+  boss:    { name: '無臉典獄長', hp: 50, atk: 8, def: 3, spd: 4, boss: true },
+  horus:   { name: '荷魯斯之影', hp: 52, atk: 7, def: 2, spd: 5, boss: true, ranged: true },
+};
+const WAVES = [['shade', 'husk', 'wisp'], ['mirror', 'hunter', 'shade'], ['boss']];
+let wave = 0;
+
+function reset(next) {
+  if (next === true) wave = (wave + 1) % WAVES.length;
   units = [
     { id: 'hero', side: 'ally', name: '月老', art: 'yuelao', hp: 30, maxHp: 30, atk: 5, def: 2, spd: 5, rank: 0 },
     { id: 'dog', side: 'ally', name: '引魂犬', sprite: 'dog', hp: 20, maxHp: 20, atk: 5, def: 1, spd: 7, rank: 1 },
-    { id: 'e1', side: 'enemy', name: '影子怪', sprite: 'shade', hp: 12, maxHp: 12, atk: 5, def: 1, spd: 4, rank: 0 },
-    { id: 'e2', side: 'enemy', name: '空殼職員', sprite: 'husk', hp: 18, maxHp: 18, atk: 6, def: 2, spd: 3, rank: 1 },
-    { id: 'e3', side: 'enemy', name: '鬼火', sprite: 'wisp', hp: 8, maxHp: 8, atk: 4, def: 0, spd: 6, rank: 2, ranged: true },
+    ...WAVES[wave].map((k, r) => ({ id: 'e' + r, side: 'enemy', sprite: k, rank: r, maxHp: FOES[k].hp, ...FOES[k] })),
   ];
-  for (const u of units) Object.assign(u, { ox: 0, oy: 0, flash: 0, anim: null, curse: 0, stun: 0, shield: 0, dead: false });
+  for (const u of units) Object.assign(u, { ox: 0, oy: 0, flash: 0, anim: null, curse: 0, stun: 0, shield: 0, dead: false, atkUntil: 0, hurtUntil: 0 });
   charge = 0; cds = { pull: 0, heal: 0 }; effects = []; shake = 0; over = false; picking = null; busy = false;
   $('.log').textContent = '輪到誰行動，畫面下方會顯示。';
   nextRound();
 }
 
 // ───── 位置與畫 ─────
-const home = (u) => u.side === 'ally' ? 150 - u.rank * 62 : 236 + u.rank * 58;
+const home = (u) => u.side === 'ally' ? 150 - u.rank * 62 : (u.boss ? 290 : 236 + u.rank * 58);
 const alive = (side) => units.filter((u) => u.side === side && !u.dead);
 
 function drawBackground(now) {
@@ -99,11 +112,11 @@ function drawBackground(now) {
 }
 
 function drawUnit(u, now) {
-  if (u.dead && !u.anim) return;
+  if (u.dead && u.art && !u.anim) return;
   const x = home(u) + u.ox, flip = u.side === 'enemy';
   const white = u.flash > now && Math.floor((u.flash - now) / 60) % 2 === 0;
   // 影子
-  g.fillStyle = 'rgba(0,0,0,0.4)'; g.beginPath(); g.ellipse(x, GROUND, u.art ? 22 : 18, 4, 0, 0, Math.PI * 2); g.fill();
+  if (!u.dead) { g.fillStyle = 'rgba(0,0,0,0.4)'; g.beginPath(); g.ellipse(x, GROUND, u.boss ? 34 : u.art ? 22 : 20, 4, 0, 0, Math.PI * 2); g.fill(); }
   if (u.art) {
     let sheet = 'pose', i = 0;
     const A = { walk: ['walk', [100, 100, 100, 100], true], punch: ['punch', [70, 80, 260, 120]], cast: ['cast', [110, 110, 110, 380]], hurt: ['hurt', [150, 300]], down: ['hurt', [150, 200, 99999]] };
@@ -117,14 +130,16 @@ function drawUnit(u, now) {
     // 飄愛心
     for (let k = 0; k < 2; k++) { const p = (now / 1800 + k / 2) % 1; drawMark(g, 'heart', x + (k ? 18 : -28) + Math.sin(p * 6) * 3, GROUND - 50 - p * 40, 2, p < 0.2 ? p * 5 : 1 - (p - 0.2) / 0.8); }
   } else {
-    const bob = Math.floor(now / 500 + u.rank) % 2;
-    const sz = 64, img = getSprite(u.sprite, { flip: !flip ? false : true, white });
-    if (u.dead) g.globalAlpha = 0.4;
-    g.drawImage(img, Math.round(x - sz / 2), GROUND - sz + 4 - bob * 2 + u.oy, sz, sz);
+    // 新圖：0 待機、1 攻擊、2 被打；倒下就淡出
+    const pose = now < u.hurtUntil || u.dead ? 2 : now < u.atkUntil ? 1 : 0;
+    const bob = pose === 0 && Math.floor(now / 600 + u.rank) % 2 ? 1 : 0;
+    if (u.dead) { const k = Math.max(0, Math.min(1, (now - u.deadAt) / 600)); if (k >= 1) return; g.globalAlpha = 1 - k; }
+    drawArt(g, 'u:' + u.sprite, 'pose', pose, x, GROUND + u.oy + bob, 1, { flip, white });
     g.globalAlpha = 1;
+    if (u.dead) return;
   }
   // 血條、狀態
-  const top = GROUND - (u.art ? 84 : 66);
+  const top = GROUND - (u.art ? 84 : UNIT_ART[u.sprite][1] + 8);
   g.fillStyle = '#000'; g.fillRect(x - 17, top - 1, 34, 5);
   g.fillStyle = u.side === 'ally' ? '#5fd35f' : '#e05050'; g.fillRect(x - 16, top, Math.max(0, 32 * u.hp / u.maxHp), 3);
   g.font = 'bold 10px sans-serif'; g.textAlign = 'center';
@@ -171,13 +186,13 @@ async function hit(src, dst, dmg, fixed = false) {
   if (!fixed) dmg = Math.max(1, dmg - dst.def + rnd(-1, 1));
   if (dst.curse > 0) dmg = Math.round(dmg * 1.5);
   if (dst.shield > 0) dmg = Math.ceil(dmg / 2);
-  dst.hp -= dmg; dst.flash = performance.now() + 300; shake = Math.min(6, 2 + dmg / 3);
+  dst.hp -= dmg; dst.flash = performance.now() + 300; dst.hurtUntil = performance.now() + 450; shake = Math.min(6, 2 + dmg / 3);
   float(dst, '-' + dmg);
   if (dst.art) dst.anim = { name: 'hurt', t0: performance.now() };
   if (src && src.id === 'hero') charge = Math.min(100, charge + 25);
   if (dst.id === 'hero') charge = Math.min(100, charge + 15);
   if (dst.hp <= 0) {
-    dst.hp = 0; dst.dead = true;
+    dst.hp = 0; dst.dead = true; dst.deadAt = performance.now() + 300;
     if (dst.art) dst.anim = { name: 'down', t0: performance.now() };
     float(dst, '倒下', '#ff9090');
     // 後面的人往前補位
@@ -188,9 +203,11 @@ async function hit(src, dst, dmg, fixed = false) {
 }
 
 async function dashTo(u, target, fn) {
-  const dx = home(target) - home(u) + (u.side === 'ally' ? -40 : 40);
+  const gap = target.art ? 40 : Math.max(36, UNIT_ART[target.sprite][0] / 2 + 6);
+  const dx = home(target) - home(u) + (u.side === 'ally' ? -gap : gap);
   if (u.art) u.anim = { name: 'walk', t0: performance.now() };
   await tween(220, (t) => { u.ox = dx * t; });
+  u.atkUntil = performance.now() + 450;
   await fn();
   if (u.art) u.anim = { name: 'walk', t0: performance.now() };
   await tween(220, (t) => { u.ox = dx * (1 - t); });
@@ -247,7 +264,7 @@ async function aiTurn(u) {
   const t = reach[rnd(0, reach.length - 1)] || foes[0];
   if (!t) return endTurn();
   $('.log').textContent = `${u.name}攻擊了${t.name}。`;
-  if (u.ranged) { u.oy = -6; await sleep(200); u.oy = 0; await hit(u, t, u.atk); await sleep(400); }
+  if (u.ranged) { u.atkUntil = performance.now() + 600; await sleep(300); await hit(u, t, u.atk); await sleep(400); }
   else await dashTo(u, t, async () => { await hit(u, t, u.atk); await sleep(250); });
   endTurn();
 }
@@ -280,7 +297,7 @@ function finish(win) {
   $('.who').textContent = win ? '勝利！' : '月老倒下了';
   $('.log').textContent = win ? '整層樓的姻緣都登記完畢。' : '（正式版這裡會變成靈魂，等引魂犬來救。）';
   const box = $('.acts'); box.innerHTML = '';
-  const b = document.createElement('button'); b.className = 'btn primary'; b.textContent = '再打一次'; b.onclick = reset; box.append(b);
+  const b = document.createElement('button'); b.className = 'btn primary'; b.textContent = win ? '下一批敵人' : '再打一次'; b.onclick = () => reset(win); box.append(b);
 }
 
 function renderActs() {
@@ -317,7 +334,8 @@ let loaded = 0;
 preloadArt();
 const need = Object.values(ART.yuelao.sheets).length;
 const check = setInterval(() => {
-  if (Object.keys(ART.yuelao.sheets).every((s) => artSheet('yuelao', s))) { clearInterval(check); reset(); requestAnimationFrame(draw); }
+  const ready = Object.keys(ART.yuelao.sheets).every((s) => artSheet('yuelao', s)) && Object.keys(UNIT_ART).every((k) => artSheet('u:' + k, 'pose'));
+  if (ready) { clearInterval(check); reset(); requestAnimationFrame(draw); }
 }, 50);
 </script>
 </body>

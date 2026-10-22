@@ -172,7 +172,7 @@ const Game = {
     // 測試期間：有專屬像素圖的職業（目前是月老）固定出現在能選它的路上
     for (const id of PATH_ORDER) {
       const side = FORMS[id].side, list = s.offer.paths[id];
-      for (const job of Object.keys(ART)) {
+      for (const job of Object.keys(ART).filter((k) => JOBS[k])) {
         if (side && FAITHS[job].side !== side) continue;
         if (!list.includes(job)) list[0] = job;
       }

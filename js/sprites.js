@@ -354,6 +354,10 @@ const ART = {
     sheets: { pose: ['sheet.png', 49, 78], walk: ['walk.png', 42, 78], punch: ['punch.png', 56, 78], cast: ['cast.png', 80, 78], hurt: ['hurt.png', 81, 78] },
   },
 };
+// 戰鬥角色（敵人、引魂犬）：每張 3 格，待機、攻擊、被打，都面向右邊；登記成 ART['u:名字']
+const UNIT_ART = {"dog": [52, 50], "shade": [69, 70], "wisp": [74, 54], "husk": [81, 74], "redgirl": [55, 62], "mirror": [57, 78], "hunter": [117, 76], "boss": [142, 104], "horus": [138, 100]};
+for (const [k, [w, h]] of Object.entries(UNIT_ART)) ART['u:' + k] = { dir: 'assets/units/', sheets: { pose: [k + '.png', w, h] } };
+
 // 動作：用哪張、每格停多久（毫秒）
 const ART_ANIMS = {
   walk: { sheet: 'walk', ms: [110, 110, 110, 110], loop: true },
@@ -363,7 +367,7 @@ const ART_ANIMS = {
 };
 
 // 圖檔更新時改這個，手機才不會一直用快取的舊圖
-const ASSET_V = '20261022e';
+const ASSET_V = '20261022g';
 const ArtImages = {};
 function artSheet(job, sheet) {
   const a = ART[job], spec = a && a.sheets[sheet];
