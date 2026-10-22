@@ -125,3 +125,7 @@ canvas.art { image-rendering: pixelated; width: auto; align-self: center; }
 .skill-desc > div { padding: 4px 6px; border: 1px solid transparent; }
 .skill-desc > div.active { border-color: var(--gold); background: #3a3420; }
 .skill-desc .muted { font-size: 12px; }
+.tip-overlay { position: fixed; inset: 0; background: rgba(5, 4, 10, 0.6); display: flex; align-items: flex-end; justify-content: center; z-index: 50; padding: 16px; }
+.tip-card { width: 100%; max-width: 480px; background: var(--panel); border: 2px solid var(--gold); padding: 14px; line-height: 1.6; }
+.tip-card .tip-title { color: var(--gold); font-weight: bold; margin-bottom: 6px; }
+.tip-card p { margin: 0 0 8px; font-size: 15px; }

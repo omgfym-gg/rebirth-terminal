@@ -94,6 +94,7 @@ const Game = {
       box.append(el('button', { class: 'btn primary', onclick: () => this.resume() }, `繼續（第 ${this.lifeNo} 世）`));
     }
     box.append(el('button', { class: 'btn' + (hasSave ? '' : ' primary'), onclick: () => this.confirmNew(hasSave) }, '新的靈魂'));
+    box.append(el('button', { class: 'btn', onclick: () => { Tutorial.reset(); alert('新手教學已重置，走到每個畫面時會再出現一次說明。'); } }, '重看新手教學'));
     drawTerminalBanner($('#title canvas'), 0);
     this.show('title');
   },
@@ -245,6 +246,7 @@ const Game = {
 
       const ready = pick.form && pick.faith && (!prev || !options.length || pick.inherit);
       root.append(el('button', { class: 'btn primary wide', disabled: ready ? null : 'disabled', onclick: () => this.beginLife(pick) }, '轉生'));
+      Tutorial.tip('rebirth');
     };
     render();
     this.show('rebirth');
@@ -327,6 +329,7 @@ const Game = {
     for (const e of s.echoes) root.append(el('div', { class: 'echo ' + e.type }, el('b', {}, e.title), el('div', {}, e.text)));
 
     root.append(el('button', { class: 'btn primary wide', onclick: () => this.enterDungeon() }, '進入地城'));
+    Tutorial.tip('town');
     root.append(el('button', { class: 'btn wide', onclick: () => this.showTitle() }, '回標題（自動存檔）'));
     this.show('town');
   },
@@ -660,6 +663,7 @@ const Game = {
     }
     root.append(list);
     root.append(el('button', { class: 'btn primary wide', onclick: () => this.showRebirth() }, '前往轉生櫃台'));
+    if (s.history.length) Tutorial.tip('terminal');
     root.append(el('button', { class: 'btn wide', onclick: () => this.showTitle() }, '回標題（自動存檔）'));
     this.show('terminal');
   },
@@ -712,6 +716,9 @@ const BattleUI = {
     }
     $('#battle .hint').textContent = '點藍色格子移動，或直接選擇行動。';
     this.showSkillDesc(u);
+    Tutorial.tip('battle');
+    if (u.skills.some((s) => s.cdLeft > 0)) Tutorial.tip('cooldown');
+    if (u.charge >= 100) Tutorial.tip('ult');
     this.showHero(u);
   },
   // 按鈕下面列出每招在做什麼；選中的那招會亮起來
@@ -731,11 +738,13 @@ const BattleUI = {
     box.append(el('button', { class: 'btn act', onclick: () => Game.battle && Game.battle.chooseAction('wait') }, '等待救援'));
     $('#battle .skill-desc').innerHTML = '';
     $('#battle .hint').textContent = '點藍色格子讓靈魂飄過去。紫色裂縫可以逃走。';
+    Tutorial.tip('soul');
     if (Game.battle) $('#battle .hero-hp').textContent = `靈魂 剩 ${Game.battle.hero.soulTimer} 回合`;
   },
   setActiveAction(id) {
     for (const b of document.querySelectorAll('#battle .actions .btn')) b.classList.toggle('active', b.dataset.id === id);
     for (const d of document.querySelectorAll('#battle .skill-desc [data-id]')) d.classList.toggle('active', d.dataset.id === id);
+    if (id) Tutorial.tip('target');
     $('#battle .hint').textContent = id ? '點紅色格子選擇目標。再按一次按鈕取消。' : '點藍色格子移動，或直接選擇行動。';
   },
   hideActions() {
