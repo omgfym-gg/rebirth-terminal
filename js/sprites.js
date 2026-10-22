@@ -362,12 +362,14 @@ const ART_ANIMS = {
   hurt: { sheet: 'hurt', ms: [140, 240] },
 };
 
+// 圖檔更新時改這個，手機才不會一直用快取的舊圖
+const ASSET_V = '20261022e';
 const ArtImages = {};
 function artSheet(job, sheet) {
   const a = ART[job], spec = a && a.sheets[sheet];
   if (!spec) return null;
   const key = a.dir + spec[0];
-  if (!ArtImages[key]) { const im = new Image(); im.src = key; ArtImages[key] = im; }
+  if (!ArtImages[key]) { const im = new Image(); im.src = key + '?v=' + ASSET_V; ArtImages[key] = im; }
   const img = ArtImages[key];
   return img.complete && img.naturalWidth ? { img, fw: spec[1], fh: spec[2] } : null;
 }

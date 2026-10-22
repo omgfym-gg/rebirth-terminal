@@ -32,6 +32,7 @@ class Battle {
     this.ui = ui;
     this.floor = spec;
     this.theme = THEMES.find((t) => t.id === spec.theme) || THEMES[0];
+    this.scene = new Scene(this.theme.id, COLS, ROWS, TILE * SCALE);
     this.heroBase = hero;
     this.opts = opts;
     this.job = JOBS[opts.faith];
@@ -1144,28 +1145,7 @@ class Battle {
     }
 
     // 地形
-    for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
-      const px = x * T * S, py = y * T * S, sz = T * S;
-      const t = this.tiles[y][x];
-      if (t === 'wall') {
-        g.fillStyle = '#2b2735'; g.fillRect(px, py, sz, sz);
-        g.fillStyle = '#3a3548';
-        for (let r = 0; r < 4; r++) {
-          const off = r % 2 ? sz / 2 : 0;
-          for (let c = -1; c < 2; c++) g.fillRect(px + off + c * sz / 2 + S, py + r * sz / 4 + S, sz / 2 - 2 * S, sz / 4 - 2 * S);
-        }
-      } else if (t === 'water') {
-        g.fillStyle = '#1c3a5c'; g.fillRect(px, py, sz, sz);
-        g.fillStyle = '#2f5f8f';
-        const w = Math.floor(now / 400 + x + y) % 4;
-        g.fillRect(px + (w * 3 + 1) * S, py + 4 * S, 4 * S, S);
-        g.fillRect(px + ((w + 2) % 4 * 3 + 2) * S, py + 11 * S, 4 * S, S);
-      } else {
-        g.fillStyle = this.theme.floor[(x + y) % 2]; g.fillRect(px, py, sz, sz);
-        g.fillStyle = this.theme.speck;
-        g.fillRect(px + ((x * 7 + y * 3) % 12) * S, py + ((x * 5 + y * 11) % 12) * S, S * 2, S);
-      }
-    }
+    this.scene.draw(g, this.tiles, now);
 
     // 裂縫
     for (const r of this.rifts) {
@@ -1213,6 +1193,9 @@ class Battle {
         this.drawLabel(px + T * S / 2, py + 2 * S, String(u.soulTimer), '#a0d8ff');
         continue;
       }
+      // 腳下的影子
+      g.fillStyle = 'rgba(0,0,0,0.35)';
+      g.beginPath(); g.ellipse((u.x * T + u.ox + T / 2) * S, (u.y * T + u.oy + T - 1) * S, (u.boss ? 9 : 6) * S, 2 * S, 0, 0, Math.PI * 2); g.fill();
       const white = u.flash > 0 && Math.floor(u.flash / 60) % 2 === 0;
       if (u.flash > 0) u.flash -= dt;
       const flip = u.facing < 0;
@@ -1247,6 +1230,8 @@ class Battle {
         g.fillRect(tx + z - c, ty + z - w, c, w); g.fillRect(tx + z - w, ty + z - c, w, c);
       }
     }
+
+    this.scene.drawLight(g, this.canvas.width, this.canvas.height);
 
     // 特效
     this.effects = this.effects.filter((e) => (e.ttl -= dt) > 0);
