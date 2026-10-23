@@ -1,0 +1,524 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>卡牌戰鬥試玩</title>
+<link rel="stylesheet" href="style.css?v=20261023l">
+<style>
+  .stage { width: 100%; height: auto; border: 2px solid var(--line); background: #0b0a12; touch-action: manipulation; }
+  .bar { display: flex; justify-content: space-between; align-items: center; margin: 6px 0; font-size: 14px; gap: 8px; }
+  .energy { display: inline-block; min-width: 46px; text-align: center; padding: 2px 6px; border: 2px solid var(--gold); color: var(--gold); font-weight: bold; }
+  .hand { display: flex; gap: 6px; overflow-x: auto; padding: 10px 2px 8px 10px; min-height: 150px; }
+  .screen-battle .hand { flex-wrap: wrap; overflow: visible; row-gap: 12px; }
+  .screen-battle .card { flex: 0 0 calc(33.3% - 8px); min-height: 100px; }
+  .card { flex: 0 0 104px; min-height: 140px; border: 2px solid var(--line); background: var(--panel); padding: 6px; display: flex; flex-direction: column; gap: 3px; font-size: 12px; line-height: 1.35; text-align: left; color: var(--text); cursor: pointer; position: relative; }
+  .card b { font-size: 14px; color: var(--accent); }
+  .card .cost { position: absolute; top: -8px; left: -8px; width: 24px; height: 24px; border-radius: 50%; background: #3a3420; border: 2px solid var(--gold); color: var(--gold); font-weight: bold; text-align: center; line-height: 20px; }
+  .card.atk { border-color: #a04848; } .card.skill { border-color: #4878a0; } .card.ult { border-color: var(--gold); }
+  .card.mine b { color: #ffd070; }
+  .card:disabled { opacity: 0.4; }
+  .card .who { color: var(--muted); font-size: 11px; }
+  .row { display: flex; gap: 6px; }
+  .row .btn { flex: 1; padding: 10px 4px; font-size: 15px; }
+  .btn.glow { border-color: var(--gold); animation: glow 0.8s infinite alternate; }
+  .log { font-size: 13px; color: var(--muted); margin-top: 6px; min-height: 40px; }
+  .pick { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+  .pick .btn { flex: 1 0 30%; padding: 8px 4px; font-size: 14px; }
+  .pick .btn.active { border-color: var(--gold); background: #3a3420; }
+  .panel { border: 2px solid var(--line); background: var(--panel); padding: 10px; margin-top: 8px; }
+  .panel h3 { margin-top: 0; }
+  .intro { font-size: 13px; line-height: 1.5; }
+  .legacy { color: #ffd070; font-size: 13px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <h2>卡牌戰鬥・試玩</h2>
+  <p class="muted" style="font-size:13px">每回合有 3 點能量、抽 5 張牌，打出卡片攻擊或防禦。敵人頭上會顯示它下一步要做什麼。打完 4 場就通關；死掉的話，可以挑一張牌帶到下一世。</p>
+  <div class="screen-pick"></div>
+  <div class="screen-battle" style="display:none">
+    <canvas class="stage" width="384" height="216"></canvas>
+    <div class="bar"><span class="hp"></span><span class="energy"></span></div>
+    <div class="hand"></div>
+    <div class="row"><button class="btn ultbtn"></button><button class="btn primary endturn">結束回合</button></div>
+    <div class="log"></div>
+  </div>
+  <div class="screen-reward" style="display:none"></div>
+  <a class="btn wide" href="./" style="display:block;text-align:center;text-decoration:none;margin-top:10px">回遊戲</a>
+</div>
+<script src="js/data.js?v=20261023l"></script>
+<script src="js/jobs.js?v=20261023l"></script>
+<script src="js/sprites.js?v=20261023l"></script>
+<script>
+'use strict';
+function drawBackground(now) {
+  // 後牆：辦公大樓的走廊，門、公告欄、閃爍的燈
+  g.fillStyle = '#211d2b'; g.fillRect(0, 0, W, 150);
+  g.fillStyle = '#2a2536';
+  for (let x = 0; x < W; x += 48) g.fillRect(x, 0, 2, 150);
+  for (let i = 0; i < 4; i++) {
+    const dx = 20 + i * 96;
+    g.fillStyle = '#16131e'; g.fillRect(dx, 62, 40, 88);
+    g.fillStyle = '#3a3448'; g.fillRect(dx - 3, 59, 46, 3); g.fillRect(dx - 3, 59, 3, 91); g.fillRect(dx + 40, 59, 3, 91);
+    g.fillStyle = '#c8b860'; g.fillRect(dx + 32, 104, 4, 2);
+    g.fillStyle = '#3c5a3a'; g.fillRect(dx + 8, 40, 24, 8); g.fillStyle = '#7ae07a'; g.fillRect(dx + 11, 43, 18, 2);
+  }
+  g.fillStyle = '#4a3a2a'; g.fillRect(126, 70, 36, 26); g.fillStyle = '#d8d0b0';
+  for (let k = 0; k < 5; k++) g.fillRect(130 + (k % 3) * 10, 74 + Math.floor(k / 3) * 10, 7, 7);
+  // 天花板燈
+  for (let i = 0; i < 4; i++) {
+    const on = !(i === 2 && Math.floor(now / 140) % 9 === 0);
+    g.fillStyle = on ? '#e8f0d0' : '#4a4a40'; g.fillRect(36 + i * 96, 6, 32, 3);
+    if (on) { const grd = g.createRadialGradient(52 + i * 96, 10, 2, 52 + i * 96, 60, 90); grd.addColorStop(0, 'rgba(230,240,200,0.10)'); grd.addColorStop(1, 'rgba(230,240,200,0)'); g.fillStyle = grd; g.fillRect(i * 96, 0, 104, 160); }
+  }
+  // 牆腳＋地板（往前透視的磁磚）
+  g.fillStyle = '#3a3448'; g.fillRect(0, 146, W, 4);
+  g.fillStyle = '#2a2632'; g.fillRect(0, 150, W, H - 150);
+  g.fillStyle = '#221f2a';
+  for (let y = 150, k = 0; y < H; y += 8 + k * 2, k++) g.fillRect(0, y, W, 1);
+  for (let i = -8; i <= 8; i++) { g.strokeStyle = '#221f2a'; g.beginPath(); g.moveTo(W / 2 + i * 30, 150); g.lineTo(W / 2 + i * 60, H); g.stroke(); }
+  // 地上的水漬反光
+  g.fillStyle = 'rgba(120,160,220,0.08)'; g.fillRect(60, 200, 90, 4); g.fillRect(250, 206, 70, 3);
+}
+
+// 卡牌回合制原型（像殺戮尖塔）：每回合 3 能量、抽 5 張；敵人頭上顯示下一步意圖。
+// 死亡就是力量：倒下時挑一張牌帶到下一世（存在這台手機上）。
+const W = 384, H = 216, GROUND = 196;
+const cv = document.querySelector('.stage'), g = cv.getContext('2d');
+g.imageSmoothingEnabled = false;
+const $ = (s) => document.querySelector(s);
+let gen = 0;
+const sleep = (ms) => { const my = gen; return new Promise((r) => setTimeout(() => { if (my === gen) r(); }, ms)); };
+const tween = (ms, fn) => { const my = gen; return new Promise((res) => { const t0 = performance.now(); const f = (n) => { if (my !== gen) return; const t = Math.min(1, (n - t0) / ms); fn(t); t < 1 ? requestAnimationFrame(f) : res(); }; requestAnimationFrame(f); }); };
+const rnd = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+const shuffle = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = rnd(0, i); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+
+// ───── 卡片：職業的兩招變成卡，大招用神力／魔力條 ─────
+const HEROES = Object.keys(ART).filter((k) => JOBS[k]);
+const jobGauge = (id) => JOBS[id].side === '神' ? '神力' : '魔力';
+
+function skillCard(id, sk, k) {
+  const fx = sk.fx, a = sk.a || 'single', who = sk.who || (sk.t === 'ally' ? 'ally' : 'enemy');
+  const c = { id: id + '.' + k, n: sk.n, job: id, anim: k === 'ult' ? 'ult' : k === 0 ? 's1' : 's2' };
+  const mult = k === 'ult' ? 1.5 : 1;
+  c.aoe = who === 'enemy' && ((sk.t === 'self' && a !== 'single') || (sk.t === 'tile' && !fx.teleport && a !== 'single'));
+  if (fx.dmg) { c.dmg = Math.round(6 * fx.dmg * mult); c.hits = fx.hits || 1; }
+  if (fx.fixed) c.fixed = Math.round(fx.fixed * 2 * mult);
+  if (fx.heal) c.heal = Math.round(fx.heal * mult);
+  if (fx.shield || fx.teleport) c.block = Math.round(((fx.shield || 0) * 4 + (fx.teleport ? 8 : 5)) * mult);
+  if (fx.stun) c.stun = 1;
+  if (fx.blind) c.weak = fx.blind + 1;
+  if (fx.curse) c.vuln = fx.curse + 1;
+  if (fx.confuse) c.confuse = 1;
+  if (fx.drain) c.drain = fx.drain;
+  if (fx.buffAtk) c.str = fx.buffAtk;
+  if (fx.cleanse) c.cleanse = 1;
+  if (fx.execute) c.execute = fx.execute;
+  if (fx.extraTurn) c.energy = 2;
+  if (fx.charge) c.charge = fx.charge;
+  if (fx.summon) c.summon = fx.summon.n;
+  if (fx.lowHpBonus) c.lowHp = 1;
+  if (who === 'ally' && !c.heal && !c.block && !c.str) c.heal = 6;
+  if (!c.dmg && !c.fixed && !c.heal && !c.block && !c.stun && !c.weak && !c.vuln && !c.confuse && !c.str && !c.energy && !c.summon) c.block = 6;
+  c.type = k === 'ult' ? 'ult' : (c.dmg || c.fixed) ? 'atk' : 'skill';
+  const strong = (c.dmg || c.fixed) && (c.stun || c.vuln || c.weak || c.aoe || c.confuse);
+  c.cost = k === 'ult' ? 0 : strong || c.dmg >= 9 || c.energy ? 2 : 1;
+  c.desc = cardDesc(c);
+  return c;
+}
+function cardDesc(c) {
+  const t = c.aoe ? '全體敵人' : '';
+  const o = [];
+  if (c.dmg) o.push(`${t}${c.hits > 1 ? `連打 ${c.hits} 次，每次 ${c.dmg}` : `造成 ${c.dmg}`} 點傷害`);
+  if (c.fixed) o.push(`${t}${c.dmg ? '再受' : '受到'} ${c.fixed} 點傷害（無視格擋）`);
+  if (c.lowHp) o.push('目標生命低於一半時加五成');
+  if (c.execute) o.push(`生命低於 ${Math.round(c.execute * 100)}% 的非首領直接倒下`);
+  if (c.block) o.push(`獲得 ${c.block} 點格擋`);
+  if (c.heal) o.push(`回復 ${c.heal} 點生命`);
+  if (c.str) o.push(`力量 +${c.str}（之後每次攻擊多 ${c.str}）`);
+  if (c.cleanse) o.push('解除自己的負面狀態');
+  if (c.stun) o.push(`${t || '目標'}暈眩：跳過下一次行動`);
+  if (c.weak) o.push(`${t || '目標'}虛弱 ${c.weak} 回合（攻擊少四分之一）`);
+  if (c.vuln) o.push(`${t || '目標'}易傷 ${c.vuln} 回合（受到傷害加五成）`);
+  if (c.confuse) o.push(`${t || '目標'}混亂：下一次攻擊打到自己人`);
+  if (c.drain) o.push(`吸取 ${Math.round(c.drain * 10)} 成傷害`);
+  if (c.energy) o.push(`能量 +${c.energy}`);
+  if (c.charge) o.push(`${c.job ? jobGauge(c.job) : '能量條'} +${c.charge}%`);
+  if (c.summon) o.push(`召喚 ${c.summon} 個分身，各對全體敵人造成 4 點傷害`);
+  return o.join('，') + '。';
+}
+const BASIC = {
+  strike: { id: 'strike', n: '攻擊', cost: 1, type: 'atk', dmg: 6, hits: 1, anim: 'punch', desc: '造成 6 點傷害。' },
+  guard: { id: 'guard', n: '防禦', cost: 1, type: 'skill', block: 5, anim: 'cast', desc: '獲得 5 點格擋（擋到下回合開始）。' },
+};
+function cardById(id) {
+  if (BASIC[id]) return { ...BASIC[id] };
+  const [job, k] = id.split('.');
+  return skillCard(job, k === 'ult' ? JOBS[job].ult : JOBS[job].skills[+k], k === 'ult' ? 'ult' : +k);
+}
+
+// ───── 敵人：每隻有一串固定的意圖輪流做 ─────
+const FOES = {
+  shade:   { name: '影子怪',     hp: 18, plan: [['atk', 5], ['weak', 2], ['atk', 5]] },
+  husk:    { name: '空殼職員',   hp: 24, plan: [['def', 6], ['atk', 7], ['atk', 3, 2]] },
+  wisp:    { name: '鬼火',       hp: 12, plan: [['buff', 2], ['atk', 3, 2]] },
+  mirror:  { name: '鏡中人',     hp: 26, plan: [['atk', 7], ['vuln', 2], ['atk', 7]] },
+  hunter:  { name: '追殺者',     hp: 30, plan: [['def', 8], ['atk', 10], ['atk', 3, 3]] },
+  zombie:  { name: '加班殭屍',   hp: 28, plan: [['atk', 7], ['def', 6], ['atk', 7]] },
+  printer: { name: '卡紙印表機', hp: 18, plan: [['weak', 2], ['atk', 2, 3], ['atk', 6]] },
+  judge:   { name: '考績審判官', hp: 100, boss: true, plan: [['vuln', 2], ['atk', 14], ['def', 12], ['atk', 5, 3], ['buff', 3]] },
+};
+const FIGHTS = [['zombie', 'printer'], ['shade', 'husk', 'wisp'], ['mirror', 'hunter'], ['judge']];
+
+// ───── 狀態 ─────
+let heroId = null, run = null, B = null, effects = [], shake = 0, busy = false, target = null;
+const LEGACY_KEY = 'rebirth-card-legacy-v1';
+const loadLegacy = () => { try { return JSON.parse(localStorage.getItem(LEGACY_KEY) || '[]'); } catch (e) { return []; } };
+const saveLegacy = (l) => { try { localStorage.setItem(LEGACY_KEY, JSON.stringify(l)); } catch (e) { /* 存不了就算了 */ } };
+
+function startRun(id) {
+  heroId = id;
+  const p = JOBS[id].passive.p;
+  const legacy = loadLegacy();
+  const deck = ['strike', 'strike', 'strike', 'strike', 'guard', 'guard', 'guard', 'guard', id + '.0', id + '.0', id + '.1', ...legacy];
+  run = { deck, fight: 0, maxHp: 60 + (p.hp || 0) * 2, hp: 60 + (p.hp || 0) * 2, legacy, life: (run ? run.life : 0) + 1 };
+  startFight();
+}
+
+function startFight() {
+  gen++;
+  const p = JOBS[heroId].passive.p;
+  const hero = { id: 'hero', side: 'ally', name: JOBS[heroId].name, art: heroId, hp: run.hp, maxHp: run.maxHp, block: 0, str: 0, weak: 0, vuln: 0, dodge: p.dodge || 0, regen: p.regen || 0, x: 110 };
+  const foes = FIGHTS[run.fight].map((k, i, arr) => ({ id: 'e' + i, side: 'enemy', key: k, ...FOES[k], maxHp: FOES[k].hp, block: 0, str: 0, weak: 0, vuln: 0, stun: 0, confuse: 0, step: rnd(0, 1), x: FOES[k].boss ? 290 : 228 + i * (arr.length > 2 ? 56 : 70) }));
+  for (const u of [hero, ...foes]) Object.assign(u, { ox: 0, oy: 0, flash: 0, anim: null, dead: false, atkUntil: 0, hurtUntil: 0 });
+  B = { hero, foes, draw: shuffle(run.deck.map(cardById)), hand: [], discard: [], energy: 3, charge: 0, turn: 0 };
+  target = foes[0];
+  effects = [];
+  showScreen('battle');
+  $('.log').textContent = `第 ${run.fight + 1} 場（共 ${FIGHTS.length} 場）：${foes.map((f) => f.name).join('、')}`;
+  startTurn();
+}
+
+const alive = () => B.foes.filter((f) => !f.dead);
+const intent = (f) => f.plan[f.step % f.plan.length];
+
+function drawCards(n) {
+  for (let i = 0; i < n; i++) {
+    if (!B.draw.length) { if (!B.discard.length) break; B.draw = shuffle(B.discard); B.discard = []; }
+    B.hand.push(B.draw.pop());
+  }
+}
+
+function startTurn() {
+  B.turn++; B.energy = 3; B.hero.block = 0;
+  if (B.hero.regen) heal(B.hero, B.hero.regen);
+  drawCards(5);
+  busy = false; render();
+}
+
+// ───── 傷害與狀態 ─────
+function float(u, text, color = '#fff') { effects.push({ type: 'text', x: u.x + u.ox, y: GROUND - 92, text, color, t0: performance.now(), ms: 900 }); }
+function heal(u, v) { v = Math.min(v, u.maxHp - u.hp); if (v > 0) { u.hp += v; float(u, '+' + v, '#7fe07f'); } }
+
+function damage(src, dst, amount, pierce = false) {
+  if (dst.dead) return 0;
+  if (dst === B.hero && dst.dodge && Math.random() < dst.dodge) { float(dst, '閃避', '#c0a0ff'); return 0; }
+  let d = amount;
+  if (src && src.weak > 0) d = Math.floor(d * 0.75);
+  if (dst.vuln > 0) d = Math.floor(d * 1.5);
+  if (!pierce && dst.block > 0) { const b = Math.min(dst.block, d); dst.block -= b; d -= b; if (b) float(dst, '格擋 ' + b, '#a0c8ff'); }
+  if (d <= 0) return 0;
+  dst.hp -= d; dst.flash = performance.now() + 300; dst.hurtUntil = performance.now() + 450; shake = Math.min(6, 2 + d / 4);
+  float(dst, '-' + d);
+  if (dst.art) dst.anim = { name: 'hurt', t0: performance.now() };
+  if (dst.hp <= 0) {
+    dst.hp = 0; dst.dead = true; dst.deadAt = performance.now() + 300;
+    if (dst.art) dst.anim = { name: 'down', t0: performance.now() };
+    float(dst, '倒下', '#ff9090');
+    if (src === B.hero) B.charge = Math.min(100, B.charge + (JOBS[heroId].passive.p.onKillCharge || 10));
+  }
+  return d;
+}
+
+// ───── 出牌 ─────
+async function playCard(i) {
+  if (busy) return;
+  const c = i === 'ult' ? cardById(heroId + '.ult') : B.hand[i];
+  if (i === 'ult' ? B.charge < 100 : c.cost > B.energy) return;
+  busy = true;
+  if (i === 'ult') B.charge = 0; else { B.energy -= c.cost; B.hand.splice(i, 1); B.discard.push(c); B.charge = Math.min(100, B.charge + (c.type === 'atk' ? 12 : 8)); }
+  if (!target || target.dead) target = alive()[0];
+  render();
+  await resolveCard(c);
+  if (!alive().length) return winFight();
+  busy = false; render();
+}
+
+async function resolveCard(c) {
+  const h = B.hero, art = ART[heroId], col = art.color || '#ffe070';
+  const targets = c.aoe ? alive() : [target];
+  const melee = c.type !== 'skill' && !c.aoe && (c.dmg || c.fixed) && (c.anim === 'punch' ? art.melee !== false : art.melee);
+  const anim = artAnim(heroId, c.anim) ? c.anim : (c.type === 'atk' ? 'punch' : 'cast');
+  $('.log').textContent = c.type === 'ult' ? `${c.n}！` : `打出「${c.n}」。`;
+  if (c.type === 'ult') { effects.push({ type: 'flash', t0: performance.now(), ms: 450 }); shake = 6; }
+  const hitAll = async () => {
+    let dealt = 0;
+    for (const t of targets) {
+      if (t.dead) continue;
+      effects.push({ type: 'burst', x: t.x + t.ox, color: col, seed: Math.random() * 6, t0: performance.now(), ms: 500 });
+      for (let k = 0; k < (c.hits || 1) && !t.dead; k++) {
+        if (c.dmg) { let d = c.dmg + h.str; if (c.lowHp && t.hp < t.maxHp / 2) d = Math.round(d * 1.5); dealt += damage(h, t, d); if (c.hits > 1) await sleep(140); }
+      }
+      if (c.fixed && !t.dead) dealt += damage(h, t, c.fixed, true);
+      if (t.dead) continue;
+      if (c.execute && !t.boss && t.hp <= t.maxHp * c.execute) { float(t, '處決', '#ff6060'); damage(h, t, t.hp, true); continue; }
+      if (c.stun) { t.stun = 1; float(t, '暈眩', '#ffb0d0'); }
+      if (c.weak) { t.weak = Math.max(t.weak, c.weak); float(t, '虛弱', '#a0a0c0'); }
+      if (c.vuln) { t.vuln = Math.max(t.vuln, c.vuln); float(t, '易傷', '#d070ff'); }
+      if (c.confuse) { t.confuse = 1; float(t, '混亂', '#ff8060'); }
+      await sleep(80);
+    }
+    if (c.drain && dealt) heal(h, Math.max(1, Math.round(dealt * c.drain)));
+  };
+  const offensive = c.dmg || c.fixed || c.stun || c.weak || c.vuln || c.confuse || c.execute;
+  if (melee && targets[0]) {
+    const dx = targets[0].x - h.x - 46;
+    h.anim = { name: 'walk', t0: performance.now() }; await tween(200, (t) => { h.ox = dx * t; });
+    h.anim = { name: anim, t0: performance.now() }; await sleep(220);
+    await hitAll(); await sleep(260);
+    h.anim = { name: 'walk', t0: performance.now() }; await tween(200, (t) => { h.ox = dx * (1 - t); }); h.anim = null;
+  } else {
+    h.anim = { name: anim, t0: performance.now() }; await sleep(320);
+    if (offensive) {
+      if (!c.aoe && targets[0]) { effects.push({ type: 'bolt', x1: h.x + 20, x2: targets[0].x, color: col, t0: performance.now(), ms: 420 }); await sleep(280); }
+      await hitAll();
+    }
+    await sleep(250);
+  }
+  if (c.block) { h.block += c.block; float(h, '格擋 +' + c.block, '#a0c8ff'); }
+  if (c.heal) heal(h, c.heal);
+  if (c.str) { h.str += c.str; float(h, '力量 +' + c.str, '#ffb040'); }
+  if (c.cleanse) { h.weak = h.vuln = 0; }
+  if (c.energy) { B.energy += c.energy; float(h, '能量 +' + c.energy, '#ffe070'); }
+  if (c.charge) B.charge = Math.min(100, B.charge + c.charge);
+  if (c.summon) {
+    for (let s = 0; s < c.summon; s++) for (const t of alive()) {
+      effects.push({ type: 'clone', art: heroId, x1: h.x - 10, x2: t.x - 40, t0: performance.now(), ms: 520 });
+      await sleep(300); damage(h, t, 4, true); await sleep(100);
+    }
+  }
+  await sleep(150);
+}
+
+// ───── 敵人回合 ─────
+async function endTurn() {
+  if (busy) return;
+  busy = true;
+  B.discard.push(...B.hand); B.hand = []; render();
+  for (const f of alive()) {
+    f.block = 0;
+    await sleep(250);
+    if (f.stun) { f.stun = 0; float(f, '暈眩中', '#ffb0d0'); f.step++; await sleep(400); continue; }
+    const [kind, v, times = 1] = intent(f);
+    if (kind === 'atk') {
+      let victim = B.hero;
+      if (f.confuse) { f.confuse = 0; const others = alive().filter((o) => o !== f); victim = others.length ? others[rnd(0, others.length - 1)] : f; float(f, '混亂', '#ff8060'); }
+      $('.log').textContent = `${f.name}攻擊${victim === B.hero ? '你' : victim.name}！`;
+      const dx = victim === B.hero ? B.hero.x - f.x + 48 : 0;
+      await tween(180, (t) => { f.ox = dx * t; });
+      for (let k = 0; k < times; k++) { f.atkUntil = performance.now() + 300; damage(f, victim, v + f.str); await sleep(220); }
+      await tween(180, (t) => { f.ox = dx * (1 - t); });
+    } else if (kind === 'def') { f.block += v; float(f, '格擋 +' + v, '#a0c8ff'); }
+    else if (kind === 'buff') { f.str += v; float(f, '力量 +' + v, '#ffb040'); }
+    else if (kind === 'weak') { B.hero.weak = Math.max(B.hero.weak, v); float(B.hero, '虛弱', '#a0a0c0'); f.atkUntil = performance.now() + 400; }
+    else if (kind === 'vuln') { B.hero.vuln = Math.max(B.hero.vuln, v); float(B.hero, '易傷', '#d070ff'); f.atkUntil = performance.now() + 400; }
+    f.step++;
+    await sleep(300);
+    if (B.hero.hp <= 0) return loseRun();
+  }
+  for (const u of [B.hero, ...B.foes]) { if (u.weak > 0) u.weak--; if (u.vuln > 0) u.vuln--; }
+  if (!alive().length) return winFight();
+  startTurn();
+}
+
+// ───── 勝利、獎勵、死亡 ─────
+function winFight() {
+  run.hp = B.hero.hp;
+  run.fight++;
+  if (run.fight >= FIGHTS.length) {
+    showScreen('reward');
+    $('.screen-reward').innerHTML = `<div class="panel"><h3>通關！</h3><p>${JOBS[heroId].name}打倒了考績審判官。這一世的考績：優等。</p></div>`;
+    const b = button('換個角色再玩', () => showPick()); $('.screen-reward').append(b);
+    return;
+  }
+  run.hp = Math.min(run.maxHp, run.hp + Math.round(run.maxHp * 0.2));
+  // 獎勵：自己職業的牌一張，加上兩張別的職業的牌（前世的記憶）
+  const others = shuffle(HEROES.filter((k) => k !== heroId)).slice(0, 2);
+  const offers = [heroId + '.' + rnd(0, 1), ...others.map((k) => k + '.' + rnd(0, 1))].map(cardById);
+  showScreen('reward');
+  const box = $('.screen-reward'); box.innerHTML = '';
+  box.append(Object.assign(document.createElement('div'), { className: 'panel', innerHTML: `<h3>贏了！選一張牌加進牌組</h3><p class="muted">生命回復兩成（${run.hp}/${run.maxHp}）。別的職業的牌，是前世留下的記憶。</p>` }));
+  const hand = document.createElement('div'); hand.className = 'hand';
+  for (const c of offers) hand.append(cardEl(c, () => { run.deck.push(c.id); startFight(); }));
+  box.append(hand, button('都不要，直接下一場', () => startFight()));
+}
+
+function loseRun() {
+  busy = true;
+  setTimeout(() => {
+    showScreen('reward');
+    const box = $('.screen-reward'); box.innerHTML = '';
+    box.append(Object.assign(document.createElement('div'), { className: 'panel', innerHTML: `<h3>${JOBS[heroId].name}倒下了</h3><p>死亡就是力量。從這一世的牌組挑一張，下一世會帶著它出生（最多記住 3 張）。</p>` }));
+    const hand = document.createElement('div'); hand.className = 'hand';
+    const uniq = [...new Set(run.deck.filter((id) => !BASIC[id]))].map(cardById);
+    for (const c of uniq) hand.append(cardEl(c, () => { const l = [...loadLegacy(), c.id].slice(-3); saveLegacy(l); showPick(); }));
+    box.append(hand, button('什麼都不帶，直接轉生', () => showPick()));
+  }, 700);
+}
+
+// ───── 畫面 ─────
+function showScreen(name) {
+  for (const s of ['pick', 'battle', 'reward']) $('.screen-' + s).style.display = s === name ? '' : 'none';
+}
+function button(text, fn, cls = 'btn wide') { const b = document.createElement('button'); b.className = cls; b.textContent = text; b.style.marginTop = '8px'; b.onclick = fn; return b; }
+function cardEl(c, onclick, disabled = false) {
+  const b = document.createElement('button');
+  b.className = `card ${c.type}${c.job === heroId ? ' mine' : ''}`;
+  b.disabled = disabled;
+  b.innerHTML = `<span class="cost">${c.type === 'ult' ? '★' : c.cost}</span><b>${c.n}</b>${c.job && c.job !== heroId ? `<span class="who">${JOBS[c.job].name}的記憶</span>` : ''}<span>${c.desc}</span>`;
+  b.onclick = onclick;
+  return b;
+}
+
+function showPick() {
+  gen++; busy = false;
+  showScreen('pick');
+  const box = $('.screen-pick'); box.innerHTML = '';
+  const legacy = loadLegacy();
+  if (legacy.length) box.append(Object.assign(document.createElement('p'), { className: 'legacy', textContent: `前世帶來的牌：${legacy.map((id) => cardById(id).n).join('、')}` }));
+  box.append(Object.assign(document.createElement('h3'), { textContent: '轉生成誰？' }));
+  const pick = document.createElement('div'); pick.className = 'pick';
+  let sel = heroId && HEROES.includes(heroId) ? heroId : HEROES[0];
+  const intro = document.createElement('div'); intro.className = 'intro';
+  const paint = () => {
+    pick.querySelectorAll('.btn').forEach((b) => b.classList.toggle('active', b.dataset.id === sel));
+    const J = JOBS[sel], o = ORIGINS[sel];
+    intro.innerHTML = '';
+    if (o) intro.append(Object.assign(document.createElement('span'), { className: 'tag origin', textContent: o[0] }), `${J.name}（${J.side}族）：${o[1]}`);
+    const cards = document.createElement('div'); cards.className = 'hand';
+    for (const id of [sel + '.0', sel + '.1', sel + '.ult']) cards.append(cardEl(cardById(id), () => {}));
+    intro.append(Object.assign(document.createElement('p'), { className: 'muted', textContent: '專屬牌（大招要集滿' + jobGauge(sel) + '才能用）：' }), cards);
+  };
+  for (const id of HEROES) {
+    const b = document.createElement('button'); b.className = 'btn'; b.dataset.id = id; b.textContent = JOBS[id].name;
+    b.onclick = () => { sel = id; paint(); }; pick.append(b);
+  }
+  box.append(pick, intro, button('就是你了，開始！', () => startRun(sel), 'btn primary wide'));
+  paint();
+}
+
+function render() {
+  if (!B) return;
+  const h = B.hero;
+  $('.hp').textContent = `${h.name} 生命 ${h.hp}/${h.maxHp}${h.block ? `・格擋 ${h.block}` : ''}${h.str ? `・力量 ${h.str}` : ''}・牌堆 ${B.draw.length}`;
+  $('.energy').textContent = `能量 ${B.energy}/3`;
+  const hand = $('.screen-battle .hand'); hand.innerHTML = '';
+  B.hand.forEach((c, i) => hand.append(cardEl(c, () => playCard(i), busy || c.cost > B.energy)));
+  const ult = cardById(heroId + '.ult');
+  const ub = $('.ultbtn'); ub.textContent = `${ult.n} ${B.charge}%`; ub.disabled = busy || B.charge < 100; ub.classList.toggle('glow', B.charge >= 100);
+  ub.onclick = () => playCard('ult');
+  $('.endturn').disabled = busy;
+}
+$('.endturn').onclick = () => endTurn();
+
+cv.addEventListener('pointerdown', (ev) => {
+  if (!B) return;
+  const r = cv.getBoundingClientRect(), x = (ev.clientX - r.left) * W / r.width;
+  const t = alive().sort((a, b) => Math.abs(a.x - x) - Math.abs(b.x - x))[0];
+  if (t && Math.abs(t.x - x) < 36) { target = t; $('.log').textContent = `目標：${t.name}`; }
+});
+
+// ───── 畫 ─────
+function drawUnit(u, now) {
+  const x = u.x + u.ox;
+  const white = u.flash > now && Math.floor((u.flash - now) / 60) % 2 === 0;
+  if (!u.dead) { g.fillStyle = 'rgba(0,0,0,0.4)'; g.beginPath(); g.ellipse(x, GROUND, u.boss ? 34 : 22, 4, 0, 0, Math.PI * 2); g.fill(); }
+  let top;
+  if (u.art) {
+    let sheet = 'pose', i = 0;
+    let A = { walk: ['walk', [100, 100, 100, 100], true], punch: ['punch', [70, 80, 260, 120]], cast: ['cast', [110, 110, 110, 380]], hurt: ['hurt', [150, 300]], down: ['hurt', [150, 200, 99999]] };
+    if (ART[u.art].anims) { A = { down: ['hurt', [150, 200, 99999]] }; for (const [k, v] of Object.entries(ART[u.art].anims)) A[k] = [v.sheet, v.ms, v.loop]; }
+    if (u.anim && A[u.anim.name]) {
+      const [s, ms, loop] = A[u.anim.name]; let t = now - u.anim.t0; const tot = ms.reduce((a, b) => a + b, 0);
+      if (loop) t %= tot;
+      if (t < tot) { sheet = s; while (t >= ms[i]) t -= ms[i++]; } else u.anim = null;
+    }
+    if (u.dead && !u.anim) return;
+    drawArt(g, u.art, sheet, i, x, GROUND + u.oy, 1, { white });
+    const mark = ART[u.art].mark;
+    if (mark) for (let k = 0; k < 2; k++) { const p = (now / 1800 + k / 2) % 1; drawMark(g, mark, x + (k ? 18 : -28) + Math.sin(p * 6) * 3, GROUND - 50 - p * 40, 2, p < 0.2 ? p * 5 : 1 - (p - 0.2) / 0.8); }
+    top = GROUND - ART[u.art].sheets.pose[2] - 6;
+  } else {
+    const pose = now < u.hurtUntil || u.dead ? 2 : now < u.atkUntil ? 1 : 0;
+    const bob = pose === 0 && Math.floor(now / 600 + x) % 2 ? 1 : 0;
+    if (u.dead) { const k = Math.max(0, Math.min(1, (now - u.deadAt) / 600)); if (k >= 1) return; g.globalAlpha = 1 - k; }
+    drawArt(g, 'u:' + u.key, 'pose', pose, x, GROUND + u.oy + bob, 1, { flip: true, white });
+    g.globalAlpha = 1;
+    if (u.dead) return;
+    top = GROUND - UNIT_ART[u.key][1] - 8;
+  }
+  g.fillStyle = '#000'; g.fillRect(x - 17, top - 1, 34, 5);
+  g.fillStyle = u.side === 'ally' ? '#5fd35f' : '#e05050'; g.fillRect(x - 16, top, Math.max(0, 32 * u.hp / u.maxHp), 3);
+  if (u.block > 0) { g.fillStyle = '#4070c0'; g.fillRect(x - 26, top - 3, 9, 9); g.fillStyle = '#fff'; g.font = 'bold 8px sans-serif'; g.textAlign = 'center'; g.fillText(u.block, x - 21.5, top + 4); }
+  g.font = 'bold 10px sans-serif'; g.textAlign = 'center';
+  const tags = [u.vuln > 0 ? ['傷', '#d070ff'] : null, u.weak > 0 ? ['弱', '#a0a0c0'] : null, u.stun > 0 ? ['暈', '#ffb0d0'] : null, u.confuse > 0 ? ['亂', '#ff8060'] : null, u.str > 0 ? ['力', '#ffb040'] : null].filter(Boolean);
+  tags.forEach(([t, c], k) => { g.fillStyle = c; g.fillText(t, x - 12 + k * 12, top + 14); });
+  // 敵人意圖
+  if (u.side === 'enemy' && !busy) {
+    const [kind, v, times = 1] = intent(u);
+    const txt = u.stun ? '暈' : kind === 'atk' ? `⚔${v + u.str}${times > 1 ? '×' + times : ''}` : kind === 'def' ? `🛡${v}` : kind === 'buff' ? '力↑' : kind === 'weak' ? '弱化' : '易傷';
+    g.font = 'bold 11px sans-serif'; g.fillStyle = '#000'; g.fillText(txt, x + 1, top - 6); g.fillStyle = kind === 'atk' ? '#ff8080' : '#a0d8ff'; g.fillText(txt, x, top - 7);
+  }
+  if (u === target && !u.dead) { g.fillStyle = '#ffe070'; g.beginPath(); g.moveTo(x - 5, GROUND + 10); g.lineTo(x + 5, GROUND + 10); g.lineTo(x, GROUND + 4); g.fill(); }
+}
+
+function draw(now) {
+  g.save();
+  if (shake > 0) { g.translate(rnd(-1, 1) * shake, rnd(-1, 1) * shake); shake = Math.max(0, shake - 0.3); }
+  drawBackground(now);
+  if (B) { for (const f of [...B.foes].reverse()) drawUnit(f, now); drawUnit(B.hero, now); }
+  effects = effects.filter((e) => now < e.t0 + e.ms);
+  for (const e of effects) {
+    const k = (now - e.t0) / e.ms;
+    if (e.type === 'text') { g.globalAlpha = 1 - k; g.font = 'bold 14px sans-serif'; g.textAlign = 'center'; g.fillStyle = '#000'; g.fillText(e.text, e.x + 1, e.y - k * 20 + 1); g.fillStyle = e.color; g.fillText(e.text, e.x, e.y - k * 20); g.globalAlpha = 1; }
+    if (e.type === 'flash') { g.fillStyle = `rgba(255,240,200,${(1 - k) * 0.6})`; g.fillRect(0, 0, W, H); }
+    if (e.type === 'bolt') {
+      const xx = e.x1 + (e.x2 - e.x1) * Math.min(1, k * 1.5), yy = GROUND - 44 - Math.sin(Math.min(1, k * 1.5) * Math.PI) * 14;
+      if (k < 0.67) { for (let s = 0; s < 5; s++) { g.globalAlpha = 1 - s * 0.18; g.fillStyle = e.color; g.fillRect(Math.round(xx - s * 6 - 3), Math.round(yy - 3 + s % 2), 6 - s, 6 - s); } g.globalAlpha = 1; g.fillStyle = '#fff'; g.fillRect(Math.round(xx - 3), Math.round(yy - 3), 6, 6); }
+    }
+    if (e.type === 'burst') {
+      for (let s = 0; s < 10; s++) { const ang = s * 0.63 + e.seed, d = 6 + k * 26; g.globalAlpha = 1 - k; g.fillStyle = s % 3 ? e.color : '#fff'; g.fillRect(Math.round(e.x + Math.cos(ang) * d - 2), Math.round(GROUND - 40 + Math.sin(ang) * d * 0.8 - 2), 4, 4); }
+      g.globalAlpha = 1;
+    }
+    if (e.type === 'clone') {
+      const xx = e.x1 + (e.x2 - e.x1) * Math.min(1, k * 1.6);
+      g.save(); g.globalAlpha = 0.75 * (1 - Math.max(0, k - 0.7) / 0.3); g.filter = 'brightness(0.45) sepia(1) hue-rotate(230deg) saturate(5)';
+      drawArt(g, e.art, 'walk', Math.floor(now / 90) % (ART[e.art].anims ? 3 : 4), xx, GROUND, 1);
+      g.restore();
+    }
+  }
+  const v = g.createRadialGradient(W / 2, H * 0.6, 80, W / 2, H * 0.6, 260); v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,0.55)');
+  g.fillStyle = v; g.fillRect(0, 0, W, H);
+  g.restore();
+  requestAnimationFrame(draw);
+}
+
+preloadArt();
+const check = setInterval(() => {
+  const ready = HEROES.every((h) => Object.keys(ART[h].sheets).every((s) => artSheet(h, s))) && Object.keys(UNIT_ART).every((k) => artSheet('u:' + k, 'pose'));
+  if (ready) { clearInterval(check); showPick(); requestAnimationFrame(draw); }
+}, 50);
+</script>
+</body>
+</html>

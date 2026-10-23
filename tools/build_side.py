@@ -1,7 +1,7 @@
-"""把 side.html 打包成單一檔案（CSS、JS、圖片都內嵌），給 Artifact 用。用法：python3 tools/build_side.py 輸出.html"""
+"""把 side.html（或指定的頁面）打包成單一檔案（CSS、JS、圖片都內嵌），給 Artifact 用。用法：python3 tools/build_side.py 輸出.html [頁面.html]"""
 import re, base64, sys, os, json
 R = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '')
-h = open(R + 'side.html', encoding='utf8').read()
+h = open(R + (sys.argv[2] if len(sys.argv) > 2 else 'side.html'), encoding='utf8').read()
 h = re.sub(r'<link rel="stylesheet" href="style.css[^"]*">', lambda m: '<style>\n' + open(R + 'style.css', encoding='utf8').read() + '\n</style>', h)
 h = re.sub(r'<a class="btn wide" href="./"[^>]*>回遊戲</a>\n?', '', h)
 imgs = {}
