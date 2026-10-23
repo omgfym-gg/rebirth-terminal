@@ -49,7 +49,7 @@
 <body>
 <div id="app">
   <h2>卡牌戰鬥・試玩</h2>
-  <p class="muted" style="font-size:13px">每回合 3 點能量、抽 5 張牌。敵人頭上會顯示它下一步要做什麼。一路往上爬，越高的樓層敵人越強；每 3 層有菁英、每 6 層有魔王。打贏拿經驗升級、解鎖專屬技能；死掉從 1 樓重爬，但等級和裝備都留著。</p>
+  <p class="muted" style="font-size:13px">每回合 3 點能量、抽 5 張牌。敵人頭上會顯示它下一步要做什麼。一路往上爬，越高的樓層敵人越強；每 3 層有菁英、每 6 層有魔王，偶爾還會碰到危險樓層。同一回合重複出同一招，效果會變差，記得換招。打贏拿經驗升級、解鎖專屬技能；死掉從 1 樓重爬，但等級和裝備都留著。</p>
   <div class="screen-pick"></div>
   <div class="screen-battle" style="display:none">
     <canvas class="stage" width="384" height="216"></canvas>
@@ -328,24 +328,33 @@ function cardById(id) {
 // ───── 敵人：每隻有一串固定的意圖輪流做 ─────
 const FOES = {
   shade:   { name: '影子怪',     hp: 18, exp: 3, plan: [['atk', 5], ['weak', 2], ['atk', 5]] },
-  husk:    { name: '空殼職員',   hp: 24, exp: 4, plan: [['def', 6], ['atk', 7], ['atk', 3, 2]] },
+  husk:    { name: '空殼職員',   hp: 24, exp: 4, armor: 4, plan: [['def', 6], ['atk', 7], ['atk', 3, 2]] },
   wisp:    { name: '鬼火',       hp: 12, exp: 3, plan: [['buff', 2], ['atk', 3, 2]] },
-  mirror:  { name: '鏡中人',     hp: 26, exp: 5, plan: [['atk', 7], ['vuln', 2], ['atk', 7]] },
-  hunter:  { name: '追殺者',     hp: 30, exp: 6, plan: [['def', 8], ['atk', 10], ['atk', 3, 3]] },
+  mirror:  { name: '鏡中人',     hp: 26, exp: 5, thorns: 2, plan: [['atk', 7], ['vuln', 2], ['atk', 7]] },
+  hunter:  { name: '追殺者',     hp: 30, exp: 6, enrage: 3, plan: [['def', 8], ['atk', 10], ['atk', 3, 3]] },
   zombie:  { name: '加班殭屍',   hp: 28, exp: 5, plan: [['atk', 7], ['def', 6], ['atk', 7]] },
   printer: { name: '卡紙印表機', hp: 18, exp: 4, plan: [['weak', 2], ['atk', 2, 3], ['atk', 6]] },
-  judge:   { name: '考績審判官', hp: 110, exp: 25, boss: true, plan: [['vuln', 2], ['atk', 14], ['def', 12], ['atk', 5, 3], ['buff', 3]] },
+  dog:     { name: '地獄看門狗', hp: 16, exp: 3, plan: [['atk', 4, 2], ['atk', 6], ['buff', 1]] },
+  judge:   { name: '考績審判官', hp: 110, exp: 25, boss: true, armor: 3, enrage: 4, plan: [['vuln', 2], ['atk', 14], ['def', 12], ['atk', 5, 3], ['buff', 3]] },
+  boss:    { name: '無臉典獄長', hp: 120, exp: 25, boss: true, regen: 6, plan: [['atk', 9, 2], ['weak', 2], ['atk', 16], ['def', 14]] },
 };
-// 6 層一輪、無限往上爬（第 7 層又從殭屍開始，但更強）；exp 是清完這層的額外獎勵（打倒每隻怪另外給經驗，越上層越多）
-const floorOf = (n) => FIGHTS[n % FIGHTS.length];
-const FIGHTS = [
-  { foes: ['zombie', 'printer'], exp: 3 },
-  { foes: ['shade', 'wisp', 'shade'], exp: 3 },
-  { foes: ['mirror', 'hunter'], exp: 4, drop: '菁英' },
-  { foes: ['husk', 'printer', 'wisp'], exp: 4 },
-  { foes: ['hunter', 'zombie'], exp: 5 },
-  { foes: ['judge'], exp: 10, drop: '魔王' },
-];
+// 敵人特性：armor 每回合自帶格擋、thorns 被打會刺回來、enrage 血少於一半時變強、regen 每回合回血
+const TRAITS = { armor: ['硬殼', '殼'], thorns: ['帶刺', '刺'], enrage: ['狂暴', '狂'], regen: ['再生', '生'] };
+// 樓層隨機：每 3 層菁英、每 6 層魔王，其他層隨機組合，偶爾會碰到「危險樓層」（全部都是菁英，經驗多、必掉裝備）
+const ROUND = 6;
+const ENCOUNTERS = {
+  normal: [['zombie', 'printer'], ['shade', 'wisp', 'shade'], ['husk', 'printer', 'wisp'], ['hunter', 'zombie'], ['mirror', 'shade'], ['dog', 'dog', 'wisp'], ['zombie', 'zombie'], ['printer', 'husk'], ['dog', 'shade', 'printer']],
+  elite: [['hunter', 'mirror'], ['husk', 'husk'], ['zombie', 'hunter', 'dog'], ['mirror', 'mirror'], ['dog', 'husk', 'dog']],
+  boss: [['judge'], ['boss']],
+};
+const pick = (a) => a[rnd(0, a.length - 1)];
+function planFloor(n) {
+  const f = n + 1;
+  if (f % ROUND === 0) return { kind: 'boss', foes: pick(ENCOUNTERS.boss), elite: [], exp: 10, drop: '魔王' };
+  if (f % 3 === 0) return { kind: 'elite', foes: pick(ENCOUNTERS.elite), elite: [0], exp: 6, drop: '菁英' };
+  if (f > 1 && Math.random() < 0.18) { const foes = pick(ENCOUNTERS.elite); return { kind: 'danger', foes, elite: foes.map((x, i) => i), exp: 15, drop: '危險樓層' }; }
+  return { kind: 'normal', foes: pick(ENCOUNTERS.normal), elite: [], exp: 3 };
+}
 
 // ───── 裝備：傳說中的神器和邪物，效果照傳說設計 ─────
 // 三個欄位（武器、護甲、飾品），跟著靈魂走（換角色、轉生都帶著）。菁英掉一般神器／邪物，魔王有機會掉這個角色的專屬武器。
@@ -508,9 +517,9 @@ function startRun(id) {
   heroId = id;
   const L = levelOf(id);
   const maxHp = (KITS[id].hp || 50) + L.lv * 4;
-  // 起手牌組：兩張基本招各 4 張，之後解鎖的牌各 1 張
+  // 起手牌組：兩張基本招各 3 張，之後解鎖的牌各 2 張
   const deck = [];
-  for (const c of unlockedCards(id, L.lv)) for (let k = 0; k < (c.lv === 1 ? 4 : 1); k++) deck.push(id + '.' + c.key);
+  for (const c of unlockedCards(id, L.lv)) for (let k = 0; k < (c.lv === 1 ? 3 : 2); k++) deck.push(id + '.' + c.key);
   const G = gearStats();
   run = { deck, fight: 0, maxHp: Math.max(10, maxHp + G.hp), hp: Math.max(10, maxHp + G.hp), lv: L.lv, gained: 0, G };
   startFight();
@@ -521,11 +530,18 @@ function startFight() {
   // 爬到一半換了裝備，這裡重算
   const G2 = gearStats(); run.maxHp += G2.hp - run.G.hp; run.hp = Math.max(1, Math.min(run.maxHp, run.hp + G2.hp - run.G.hp)); run.G = G2;
   const hero = { id: 'hero', side: 'ally', name: JOBS[heroId].name, art: heroId, hp: run.hp, maxHp: run.maxHp, block: 0, str: lvAtk(run.lv), weak: 0, vuln: 0, x: 110 };
-  const F = floorOf(run.fight).foes;
+  const plan = run.plan = planFloor(run.fight), F = plan.foes;
   // 越往上爬敵人越硬、打越痛
-  const loop = Math.floor(run.fight / FIGHTS.length);
+  const loop = Math.floor(run.fight / ROUND);
   const hpK = FOE_HP_K * (1 + run.fight * 0.15) * Math.pow(1.25, loop), atkUp = Math.max(0, run.fight - 1) + loop * 2;
   const foes = F.map((k, i) => ({ id: 'e' + i, side: 'enemy', key: k, ...FOES[k], hp: Math.round(FOES[k].hp * hpK), maxHp: Math.round(FOES[k].hp * hpK), plan: FOES[k].plan.map(([kind, v, n]) => [kind, kind === 'atk' ? v + atkUp : v, n]), block: 0, str: 0, weak: 0, vuln: 0, stun: 0, confuse: 0, link: 0, step: rnd(0, 1), x: FOES[k].boss ? 290 : 228 + i * (F.length > 2 ? 56 : 70) }));
+  // 菁英：血多五成、攻擊 +2，再多一個隨機特性
+  for (const i of plan.elite) {
+    const f = foes[i], free = Object.keys(TRAITS).filter((t) => !f[t]), t = pick(free);
+    f.name = '精英' + f.name; f.hp = f.maxHp = Math.round(f.maxHp * 1.5); f.exp *= 2; f.elite = true;
+    f.plan = f.plan.map(([kind, v, n]) => [kind, kind === 'atk' ? v + 2 : v, n]);
+    if (t) f[t] = { armor: 4, thorns: 2, enrage: 3, regen: 4 }[t];
+  }
   for (const u of [hero, ...foes]) Object.assign(u, { ox: 0, oy: 0, flash: 0, anim: null, dead: false, atkUntil: 0, hurtUntil: 0 });
   B = { hero, foes, draw: shuffle(run.deck.map(cardById)), hand: [], discard: [], energy: 3, charge: run.lv >= 10 ? 50 : 0, turn: 0, nextAtk: 1, atkCount: 0, ups: [], expStart: run.gained, lvStart: run.lv, st: {}, knock: 0, ingot: 0, turnCards: 0, cardCount: 0, firstBonus: 0 };
   target = foes[0];
@@ -536,7 +552,8 @@ function startFight() {
   if (cs === 'all') hero.weak = 1;
   if (run.G.fx.stunStart) for (const f of foes) f.stun = 1;
   showScreen('battle');
-  $('.log').textContent = `第 ${run.fight + 1} 層：${foes.map((f) => f.name).join('、')}`;
+  const traitText = (f) => { const t = Object.keys(TRAITS).filter((k) => f[k]).map((k) => TRAITS[k][0]); return t.length ? `（${t.join('、')}）` : ''; };
+  $('.log').textContent = `${plan.kind === 'danger' ? '⚠ 危險樓層！' : ''}第 ${run.fight + 1} 層：${foes.map((f) => f.name + traitText(f)).join('、')}`;
   startTurn();
 }
 
@@ -552,7 +569,7 @@ function drawCards(n) {
 }
 
 function startTurn() {
-  B.turn++; B.energy = 3; B.nextAtk = 1; B.turnCards = 0;
+  B.turn++; B.energy = 3; B.nextAtk = 1; B.turnCards = 0; B.played = {};
   const st = B.st, h = B.hero;
   h.block = hasPassive('loyal') ? Math.floor(h.block / 2) : hasPassive('guardland') ? Math.min(3, h.block) : 0;
   st.turnAtk = 0; st.halfDmg = 0; st.reflect = 0; st.snake = 0;
@@ -616,6 +633,9 @@ function damage(src, dst, amount, pierce = false, spread = false) {
       damage(src, o, Math.max(1, Math.floor(d * share)), true, true);
     }
   }
+  // 敵人特性：帶刺、狂暴
+  if (src === B.hero && dst.thorns && !spread && !pierce) { const n = dst.thorns; setTimeout(() => { if (B && !B.hero.dead) { float(B.hero, '被刺 -' + n, '#ff9090'); B.hero.hp = Math.max(1, B.hero.hp - n); } }, 100); }
+  if (dst.enrage && !dst.enraged && dst.hp > 0 && dst.hp < dst.maxHp / 2) { dst.enraged = true; dst.str += dst.enrage; float(dst, '狂暴！', '#ff5030'); }
   // 救命的被動
   if (dst === B.hero && dst.hp <= 0 && hasPassive('undying') && !B.revived) { B.revived = true; dst.hp = Math.round(dst.maxHp * 0.3); float(dst, '聖火不滅！', '#ff8a30'); }
   if (dst === B.hero && dst.hp <= 0 && hasPassive('edge') && !B.edgeUsed) { B.edgeUsed = true; dst.hp = 1; float(dst, '生死一線！', '#ffd070'); }
@@ -638,10 +658,21 @@ async function playCard(i) {
   busy = true;
   if (i === 'ult') B.charge = 0; else { B.energy -= costOf(c); B.st.costMinus = 0; B.hand.splice(i, 1); B.discard.push(c); B.charge = Math.min(100, B.charge + (c.type === 'atk' ? 14 : 9)); }
   B.firstBonus = hasPassive('triple') && B.turnCards === 0 ? 2 : 0;
+  // 同一回合重複出同一招，效果每次少三成（最低四成），逼你換招
+  let cc = c;
+  if (c.type !== 'ult') {
+    const rep = B.played[c.key] || 0; B.played[c.key] = rep + 1;
+    if (rep) {
+      const m = Math.max(0.4, 1 - 0.3 * rep);
+      cc = { ...c, k: (c.k || 1) * m };
+      for (const k of ['dmg', 'fixed', 'block', 'heal']) if (c[k]) cc[k] = Math.max(1, Math.round(c[k] * m));
+      float(B.hero, `招式用老了 ${Math.round(m * 100)}%`, '#c0c0c0');
+    }
+  }
   B.turnCards++; B.cardCount++;
   if (!target || target.dead) target = alive()[0];
   render();
-  await (c.fx ? resolveFx(c) : resolveCard(c));
+  await (c.fx ? resolveFx(cc) : resolveCard(cc));
   B.firstBonus = 0;
   if (c.type !== 'ult' && c.key !== 'mimic') B.lastCard = c;
   if (hasPassive('herald') && c.cost === 0 && c.type !== 'ult') { drawCards(1); float(B.hero, '眾神信使：抽 1', '#f0d070'); }
@@ -831,6 +862,7 @@ async function endTurn() {
   for (const f of alive()) {
     if (f.dead) continue;
     f.block = 0;
+    if (f.regen) heal(f, f.regen);
     await sleep(250);
     if (f.stun) { f.stun--; float(f, '暈眩中', '#ffb0d0'); f.step++; await sleep(400); continue; }
     const [kind, v, times = 1] = intent(f);
@@ -857,6 +889,7 @@ async function endTurn() {
     else if (kind === 'weak') { B.hero.weak = Math.max(B.hero.weak, v); float(B.hero, '虛弱', '#a0a0c0'); f.atkUntil = performance.now() + 400; }
     else if (kind === 'vuln') { B.hero.vuln = Math.max(B.hero.vuln, v); float(B.hero, '易傷', '#d070ff'); f.atkUntil = performance.now() + 400; }
     f.step++;
+    if (f.armor && !f.dead) { f.block += f.armor; float(f, '硬殼 +' + f.armor, '#a0c8ff'); }
     await sleep(300);
     if (B.hero.hp <= 0) return loseRun();
   }
@@ -910,18 +943,18 @@ function levelUpHtml(r) {
 function winFight() {
   B.over = true;
   run.hp = B.hero.hp;
-  const r = gainExp(floorOf(run.fight).exp + Math.floor(run.fight / FIGHTS.length) * 5);
+  const r = gainExp(run.plan.exp + Math.floor(run.fight / ROUND) * 5);
   r.news = [...B.ups, ...r.news]; r.before = B.lvStart;
   const got = run.gained - B.expStart;
   run.fight++;
   const box = $('.screen-reward'); box.innerHTML = '';
   showScreen('reward');
-  const drop = floorOf(run.fight - 1).drop;
+  const drop = run.plan.drop;
   // 最高紀錄
   prog[heroId].best = Math.max(prog[heroId].best || 0, run.fight); saveProg();
   const dropBox = () => {
     if (!drop) return;
-    const it = rollGear(drop === '魔王');
+    const it = rollGear(drop !== '菁英');
     gear.bag.push(it);
     // 背包最多 30 件，滿了丟掉最舊的（穿著的不丟）
     while (gear.bag.length > 30) { const old = gear.bag.find((g) => !Object.values(gear.eq).includes(g.uid)); gear.bag.splice(gear.bag.indexOf(old), 1); }
@@ -933,7 +966,7 @@ function winFight() {
     if (cur) box.append(Object.assign(document.createElement('p'), { className: 'muted', textContent: `目前的${SLOTS[slot]}：${itemOf(cur).n}。不穿的話會放進背包。` }));
   };
   run.hp = Math.min(run.maxHp, run.hp + Math.round(run.maxHp * 0.15));
-  box.append(Object.assign(document.createElement('div'), { className: 'panel', innerHTML: `<h3>${drop === '魔王' ? '打倒魔王！' : '贏了！'}第 ${run.fight} 層 +${got} 經驗</h3><p class="muted">${expLine()}，生命回復一成半（${run.hp}/${run.maxHp}）。</p>${levelUpHtml(r)}` }));
+  box.append(Object.assign(document.createElement('div'), { className: 'panel', innerHTML: `<h3>${drop === '魔王' ? '打倒魔王！' : drop === '危險樓層' ? '撐過危險樓層！' : '贏了！'}第 ${run.fight} 層 +${got} 經驗</h3><p class="muted">${expLine()}，生命回復一成半（${run.hp}/${run.maxHp}）。</p>${levelUpHtml(r)}` }));
   dropBox();
   box.append(Object.assign(document.createElement('p'), { textContent: '選一個獎勵：' }));
   // 獎勵：加一張自己已解鎖的牌，或把牌組裡一張牌升級
@@ -1012,7 +1045,7 @@ function render() {
   $('.hp').textContent = `${h.name} Lv${run.lv} 生命 ${h.hp}/${h.maxHp}${h.block ? `・格擋 ${h.block}` : ''}${B.nextAtk > 1 ? '・下一擊加倍' : ''}・牌堆 ${B.draw.length}`;
   $('.energy').textContent = `能量 ${B.energy}/3`;
   const hand = $('.screen-battle .hand'); hand.innerHTML = '';
-  B.hand.forEach((c, i) => hand.append(cardEl({ ...c, cost: costOf(c) }, () => playCard(i), busy || costOf(c) > B.energy)));
+  B.hand.forEach((c, i) => { const rep = B.played[c.key] || 0; hand.append(cardEl({ ...c, cost: costOf(c) }, () => playCard(i), busy || costOf(c) > B.energy, rep ? `本回合用過 ${rep} 次，效果 ${Math.round(Math.max(0.4, 1 - 0.3 * rep) * 100)}%` : '')); });
   const ult = cardById(heroId + '.ult');
   const ub = $('.ultbtn'); ub.textContent = `${ult.n} ${B.charge}%`; ub.disabled = busy || B.charge < 100; ub.classList.toggle('glow', B.charge >= 100);
   ub.onclick = () => playCard('ult');
@@ -1067,6 +1100,7 @@ function drawUnit(u, now) {
   if (u.block > 0) { g.fillStyle = '#4070c0'; g.fillRect(x - 26, top - 3, 9, 9); g.fillStyle = '#fff'; g.font = 'bold 8px sans-serif'; g.textAlign = 'center'; g.fillText(u.block, x - 21.5, top + 4); }
   g.font = 'bold 10px sans-serif'; g.textAlign = 'center';
   const tags = [u.vuln > 0 ? ['傷', '#d070ff'] : null, u.weak > 0 ? ['弱', '#a0a0c0'] : null, u.stun > 0 ? ['暈', '#ffb0d0'] : null, u.confuse > 0 ? ['亂', '#ff8060'] : null, u.str > 0 ? ['力', '#ffb040'] : null, u.link ? ['線', '#ff4060'] : null,
+    ...Object.entries(TRAITS).map(([k, [, t]]) => u[k] ? [t, '#e0e0e0'] : null),
     ...Object.entries(DEBUFF).map(([k, [t, c]]) => u[k] > 0 ? [t + (['poison', 'curse', 'frost', 'petrify'].includes(k) ? u[k] : ''), c] : null)].filter(Boolean);
   // 標籤一個接一個排，置中
   const widths = tags.map(([t]) => g.measureText(t).width + 2), total = widths.reduce((a, b) => a + b, 0);
