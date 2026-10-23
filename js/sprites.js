@@ -373,6 +373,7 @@ const JOB_ART = {
   tudigong: { mark: 'ingot', atk: 's2', melee: false, color: '#ffc830', h: 82, w: { idle: 62, walk: 60, hurt: 74, s1: 94, s2: 95, ult: 94 } },
   guangong: { mark: 'crescent', atk: 's1', melee: true, color: '#40d070', h: 82, w: { idle: 97, walk: 99, hurt: 97, s1: 97, s2: 108, ult: 135 } },
   hermes: { mark: 'wing', atk: 's2', melee: true, color: '#f0d070', h: 82, w: { idle: 76, walk: 79, hurt: 96, s1: 129, s2: 88, ult: 130 } },
+  dagda: { mark: 'pot', atk: 's2', melee: true, color: '#d8a060', h: 82, w: { idle: 77, walk: 77, hurt: 98, s1: 93, s2: 82, ult: 121 } },
 };
 for (const [id, j] of Object.entries(JOB_ART)) {
   const sheet = (n) => [n + '.png', j.w[n], j.h];
@@ -410,7 +411,7 @@ function artAnim(job, name) {
 }
 
 // 圖檔更新時改這個，手機才不會一直用快取的舊圖
-const ASSET_V = '20261023g';
+const ASSET_V = '20261023h';
 const ArtImages = {};
 function artSheet(job, sheet) {
   const a = ART[job], spec = a && a.sheets[sheet];
@@ -447,6 +448,7 @@ function drawArt(g, job, sheet, i, cx, bottom, scale, { flip = false, white = fa
 // 職業記號：小像素圖，戰鬥時飄在角色身邊
 const MARKS = {
   heart: { color: '#ff5c8d', light: '#ffc0d4', rows: ['.x.x.', 'xxxxx', 'xxxxx', '.xxx.', '..x..'] },
+  pot: { color: '#606878', light: '#ffd080', rows: ['.x.x.', 'xxxxx', 'xxxxx', '.xxx.'] },
   wing: { color: '#f4f4ff', light: '#ffffff', rows: ['x....', 'xx...', 'xxx..', '.xxxx', '..xx.'] },
   crescent: { color: '#40d070', light: '#c0ffd0', rows: ['..xx', '...x', '...x', '..xx', 'xxx.'] },
   ingot: { color: '#ffc830', light: '#fff4b0', rows: ['.xxx.', 'xx.xx', 'xxxxx'] },
