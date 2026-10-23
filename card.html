@@ -33,6 +33,12 @@
   .panel h3 { margin-top: 0; }
   .intro { font-size: 13px; line-height: 1.5; margin-top: 10px; }
   .levelup { color: #ffd070; font-size: 13px; }
+  .gear { border: 1px solid var(--line); background: var(--panel); padding: 6px 8px; margin: 4px 0; font-size: 13px; }
+  .gear small { color: var(--muted); }
+  .gear.holy b { color: #ffd070; } .gear.cursed b { color: #d080ff; }
+  .gear .warn { color: #ff9090; }
+  .gear-actions { display: flex; gap: 6px; margin-top: 4px; color: #7fe07f; }
+  .gear-actions .btn { flex: 1; padding: 6px; font-size: 13px; }
   .skills { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
   .skill { border: 1px solid var(--line); padding: 4px 6px; font-size: 12px; }
   .skill small { color: var(--muted); }
@@ -148,6 +154,7 @@ const KITS = {
   },
 };
 const MAX_LV = 10;
+const ATK_K = 1.7, FOE_HP_K = 0.7; // 節奏：我方傷害、敵人血量的倍率
 const expNeed = (lv) => 20 + lv * 10; // 從 lv 升到 lv+1 要的經驗
 const HEROES = Object.keys(KITS);
 const jobGauge = (id) => JOBS[id].side === '神' ? '神力' : '魔力';
@@ -169,6 +176,8 @@ function cardById(id) {
   const up = id.endsWith('+'), [job, key] = id.replace('+', '').split('.');
   const base = KITS[job].cards.find((c) => c.key === key);
   const c = { ...base, id, job, up };
+  // 小黑：攻擊力高一點、一場不要打太久 → 所有傷害乘 ATK_K
+  for (const k of ['dmg', 'fixed']) if (c[k]) c[k] = Math.round(c[k] * ATK_K);
   if (up) {
     c.n += '+';
     for (const k of ['dmg', 'fixed', 'block', 'heal']) if (c[k]) c[k] = Math.ceil(c[k] * 1.35);
@@ -187,17 +196,113 @@ const FOES = {
   hunter:  { name: '追殺者',     hp: 30, exp: 6, plan: [['def', 8], ['atk', 10], ['atk', 3, 3]] },
   zombie:  { name: '加班殭屍',   hp: 28, exp: 5, plan: [['atk', 7], ['def', 6], ['atk', 7]] },
   printer: { name: '卡紙印表機', hp: 18, exp: 4, plan: [['weak', 2], ['atk', 2, 3], ['atk', 6]] },
-  judge:   { name: '考績審判官', hp: 130, exp: 25, boss: true, plan: [['vuln', 2], ['atk', 14], ['def', 12], ['atk', 5, 3], ['buff', 3]] },
+  judge:   { name: '考績審判官', hp: 110, exp: 25, boss: true, plan: [['vuln', 2], ['atk', 14], ['def', 12], ['atk', 5, 3], ['buff', 3]] },
 };
 // 一路往上爬的 6 層樓；exp 是清完這層的額外獎勵（打倒每隻怪另外給經驗，越上層越多）
 const FIGHTS = [
   { foes: ['zombie', 'printer'], exp: 3 },
   { foes: ['shade', 'wisp', 'shade'], exp: 3 },
-  { foes: ['mirror', 'hunter'], exp: 4 },
+  { foes: ['mirror', 'hunter'], exp: 4, drop: '菁英' },
   { foes: ['husk', 'printer', 'wisp'], exp: 4 },
   { foes: ['hunter', 'zombie'], exp: 5 },
-  { foes: ['judge'], exp: 10 },
+  { foes: ['judge'], exp: 10, drop: '魔王' },
 ];
+
+// ───── 裝備：傳說中的神器和邪物，效果照傳說設計 ─────
+// 三個欄位（武器、護甲、飾品），跟著靈魂走（換角色、轉生都帶著）。菁英掉一般神器／邪物，魔王有機會掉這個角色的專屬武器。
+// 數值欄：crit 爆擊%、steal 吸血%、dodge 迴避%、atk 攻擊、hp 生命、guard 每回合格擋、regen 每回合回血
+// 特效欄（fx）：thunder 落雷、critX 爆擊倍率、hitPlus 連打每段加傷、selfDmg 每回合扣血、armor 受傷減免、
+// aegis 第一次挨打讓對方虛弱、curseStart 開場給敵人負面、energy1 第一回合多能量、reflect 反彈%、linkPlus 紅線傳遞加成、stunStart 開場石化
+const GEAR_KEY = 'rebirth-card-gear-v2';
+const SLOTS = { weapon: '武器', armor: '護甲', charm: '飾品' };
+const STATS = {
+  crit: ['爆擊', '%'], steal: ['吸血', '%'], dodge: ['迴避', '%'], atk: ['攻擊', ''], hp: ['生命', ''], guard: ['每回合格擋', ''], regen: ['每回合回血', ''],
+};
+const ITEMS = {
+  // 神器
+  mjolnir:   { n: '雷神之鎚妙爾尼爾', kind: '神器', slot: 'weapon', from: '北歐神話', st: { atk: 2 }, fx: { thunder: 4 }, d: '索爾的鎚子：每打一張攻擊牌，有三成機率落雷，全體敵人受到 4 點傷害。' },
+  gungnir:   { n: '永恆之槍岡格尼爾', kind: '神器', slot: 'weapon', from: '北歐神話', st: { crit: 20 }, fx: { critX: 2.5 }, d: '奧丁之槍，出手必中：爆擊傷害從兩倍變成兩倍半。' },
+  ruyi:      { n: '如意金箍棒', kind: '神器', slot: 'weapon', from: '《西遊記》', st: { atk: 1 }, fx: { hitPlus: 2 }, d: '可大可小、可長可短：連打的牌每一段多 2 點傷害。' },
+  aegis:     { n: '埃癸斯神盾', kind: '神器', slot: 'armor', from: '希臘神話', st: { guard: 3 }, fx: { aegis: 1 }, d: '雅典娜的盾，嵌著美杜莎的頭：每回合第一個打你的敵人會虛弱 2 回合。' },
+  jinlu:     { n: '金縷玉衣', kind: '神器', slot: 'armor', from: '中國・漢代', st: { hp: 20 }, fx: { armor: 1 }, d: '玉片串成的不朽之衣：生命 +20，每次受傷少 1 點。' },
+  hagoromo:  { n: '天女的羽衣', kind: '神器', slot: 'armor', from: '日本傳說', st: { dodge: 20 }, fx: {}, d: '穿上就能飛回天上：迴避 +20%。' },
+  grail:     { n: '聖杯', kind: '神器', slot: 'charm', from: '亞瑟王傳說', st: { steal: 12, regen: 2 }, fx: {}, d: '能治癒一切的杯子：吸血 +12%，每回合回 2 點生命。' },
+  yata:      { n: '八咫鏡', kind: '神器', slot: 'charm', from: '日本三神器', st: { guard: 2 }, fx: { reflect: 30 }, d: '照出天照大神的鏡子：受到攻擊時反彈 30% 傷害。' },
+  qiankun:   { n: '乾坤圈', kind: '神器', slot: 'charm', from: '《封神演義》', st: { crit: 15, atk: 1 }, fx: {}, d: '哪吒的金圈，一扔就中：爆擊 +15%，攻擊 +1。' },
+  // 邪物
+  muramasa:  { n: '妖刀村正', kind: '邪物', slot: 'weapon', from: '日本・妖刀傳說', st: { crit: 25, steal: 10 }, fx: { selfDmg: 2 }, d: '出鞘必見血的妖刀：爆擊 +25%、吸血 +10%，但每回合開始自己扣 2 點生命。' },
+  dracula:   { n: '德古拉的斗篷', kind: '邪物', slot: 'armor', from: '東歐・吸血鬼傳說', st: { steal: 22, dodge: 8 }, fx: { selfDmg: 1 }, d: '吸血鬼伯爵的披風：吸血 +22%、迴避 +8%，但每回合開始扣 1 點生命（怕光）。' },
+  annabelle: { n: '安娜貝爾娃娃', kind: '邪物', slot: 'charm', from: '美國・邪物', st: { crit: 12, hp: -6 }, fx: { curseStart: 'vuln' }, d: '被附身的娃娃：每場開場全體敵人易傷 2 回合，爆擊 +12%，但生命 -6。' },
+  monkeypaw: { n: '猴掌', kind: '邪物', slot: 'charm', from: '英國・《猴掌》', st: { hp: -10 }, fx: { energy1: 2 }, d: '能實現三個願望，代價可怕：每場第一回合能量 +2，但生命 -10。' },
+  pandora:   { n: '潘朵拉之盒', kind: '邪物', slot: 'charm', from: '希臘神話', st: { atk: 1 }, fx: { curseStart: 'all' }, d: '打開就放出所有災厄：每場開場全體敵人虛弱又易傷 2 回合，但你也虛弱 1 回合。' },
+  hope:      { n: '希望之鑽', kind: '邪物', slot: 'charm', from: '美國・詛咒寶石', st: { crit: 20, atk: 2 }, fx: { selfDmg: 1 }, d: '擁有者接連遭遇不幸的藍鑽：爆擊 +20%、攻擊 +2，但每回合開始扣 1 點生命。' },
+  // 專屬武器：神族是神器、魔族是邪物，只有本人能發揮
+  ex_yuelao:     { n: '姻緣簿', kind: '神器', slot: 'weapon', own: 'yuelao', from: '月下老人', st: { hp: 8 }, fx: { linkPlus: 0.5 }, d: '記著天下姻緣的簿子：紅線傳過去的傷害多 50%，生命 +8。' },
+  ex_guangong:   { n: '青龍偃月刀', kind: '神器', slot: 'weapon', own: 'guangong', from: '三國演義', st: { atk: 3, crit: 10 }, fx: {}, d: '重八十二斤的冷豔鋸：攻擊 +3、爆擊 +10%。' },
+  ex_brigid:     { n: '布麗姬的聖火', kind: '神器', slot: 'weapon', own: 'brigid', from: '凱爾特神話', st: { guard: 3, regen: 2 }, fx: {}, d: '基爾代爾修道院千年不滅的火：每回合格擋 +3、回 2 生命。' },
+  ex_tudigong:   { n: '福德拐杖', kind: '神器', slot: 'weapon', own: 'tudigong', from: '民間信仰', st: { guard: 5, hp: 10 }, fx: {}, d: '土地公的龍頭拐杖：每回合格擋 +5、生命 +10。' },
+  ex_hermes:     { n: '雙蛇杖', kind: '神器', slot: 'weapon', own: 'hermes', from: '希臘神話', st: { dodge: 10 }, fx: { energy1: 1 }, d: '信使之杖：迴避 +10%，每場第一回合能量 +1。' },
+  ex_dagda:      { n: '生死巨棒', kind: '神器', slot: 'weapon', own: 'dagda', from: '凱爾特神話', st: { atk: 3, steal: 15 }, fx: {}, d: '一端殺人、一端救人的巨棒：攻擊 +3、吸血 +15%。' },
+  ex_horusshadow:{ n: '碎裂的荷魯斯之眼', kind: '邪物', slot: 'weapon', own: 'horusshadow', from: '埃及神話', st: { crit: 20, dodge: 10 }, fx: {}, d: '被塞特挖出的那隻眼睛：爆擊 +20%、迴避 +10%。' },
+  ex_redgirl:    { n: '紅色雨衣', kind: '邪物', slot: 'weapon', own: 'redgirl', from: '臺灣都市傳說', st: { dodge: 15, steal: 10 }, fx: {}, d: '山裡影片中那件紅衣：迴避 +15%、吸血 +10%。' },
+  ex_hanako:     { n: '第三間的門把', kind: '邪物', slot: 'weapon', own: 'hanako', from: '日本學校怪談', st: { crit: 15 }, fx: { curseStart: 'vuln' }, d: '敲三下就會有人回應：爆擊 +15%，每場開場全體敵人易傷。' },
+  ex_anubis:     { n: '冥界天秤', kind: '邪物', slot: 'weapon', own: 'anubis', from: '埃及神話', st: { steal: 15 }, fx: { reflect: 20 }, d: '秤心臟與真理之羽：吸血 +15%，受到攻擊反彈 20%。' },
+  ex_hachi:      { n: '白色寬簷帽', kind: '邪物', slot: 'weapon', own: 'hachi', from: '日本網路怪談', st: { dodge: 20 }, fx: { curseStart: 'weak' }, d: '牆頭露出的那頂帽子：迴避 +20%，每場開場全體敵人虛弱。' },
+  ex_yukionna:   { n: '冰之吐息', kind: '邪物', slot: 'weapon', own: 'yukionna', from: '日本妖怪', st: { guard: 4 }, fx: { aegis: 1 }, d: '吹一口就結冰：每回合格擋 +4，第一個打你的敵人虛弱。' },
+  ex_medusa:     { n: '石化之眼', kind: '邪物', slot: 'weapon', own: 'medusa', from: '希臘神話', st: { crit: 10 }, fx: { stunStart: 1 }, d: '看一眼就變石頭：每場開場全體敵人石化（跳過第一次行動）。' },
+};
+let gear = (() => { try { return JSON.parse(localStorage.getItem(GEAR_KEY)) || null; } catch (e) { return null; } })() || { bag: [], eq: {} };
+const saveGear = () => { try { localStorage.setItem(GEAR_KEY, JSON.stringify(gear)); } catch (e) { /* 存不了就只在這次有效 */ } };
+const itemOf = (g) => ITEMS[g.id];
+
+// 菁英掉一般的神器或邪物；魔王有四成機率掉這個角色的專屬武器
+function rollGear(boss) {
+  const ex = 'ex_' + heroId;
+  if (boss && ITEMS[ex] && Math.random() < 0.4) return { uid: Date.now() + '' + rnd(0, 999), id: ex };
+  const pool = Object.keys(ITEMS).filter((k) => !ITEMS[k].own);
+  return { uid: Date.now() + '' + rnd(0, 999), id: pool[rnd(0, pool.length - 1)] };
+}
+const statText = (st) => Object.entries(st).map(([k, v]) => `${STATS[k][0]} ${v > 0 ? '+' : ''}${v}${STATS[k][1]}`).join('、');
+// 目前穿著、而且這個角色能用的裝備加總
+function gearStats(id = heroId) {
+  const t = { crit: 0, steal: 0, dodge: 0, atk: 0, hp: 0, guard: 0, regen: 0, fx: {} };
+  for (const uid of Object.values(gear.eq)) {
+    const g = gear.bag.find((x) => x.uid === uid), it = g && itemOf(g);
+    if (!it || (it.own && it.own !== id)) continue;
+    for (const [k, v] of Object.entries(it.st)) t[k] += v;
+    for (const [k, v] of Object.entries(it.fx)) t.fx[k] = typeof v === 'number' && t.fx[k] ? t.fx[k] + v : v;
+  }
+  t.dodge = Math.min(t.dodge, 40); // 迴避太高會太無聊
+  return t;
+}
+function gearEl(g, actions) {
+  const it = itemOf(g), d = document.createElement('div');
+  d.className = 'gear ' + (it.kind === '神器' ? 'holy' : 'cursed');
+  const own = it.own ? `・${JOBS[it.own].name}專屬` : '';
+  const off = it.own && it.own !== heroId ? `<br><small class="warn">只有${JOBS[it.own].name}穿上才有效果</small>` : '';
+  d.innerHTML = `<b>${it.n}</b> <small>${it.kind}・${SLOTS[it.slot]}${own}・${it.from}</small><br><span>${it.d}</span>${off}`;
+  const row = document.createElement('div'); row.className = 'gear-actions';
+  for (const [label, fn] of actions) { const b = document.createElement('button'); b.className = 'btn'; b.textContent = label; b.onclick = fn; row.append(b); }
+  if (actions.length) d.append(row);
+  return d;
+}
+function equip(g) { gear.eq[itemOf(g).slot] = g.uid; saveGear(); }
+function showGear(back) {
+  showScreen('reward');
+  const box = $('.screen-reward'); box.innerHTML = '';
+  const T = gearStats();
+  box.append(Object.assign(document.createElement('div'), { className: 'panel', innerHTML: `<h3>裝備（${JOBS[heroId].name}）</h3><p class="muted">神器和邪物跟著靈魂走：換角色、轉生都會帶著。打倒菁英（第 3 層）和魔王（第 6 層）會掉落，魔王還可能掉角色的專屬武器。</p><p class="levelup">目前數值加成：${statText(Object.fromEntries(Object.entries(T).filter(([k, v]) => k !== 'fx' && v))) || '沒有'}</p>` }));
+  for (const [slot, name] of Object.entries(SLOTS)) {
+    const g = gear.bag.find((x) => x.uid === gear.eq[slot]);
+    box.append(Object.assign(document.createElement('h3'), { textContent: `${name}：${g ? '' : '（空）'}` }));
+    if (g) box.append(gearEl(g, [['卸下', () => { delete gear.eq[slot]; saveGear(); showGear(back); }]]));
+  }
+  const rest = gear.bag.filter((g) => !Object.values(gear.eq).includes(g.uid));
+  box.append(Object.assign(document.createElement('h3'), { textContent: `背包（${rest.length}）` }));
+  for (const g of rest) box.append(gearEl(g, [['穿上', () => { equip(g); showGear(back); }], ['丟掉', () => { gear.bag = gear.bag.filter((x) => x !== g); saveGear(); showGear(back); }]]));
+  if (!rest.length) box.append(Object.assign(document.createElement('p'), { className: 'muted', textContent: '背包是空的。' }));
+  box.append(button('返回', back));
+}
 
 // ───── 狀態 ─────
 let heroId = null, run = null, B = null, effects = [], shake = 0, busy = false, target = null;
@@ -209,21 +314,29 @@ function startRun(id) {
   // 起手牌組：兩張基本招各 4 張，之後解鎖的牌各 1 張
   const deck = [];
   for (const c of unlockedCards(id, L.lv)) for (let k = 0; k < (c.lv === 1 ? 4 : 1); k++) deck.push(id + '.' + c.key);
-  run = { deck, fight: 0, maxHp, hp: maxHp, lv: L.lv, gained: 0 };
+  const G = gearStats();
+  run = { deck, fight: 0, maxHp: Math.max(10, maxHp + G.hp), hp: Math.max(10, maxHp + G.hp), lv: L.lv, gained: 0, G };
   startFight();
 }
 
 function startFight() {
   gen++;
+  // 爬到一半換了裝備，這裡重算
+  const G2 = gearStats(); run.maxHp += G2.hp - run.G.hp; run.hp = Math.max(1, Math.min(run.maxHp, run.hp + G2.hp - run.G.hp)); run.G = G2;
   const hero = { id: 'hero', side: 'ally', name: JOBS[heroId].name, art: heroId, hp: run.hp, maxHp: run.maxHp, block: 0, str: 0, weak: 0, vuln: 0, x: 110 };
   const F = FIGHTS[run.fight].foes;
   // 越往上爬敵人越硬、打越痛
-  const hpK = 1 + run.fight * 0.15, atkUp = Math.max(0, run.fight - 1);
+  const hpK = FOE_HP_K * (1 + run.fight * 0.15), atkUp = Math.max(0, run.fight - 1);
   const foes = F.map((k, i) => ({ id: 'e' + i, side: 'enemy', key: k, ...FOES[k], hp: Math.round(FOES[k].hp * hpK), maxHp: Math.round(FOES[k].hp * hpK), plan: FOES[k].plan.map(([kind, v, n]) => [kind, kind === 'atk' ? v + atkUp : v, n]), block: 0, str: 0, weak: 0, vuln: 0, stun: 0, confuse: 0, link: 0, step: rnd(0, 1), x: FOES[k].boss ? 290 : 228 + i * (F.length > 2 ? 56 : 70) }));
   for (const u of [hero, ...foes]) Object.assign(u, { ox: 0, oy: 0, flash: 0, anim: null, dead: false, atkUntil: 0, hurtUntil: 0 });
   B = { hero, foes, draw: shuffle(run.deck.map(cardById)), hand: [], discard: [], energy: 3, charge: run.lv >= 10 ? 50 : 0, turn: 0, nextAtk: 1, atkCount: 0, ups: [], expStart: run.gained, lvStart: run.lv };
   target = foes[0];
   effects = [];
+  // 開場就發動的神器／邪物
+  const cs = run.G.fx.curseStart;
+  if (cs) for (const f of foes) { if (cs !== 'weak') f.vuln = 2; if (cs !== 'vuln') f.weak = 2; }
+  if (cs === 'all') hero.weak = 1;
+  if (run.G.fx.stunStart) for (const f of foes) f.stun = 1;
   showScreen('battle');
   $('.log').textContent = `第 ${run.fight + 1} 層（共 ${FIGHTS.length} 層）：${foes.map((f) => f.name).join('、')}`;
   startTurn();
@@ -244,6 +357,12 @@ function startTurn() {
   B.turn++; B.energy = 3; B.nextAtk = 1;
   B.hero.block = hasPassive('loyal') ? Math.floor(B.hero.block / 2) : 0;
   if (hasPassive('moon')) heal(B.hero, 2);
+  const G = run.G;
+  if (G.guard) B.hero.block += G.guard;
+  if (G.regen) heal(B.hero, G.regen);
+  if (G.fx.selfDmg && B.hero.hp > 1) { const n = Math.min(G.fx.selfDmg, B.hero.hp - 1); B.hero.hp -= n; float(B.hero, `邪物反噬 -${n}`, '#c060ff'); }
+  if (B.turn === 1 && G.fx.energy1) { B.energy += G.fx.energy1; float(B.hero, `能量 +${G.fx.energy1}`, '#ffe070'); }
+  B.aegisUsed = false;
   drawCards(5);
   busy = false; render();
 }
@@ -254,17 +373,22 @@ function heal(u, v) { v = Math.min(v, u.maxHp - u.hp); if (v > 0) { u.hp += v; f
 
 function damage(src, dst, amount, pierce = false, spread = false) {
   if (dst.dead) return 0;
+  const fromFoe = dst === B.hero && src && src !== B.hero;
+  if (fromFoe && run.G.dodge && Math.random() * 100 < run.G.dodge) { float(dst, '閃避', '#c0a0ff'); return 0; }
+  if (fromFoe && run.G.fx.aegis && !B.aegisUsed) { B.aegisUsed = true; src.weak = Math.max(src.weak, 2); float(src, '神盾：虛弱', '#a0a0c0'); }
   let d = amount;
   if (src && src.weak > 0) d = Math.floor(d * 0.75);
   if (dst.vuln > 0) d = Math.floor(d * 1.5);
+  if (fromFoe && run.G.fx.armor) d = Math.max(0, d - run.G.fx.armor);
   if (!pierce && dst.block > 0) { const b = Math.min(dst.block, d); dst.block -= b; d -= b; if (b) float(dst, '格擋 ' + b, '#a0c8ff'); }
   if (d <= 0) return 0;
+  if (fromFoe && run.G.fx.reflect && !src.dead) { const back = Math.ceil(d * run.G.fx.reflect / 100); setTimeout(() => { if (B && !src.dead) damage(null, src, back, true); }, 120); }
   dst.hp -= d; dst.flash = performance.now() + 300; dst.hurtUntil = performance.now() + 450; shake = Math.min(6, 2 + d / 4);
   float(dst, '-' + d, spread ? '#ff90b0' : '#fff');
   if (dst.art) dst.anim = { name: 'hurt', t0: performance.now() };
   // 紅線：傷害沿著紅線傳給其他被綁的敵人
   if (dst.link && src === B.hero && !spread) {
-    const share = hasPassive('fate') ? 1 : 0.5;
+    const share = (hasPassive('fate') ? 1 : 0.5) + (run.G.fx.linkPlus || 0);
     for (const o of alive()) if (o !== dst && o.link) {
       effects.push({ type: 'thread', x1: dst.x, x2: o.x, t0: performance.now(), ms: 500 });
       damage(src, o, Math.max(1, Math.floor(d * share)), true, true);
@@ -291,6 +415,11 @@ async function playCard(i) {
   if (!target || target.dead) target = alive()[0];
   render();
   await resolveCard(c);
+  if (c.type === 'atk' && run.G.fx.thunder && alive().length && Math.random() < 0.3) {
+    effects.push({ type: 'flash', t0: performance.now(), ms: 250 }); $('.log').textContent = '妙爾尼爾：落雷！';
+    for (const f of alive()) { effects.push({ type: 'bolt', x1: f.x, x2: f.x, color: '#a0d8ff', t0: performance.now(), ms: 300 }); damage(B.hero, f, run.G.fx.thunder, true); }
+    await sleep(300);
+  }
   if (c.type === 'atk' && hasPassive('saint') && ++B.atkCount % 3 === 0) { drawCards(1); float(B.hero, '武聖：抽 1', '#ffd070'); }
   if (!alive().length) return winFight();
   busy = false; render();
@@ -316,7 +445,10 @@ async function resolveCard(c) {
         let d = c.dmg + h.str + (hasPassive('beard') && h.hp < h.maxHp * 0.3 ? 4 : 0);
         if (c.lowHp && t.hp < t.maxHp / 2) d = Math.round(d * 1.5);
         if (c.cutLink && wasLinked) d *= 2;
-        damage(h, t, d * mult * solo);
+        d = (d + run.G.atk + (c.hits > 1 ? run.G.fx.hitPlus || 0 : 0)) * mult * solo;
+        if (run.G.crit && Math.random() * 100 < run.G.crit) { d = Math.round(d * (run.G.fx.critX || 2)); float(t, '爆擊！', '#ff4040'); shake = 6; }
+        const dealt = damage(h, t, d);
+        if (run.G.steal && dealt) heal(h, Math.max(1, Math.round(dealt * run.G.steal / 100)));
         if (c.hits > 1) await sleep(130);
       }
       if (c.fixed && !t.dead) damage(h, t, c.fixed, true);
@@ -441,13 +573,30 @@ function winFight() {
   run.fight++;
   const box = $('.screen-reward'); box.innerHTML = '';
   showScreen('reward');
+  const drop = FIGHTS[run.fight - 1].drop;
+  const dropBox = () => {
+    if (!drop) return;
+    const it = rollGear(drop === '魔王');
+    gear.bag.push(it);
+    // 背包最多 30 件，滿了丟掉最舊的（穿著的不丟）
+    while (gear.bag.length > 30) { const old = gear.bag.find((g) => !Object.values(gear.eq).includes(g.uid)); gear.bag.splice(gear.bag.indexOf(old), 1); }
+    saveGear();
+    const slot = itemOf(it).slot, cur = gear.bag.find((g) => g.uid === gear.eq[slot]);
+    box.append(Object.assign(document.createElement('h3'), { textContent: `${drop}掉落了裝備！` }));
+    const el = gearEl(it, [['立刻穿上', () => { equip(it); el.querySelector('.gear-actions').textContent = '已穿上 ✓'; }]]);
+    box.append(el);
+    if (cur) box.append(Object.assign(document.createElement('p'), { className: 'muted', textContent: `目前的${SLOTS[slot]}：${itemOf(cur).n}。不穿的話會放進背包。` }));
+  };
   if (run.fight >= FIGHTS.length) {
     box.innerHTML = `<div class="panel"><h3>登頂！</h3><p>${JOBS[heroId].name}打倒了考績審判官。這一世獲得 ${run.gained} 經驗，現在 ${expLine()}。</p>${levelUpHtml(r)}</div>`;
+    dropBox();
     box.append(button('再爬一次', () => showPick()));
     return;
   }
   run.hp = Math.min(run.maxHp, run.hp + Math.round(run.maxHp * 0.15));
-  box.append(Object.assign(document.createElement('div'), { className: 'panel', innerHTML: `<h3>贏了！這層 +${got} 經驗</h3><p class="muted">${expLine()}，生命回復一成半（${run.hp}/${run.maxHp}）。</p>${levelUpHtml(r)}<p>選一個獎勵：</p>` }));
+  box.append(Object.assign(document.createElement('div'), { className: 'panel', innerHTML: `<h3>贏了！這層 +${got} 經驗</h3><p class="muted">${expLine()}，生命回復一成半（${run.hp}/${run.maxHp}）。</p>${levelUpHtml(r)}` }));
+  dropBox();
+  box.append(Object.assign(document.createElement('p'), { textContent: '選一個獎勵：' }));
   // 獎勵：加一張自己已解鎖的牌，或把牌組裡一張牌升級
   const pool = shuffle(unlockedCards(heroId, run.lv).map((c) => heroId + '.' + c.key)).slice(0, 2);
   const upable = shuffle([...new Set(run.deck.filter((id) => !id.endsWith('+')))]);
@@ -495,6 +644,7 @@ function showPick() {
   let sel = heroId && HEROES.includes(heroId) ? heroId : HEROES[0];
   const intro = document.createElement('div'); intro.className = 'intro';
   const paint = () => {
+    heroId = sel; // 裝備畫面看的是目前選的角色
     pick.querySelectorAll('.btn').forEach((b) => b.classList.toggle('active', b.dataset.id === sel));
     const J = JOBS[sel], o = ORIGINS[sel], K = KITS[sel], L = levelOf(sel);
     intro.innerHTML = '';
@@ -513,7 +663,7 @@ function showPick() {
     b.onclick = () => { sel = id; paint(); }; pick.append(b);
   }
   const soon = Object.keys(ART).filter((k) => JOBS[k] && !KITS[k]).map((k) => JOBS[k].name);
-  box.append(pick, Object.assign(document.createElement('p'), { className: 'muted', style: 'font-size:12px', textContent: `技能設計中：${soon.join('、')}` }), button('就是你了，開始爬樓！', () => startRun(sel), 'btn primary wide'), intro);
+  box.append(pick, Object.assign(document.createElement('p'), { className: 'muted', style: 'font-size:12px', textContent: `技能設計中：${soon.join('、')}` }), button('就是你了，開始爬樓！', () => startRun(sel), 'btn primary wide'), button(`裝備（背包 ${gear.bag.length} 件）`, () => showGear(showPick)), intro);
   paint();
 }
 
