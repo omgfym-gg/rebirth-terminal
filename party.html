@@ -60,7 +60,7 @@
 <body>
 <div id="app">
   <h2>三人小隊・試玩</h2>
-  <p class="muted" style="font-size:13px">三個角色一起上場，三人的牌洗成同一副，每張牌由它的主人出手（卡上有寫是誰的）。每回合 3 點能量、抽 5 張，打不完，要挑。敵人頭上寫著它要打誰（→月 就是打月老），決定要保誰。同一回合三個人都出過牌就「三人合擊」：能量 +1、抽 1 張。隊友倒下，他的牌會變成「魂火」。三個都倒下才算輸。打完一層從三張新牌裡挑一張加進牌組。</p>
+  <p class="muted" style="font-size:13px">三個角色一起上場，三人的牌洗成同一副，每張牌由它的主人出手（卡上有寫是誰的）。每回合 3 點能量、抽 5 張，打不完，要挑。敵人頭上寫著它要打誰（→月 就是打月老），決定要保誰：點自己的隊友（腳下出現綠色箭頭），之後的補血和格擋都會給他；沒點就給出牌的人。同一回合三個人都出過牌就「三人合擊」：能量 +1、抽 1 張。隊友倒下，他的牌會變成「魂火」。三個都倒下才算輸。打完一層從三張新牌裡挑一張加進牌組。</p>
   <div class="screen-pick"></div>
   <div class="screen-battle" style="display:none">
     <canvas class="stage" width="384" height="216"></canvas>
@@ -606,7 +606,8 @@ function drawAura(x, now, top) {
 
 // ───── 狀態 ─────
 let heroId = null, run = null, B = null, effects = [], shake = 0, busy = false, target = null;
-let partyIds = null;
+let partyIds = null, allyTarget = null; // allyTarget：點隊友指定補血、格擋給誰（沒指定就給出牌的人）
+const allyT = (h) => allyTarget && !allyTarget.dead && B.party.includes(allyTarget) ? allyTarget : h;
 const aliveParty = () => B ? B.party.filter((u) => !u.dead) : [];
 const PARTY_X = [150, 98, 46];
 const FOE_ATK_K = 1.5; // 三個人分攤傷害，敵人打痛一點
@@ -650,7 +651,7 @@ function startFight() {
   Object.defineProperty(B, 'hero', { get() { return B.party.find((u) => u.job === heroId) || B.party.find((u) => !u.dead) || B.party[0]; } });
   Object.defineProperty(B, 'st', { get() { return B.hero.st; } });
   heroId = partyIds[0];
-  target = foes[0];
+  target = foes[0]; allyTarget = null;
   effects = [];
   for (const u of party) withHero(u.job, () => {
     const G = run.G, cs = G.fx.curseStart;
@@ -994,8 +995,8 @@ function makeG(c) {
     d: (v) => Math.round(v * ATK_K * (c.k || 1)),
     dmg: (v, pierce) => g.dmgRaw(g.d(v), pierce),
     dmgRaw: (v, pierce) => hitFoe(g.t, v + B.firstBonus, pierce),
-    block(v) { const b = g.n(v) + B.firstBonus + (hasPassive('treasury') ? B.res : 0) + (hasPassive('embalm') && h.hp < h.maxHp / 2 ? 3 : 0); h.block += b; float(h, '格擋 +' + b, '#a0c8ff'); if (hasPassive('smith')) st.nextAtkPlus = (st.nextAtkPlus || 0) + 3; },
-    heal: (v) => heal(h, g.n(v) + B.firstBonus),
+    block(v) { const b = g.n(v) + B.firstBonus + (hasPassive('treasury') ? B.res : 0) + (hasPassive('embalm') && h.hp < h.maxHp / 2 ? 3 : 0), to = allyT(h); to.block += b; float(to, '格擋 +' + b, '#a0c8ff'); if (to !== h) effects.push({ type: 'thread', x1: h.x, x2: to.x, t0: performance.now(), ms: 500 }); if (hasPassive('smith')) st.nextAtkPlus = (st.nextAtkPlus || 0) + 3; },
+    heal: (v) => { const to = allyT(h); if (to !== h) effects.push({ type: 'thread', x1: h.x, x2: to.x, t0: performance.now(), ms: 500 }); heal(to, g.n(v) + B.firstBonus); },
     draw: (n) => drawCards(n),
     cleanse() { h.weak = h.vuln = 0; },
     est: (name, n) => addDebuff(g.t, name, n),
@@ -1272,6 +1273,7 @@ cv.addEventListener('pointerdown', (ev) => {
   const t = [...aliveParty(), ...alive()].sort((a, b) => Math.abs(a.x - a.ox * 0 - x) - Math.abs(b.x - x))[0];
   if (t && Math.abs(t.x - x) < 36) {
     if (t.side === 'enemy') { target = t; $('.log').textContent = `目標：${t.name}`; }
+    else { allyTarget = t; $('.log').textContent = `補血、格擋現在都給${t.name}`; }
     infoUnit = t; render();
   }
 });
@@ -1389,6 +1391,7 @@ function drawUnit(u, now) {
     const txt = (u.stun ? '暈' : kind === 'atk' ? `⚔${v + u.str}${times > 1 ? '×' + times : ''}` : kind === 'def' ? `🛡${v}` : kind === 'buff' ? '力↑' : kind === 'weak' ? '弱化' : '易傷') + (u.stun ? '' : to);
     g.font = 'bold 11px sans-serif'; g.fillStyle = '#000'; g.fillText(txt, x + 1, top - 6); g.fillStyle = kind === 'atk' ? '#ff8080' : '#a0d8ff'; g.fillText(txt, x, top - 7);
   }
+  if (B && u === allyT(null) && !u.dead) { g.fillStyle = '#70e070'; g.beginPath(); g.moveTo(x - 5, GROUND + 10); g.lineTo(x + 5, GROUND + 10); g.lineTo(x, GROUND + 4); g.fill(); }
   if (u === target && !u.dead) { g.fillStyle = '#ffe070'; g.beginPath(); g.moveTo(x - 5, GROUND + 10); g.lineTo(x + 5, GROUND + 10); g.lineTo(x, GROUND + 4); g.fill(); }
 }
 
