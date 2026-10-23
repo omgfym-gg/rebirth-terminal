@@ -359,6 +359,12 @@ const ART = {
     // punch 是權杖射金光，cast 是面具上的眼睛放暗影
     sheets: { pose: ['sheet.png', 64, 86], walk: ['walk.png', 70, 86], punch: ['punch.png', 94, 86], cast: ['cast.png', 75, 86], hurt: ['hurt.png', 92, 86] },
   },
+  redgirl: {
+    dir: 'assets/redgirl/',
+    mark: 'fog', // 身邊飄紅色山霧
+    // punch 是蹲低撲上去抓，cast 是揮手召出紅霧
+    sheets: { pose: ['sheet.png', 56, 78], walk: ['walk.png', 52, 78], punch: ['punch.png', 75, 78], cast: ['cast.png', 73, 78], hurt: ['hurt.png', 96, 78] },
+  },
 };
 // 戰鬥角色（敵人、引魂犬）：每張 3 格，待機、攻擊、被打，都面向右邊；登記成 ART['u:名字']
 const UNIT_ART = {"dog": [52, 50], "shade": [69, 70], "wisp": [74, 54], "husk": [81, 74], "redgirl": [55, 62], "mirror": [57, 78], "hunter": [117, 76], "boss": [142, 104], "horus": [138, 100]};
@@ -373,7 +379,7 @@ const ART_ANIMS = {
 };
 
 // 圖檔更新時改這個，手機才不會一直用快取的舊圖
-const ASSET_V = '20261022h';
+const ASSET_V = '20261023a';
 const ArtImages = {};
 function artSheet(job, sheet) {
   const a = ART[job], spec = a && a.sheets[sheet];
@@ -410,6 +416,7 @@ function drawArt(g, job, sheet, i, cx, bottom, scale, { flip = false, white = fa
 // 職業記號：小像素圖，戰鬥時飄在角色身邊
 const MARKS = {
   heart: { color: '#ff5c8d', light: '#ffc0d4', rows: ['.x.x.', 'xxxxx', 'xxxxx', '.xxx.', '..x..'] },
+  fog: { color: '#d0404a', light: '#ffb0b0', rows: ['.xx...', 'xxxx.x', '.xxxxx', '..xx..'] },
   eye: { color: '#f0c040', light: '#3050c0', rows: ['.xxxx.', 'xx.xxx', '.xxxx.', '..x.x.', '.x...x'] },
 };
 function drawMark(g, name, x, y, s, alpha = 1) {

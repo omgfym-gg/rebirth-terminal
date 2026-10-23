@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>橫向戰鬥試玩</title>
-<link rel="stylesheet" href="style.css?v=20261022h">
+<link rel="stylesheet" href="style.css?v=20261023a">
 <style>
   .stage { width: 100%; height: auto; border: 2px solid var(--line); background: #0b0a12; touch-action: manipulation; }
   .bar { display: flex; justify-content: space-between; margin: 6px 0; font-size: 14px; }
@@ -31,9 +31,9 @@
   <div class="log"></div>
   <a class="btn wide" href="./" style="display:block;text-align:center;text-decoration:none;margin-top:10px">回遊戲</a>
 </div>
-<script src="js/data.js?v=20261022h"></script>
-<script src="js/jobs.js?v=20261022h"></script>
-<script src="js/sprites.js?v=20261022h"></script>
+<script src="js/data.js?v=20261023a"></script>
+<script src="js/jobs.js?v=20261023a"></script>
+<script src="js/sprites.js?v=20261023a"></script>
 <script>
 'use strict';
 // 橫向回合制原型：我方站左邊、敵人站右邊，各自有前後排。點技能，再點目標。
@@ -68,6 +68,16 @@ const HEROES = {
       ult:    { name: '競品打擊', desc: '魔力滿 100% 才能用。召喚 2 個暗影分身，輪流突襲全場敵人（每次 3 點，無視防禦）。', target: 'none' },
     },
   },
+  redgirl: {
+    name: '紅衣小女孩', gauge: '魔力', stats: { hp: 24, atk: 5, def: 1, spd: 8, dodge: 0.1 },
+    passive: '紅衣誘引：10% 機率閃避；打中敵人時 25% 機率讓它詛咒 2 回合。',
+    actions: {
+      attack: { name: '撲抓', desc: '蹲低再撲上去，抓前兩排的一個敵人。', target: 'enemyFront' },
+      mist:   { name: '山徑迷霧', desc: '揮手召出紅色山霧，罩住前兩排敵人：失明 1 回合，而且混亂 1 回合（會攻擊自己人）。冷卻 3', target: 'none', cd: 3 },
+      smile:  { name: '詭異微笑', desc: '一眨眼就出現在任一個敵人面前，對它微笑再抓一下（1 倍傷害），然後消失回原位。冷卻 3', target: 'enemy', cd: 3 },
+      ult:    { name: '跟著我走', desc: '魔力滿 100% 才能用。紅霧吞沒全場：所有敵人混亂 1 回合、詛咒 2 回合（受到的傷害加五成）。', target: 'none' },
+    },
+  },
 };
 let heroId = 'yuelao';
 let ACTIONS = HEROES[heroId].actions;
@@ -97,7 +107,7 @@ function reset(next) {
     { id: 'dog', side: 'ally', name: '引魂犬', sprite: 'dog', hp: 20, maxHp: 20, atk: 5, def: 1, spd: 7, rank: 1 },
     ...WAVES[wave].map((k, r) => ({ id: 'e' + r, side: 'enemy', sprite: k, rank: r, maxHp: FOES[k].hp, ...FOES[k] })),
   ];
-  for (const u of units) Object.assign(u, { ox: 0, oy: 0, flash: 0, anim: null, curse: 0, stun: 0, shield: 0, blind: 0, dead: false, atkUntil: 0, hurtUntil: 0 });
+  for (const u of units) Object.assign(u, { ox: 0, oy: 0, flash: 0, anim: null, curse: 0, stun: 0, shield: 0, blind: 0, confuse: 0, dead: false, atkUntil: 0, hurtUntil: 0 });
   charge = 0; cds = {}; effects = []; shake = 0; over = false; picking = null; busy = false;
   $('.log').textContent = '輪到誰行動，畫面下方會顯示。';
   nextRound();
@@ -152,7 +162,9 @@ function drawUnit(u, now) {
       if (t < tot) { sheet = s; while (t >= ms[i]) t -= ms[i++]; } else u.anim = null;
     } else if (!u.dead) i = 0;
     if (u.dead && !u.anim) return;
+    if (u.ghost !== undefined) g.globalAlpha = Math.max(0, u.ghost);
     drawArt(g, u.art, sheet, i, x, GROUND + u.oy, 1, { white });
+    g.globalAlpha = 1;
     // 飄職業記號（月老愛心、荷魯斯之眼）
     for (let k = 0; k < 2; k++) { const p = (now / 1800 + k / 2) % 1; drawMark(g, ART[u.art].mark, x + (k ? 18 : -28) + Math.sin(p * 6) * 3, GROUND - 50 - p * 40, 2, p < 0.2 ? p * 5 : 1 - (p - 0.2) / 0.8); }
   } else {
@@ -169,7 +181,7 @@ function drawUnit(u, now) {
   g.fillStyle = '#000'; g.fillRect(x - 17, top - 1, 34, 5);
   g.fillStyle = u.side === 'ally' ? '#5fd35f' : '#e05050'; g.fillRect(x - 16, top, Math.max(0, 32 * u.hp / u.maxHp), 3);
   g.font = 'bold 10px sans-serif'; g.textAlign = 'center';
-  const tags = [u.curse > 0 ? ['詛', '#d070ff'] : null, u.stun > 0 ? ['定', '#ffb0d0'] : null, u.shield > 0 ? ['盾', '#ffe070'] : null, u.blind > 0 ? ['盲', '#a0a0c0'] : null].filter(Boolean);
+  const tags = [u.curse > 0 ? ['詛', '#d070ff'] : null, u.stun > 0 ? ['定', '#ffb0d0'] : null, u.shield > 0 ? ['盾', '#ffe070'] : null, u.blind > 0 ? ['盲', '#a0a0c0'] : null, u.confuse > 0 ? ['亂', '#ff8060'] : null].filter(Boolean);
   tags.forEach(([t, c], k) => { g.fillStyle = c; g.fillText(t, x - 10 + k * 12, top - 4); });
   // 現在輪到誰、能不能被選
   if (current === u && !over) { g.fillStyle = '#ffe070'; g.beginPath(); g.moveTo(x - 5, top - 16); g.lineTo(x + 5, top - 16); g.lineTo(x, top - 10); g.fill(); }
@@ -212,6 +224,15 @@ function draw(now) {
       g.fillStyle = '#f080ff'; g.fillRect(Math.round(xx - 5), Math.round(yy - 5), 10, 10);
       g.fillStyle = '#2a0838'; g.fillRect(Math.round(xx - 2), Math.round(yy - 2), 4, 4);
     }
+    if (e.type === 'fog') {
+      // 紅色山霧：一團團紅霧在目標身上鼓起來再散掉
+      const a = Math.sin(Math.min(1, k) * Math.PI);
+      for (let s = 0; s < 7; s++) {
+        const r = 10 + (s % 3) * 5 + a * 6, xx = e.x + Math.cos(s * 2.1 + now / 400) * 16, yy = GROUND - 30 - (s % 4) * 10 + Math.sin(s + now / 300) * 3;
+        g.fillStyle = `rgba(${s % 2 ? 200 : 150},${s % 2 ? 40 : 20},${s % 2 ? 60 : 40},${a * 0.45})`;
+        g.beginPath(); g.arc(Math.round(xx), Math.round(yy), r, 0, Math.PI * 2); g.fill();
+      }
+    }
     if (e.type === 'clone') {
       // 暗影分身：半透明的紫色荷魯斯，衝過去再消失
       const xx = e.x1 + (e.x2 - e.x1) * Math.min(1, k * 1.6);
@@ -235,6 +256,7 @@ async function hit(src, dst, dmg, fixed = false) {
   if (src && src.blind > 0 && !fixed && Math.random() < 0.5) { float(dst, '落空', '#a0a0c0'); return 0; }
   if (dst.dodge && !fixed && Math.random() < dst.dodge) { float(dst, '閃避', '#c0a0ff'); return 0; }
   if (!fixed) dmg = Math.max(1, dmg - dst.def + rnd(-1, 1));
+  if (src && src.id === 'hero' && heroId === 'redgirl' && Math.random() < 0.25) { dst.curse = Math.max(dst.curse, 2); float(dst, '詛咒', '#d070ff'); }
   if (dst.curse > 0) dmg = Math.round(dmg * 1.5);
   if (dst.shield > 0) dmg = Math.ceil(dmg / 2);
   dst.hp -= dmg; dst.flash = performance.now() + 300; dst.hurtUntil = performance.now() + 450; shake = Math.min(6, 2 + dmg / 3);
@@ -280,6 +302,7 @@ async function perform(act, target) {
   busy = true; picking = null; renderActs();
   const hero = units[0];
   if (heroId === 'horusshadow') { await performHorus(hero, act, target); busy = false; return endTurn(); }
+  if (heroId === 'redgirl') { await performRedgirl(hero, act, target); busy = false; return endTurn(); }
   if (act === 'attack') {
     $('.log').textContent = `月老揍了${target.name}一拳。`;
     await dashTo(hero, target, async () => { hero.anim = { name: 'punch', t0: performance.now() }; await sleep(150); await hit(hero, target, hero.atk); await sleep(250); });
@@ -350,8 +373,50 @@ async function performHorus(hero, act, target) {
   await sleep(300);
 }
 
+// 紅衣小女孩：撲抓、山徑迷霧（紅霧）、詭異微笑（瞬移抓人）、跟著我走（全場紅霧）
+async function performRedgirl(hero, act, target) {
+  const fogOn = (u) => effects.push({ type: 'fog', x: home(u), t0: performance.now(), ms: 900 });
+  if (act === 'attack') {
+    $('.log').textContent = `紅衣小女孩撲向${target.name}。`;
+    await dashTo(hero, target, async () => { hero.anim = { name: 'punch', t0: performance.now() }; await sleep(160); await hit(hero, target, hero.atk); await sleep(250); });
+  } else if (act === 'mist') {
+    $('.log').textContent = '紅衣小女孩揮了揮手，山路起霧了……';
+    hero.anim = { name: 'cast', t0: performance.now() }; await sleep(380);
+    for (const e of alive('enemy').filter((u) => u.rank <= 1)) { fogOn(e); e.blind = Math.max(e.blind, 2); e.confuse = 2; float(e, '混亂', '#ff8060'); }
+    await sleep(500);
+    cds.mist = ACTIONS.mist.cd + 1; charge = Math.min(100, charge + 25);
+  } else if (act === 'smile') {
+    $('.log').textContent = `${target.name}一回頭，紅衣小女孩就站在面前對它笑。`;
+    const dx = home(target) - home(hero) - 36;
+    await tween(180, (t) => { hero.oy = 0; hero.ghost = 1 - t; });
+    hero.ox = dx; float(target, '嘻嘻', '#ff6070');
+    await tween(150, (t) => { hero.ghost = t; });
+    hero.anim = { name: 'punch', t0: performance.now() }; await sleep(160);
+    await hit(hero, target, hero.atk); await sleep(250);
+    await tween(150, (t) => { hero.ghost = 1 - t; });
+    hero.ox = 0; await tween(150, (t) => { hero.ghost = t; }); hero.ghost = undefined;
+    cds.smile = ACTIONS.smile.cd + 1;
+  } else if (act === 'ult') {
+    $('.log').textContent = '「跟著我走。」紅霧吞沒了整條走廊。';
+    charge = 0; hero.anim = { name: 'cast', t0: performance.now() }; await sleep(380);
+    effects.push({ type: 'flash', color: 'rgba(160,20,40,A)', t0: performance.now(), ms: 700 }); shake = 4;
+    for (const e of alive('enemy')) { fogOn(e); e.confuse = 2; e.curse = 3; float(e, '混亂', '#ff8060'); await sleep(150); }
+    await sleep(400);
+  }
+  await sleep(300);
+}
+
 async function aiTurn(u) {
   if (u.stun > 0) { float(u, '定身中', '#ffb0d0'); u.stun--; await sleep(600); return endTurn(); }
+  if (u.confuse > 0) {
+    const mates = alive(u.side).filter((m) => m !== u);
+    if (mates.length && Math.random() < 0.7) {
+      const t = mates[rnd(0, mates.length - 1)];
+      $('.log').textContent = `${u.name}被迷霧搞亂，攻擊了自己人${t.name}！`;
+      u.atkUntil = performance.now() + 500; float(u, '混亂', '#ff8060'); await sleep(300); await hit(u, t, u.atk); await sleep(400);
+      return endTurn();
+    }
+  }
   const foes = alive(u.side === 'ally' ? 'enemy' : 'ally');
   const reach = u.ranged ? foes : foes.filter((f) => f.rank <= 1);
   const t = reach[rnd(0, reach.length - 1)] || foes[0];
@@ -364,7 +429,7 @@ async function aiTurn(u) {
 
 function nextRound() {
   turnQueue = units.filter((u) => !u.dead).sort((a, b) => b.spd - a.spd);
-  for (const u of units) { if (u.curse > 0) u.curse--; if (u.shield > 0) u.shield--; if (u.blind > 0) u.blind--; }
+  for (const u of units) { if (u.curse > 0) u.curse--; if (u.shield > 0) u.shield--; if (u.blind > 0) u.blind--; if (u.confuse > 0) u.confuse--; }
   for (const k in cds) if (cds[k] > 0) cds[k]--;
   endTurn(true);
 }
@@ -388,7 +453,7 @@ function endTurn(fresh) {
 function finish(win) {
   over = true; current = null; picking = null;
   $('.who').textContent = win ? '勝利！' : `${HEROES[heroId].name}倒下了`;
-  $('.log').textContent = win ? (heroId === 'yuelao' ? '整層樓的姻緣都登記完畢。' : '競品情報全數到手。') : '（正式版這裡會變成靈魂，等引魂犬來救。）';
+  $('.log').textContent = win ? { yuelao: '整層樓的姻緣都登記完畢。', horusshadow: '競品情報全數到手。', redgirl: '大家都跟著她走進霧裡了。' }[heroId] : '（正式版這裡會變成靈魂，等引魂犬來救。）';
   const box = $('.acts'); box.innerHTML = '';
   const b = document.createElement('button'); b.className = 'btn primary'; b.textContent = win ? '下一批敵人' : '再打一次'; b.onclick = () => reset(win); box.append(b);
 }
