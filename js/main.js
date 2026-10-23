@@ -169,13 +169,11 @@ const Game = {
       for (const id of PATH_ORDER) s.offer.paths[id] = draw(FORMS[id].side);
       this.persist();
     }
-    // 測試期間：有專屬像素圖的職業（目前是月老）固定出現在能選它的路上
+    // 測試期間：有專屬像素圖的職業（月老、荷魯斯之影）固定出現在能選它的路上，各占一格不互相蓋掉
     for (const id of PATH_ORDER) {
       const side = FORMS[id].side, list = s.offer.paths[id];
-      for (const job of Object.keys(ART).filter((k) => JOBS[k])) {
-        if (side && FAITHS[job].side !== side) continue;
-        if (!list.includes(job)) list[0] = job;
-      }
+      const forced = Object.keys(ART).filter((k) => JOBS[k] && (!side || FAITHS[k].side === side));
+      forced.forEach((job) => { if (!list.includes(job)) list[list.findIndex((j) => !forced.includes(j))] = job; });
     }
     const root = $('#rebirth .content');
 
