@@ -784,7 +784,11 @@ class Battle {
     const isUlt = sk === u.ult;
     this.ui.battleLog(isUlt ? `${sk.n}！` : `你使出「${sk.n}」。`);
     if (isUlt) { this.flashScreen = 250; this.shake = 6; }
-    if (u.art) { this.playAnim(u, 'cast'); await sleep(280); }
+    if (u.art) {
+      // 有專屬招式動作的職業播自己的那招，其他播通用施法
+      const nm = isUlt ? 'ult' : sk.id === u.art + '.0' ? 's1' : sk.id === u.art + '.1' ? 's2' : 'cast';
+      this.playAnim(u, artAnim(u.art, nm) ? nm : 'cast'); await sleep(nm === 'cast' ? 280 : 420);
+    }
     let tiles = this.areaTiles(center, a);
     const killsBefore = this.kills;
 
@@ -1104,7 +1108,7 @@ class Battle {
   // 專屬圖：腳底踩在格子下緣，比格子高一點；沒在播動作就站著（防禦時坐著）
   drawArtUnit(g, u, px, py, now, flip, white) {
     let sheet = 'pose', i = u.defending ? 2 : 0;
-    const a = u.anim && ART_ANIMS[u.anim.name];
+    const a = u.anim && artAnim(u.art, u.anim.name);
     if (a) {
       let t = now - u.anim.t0;
       const total = a.ms.reduce((m, n) => m + n, 0);
