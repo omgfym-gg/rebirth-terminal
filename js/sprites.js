@@ -374,6 +374,8 @@ const JOB_ART = {
   guangong: { mark: 'crescent', atk: 's1', melee: true, color: '#40d070', h: 82, w: { idle: 97, walk: 99, hurt: 97, s1: 97, s2: 108, ult: 135 } },
   hermes: { mark: 'wing', atk: 's2', melee: true, color: '#f0d070', h: 82, w: { idle: 76, walk: 79, hurt: 96, s1: 129, s2: 88, ult: 130 } },
   dagda: { mark: 'pot', atk: 's2', melee: true, color: '#d8a060', h: 82, w: { idle: 77, walk: 77, hurt: 98, s1: 93, s2: 82, ult: 121 } },
+  hanako: { mark: 'wisp', atk: 's2', melee: true, color: '#b060e0', h: 82, w: { idle: 71, walk: 68, hurt: 77, s1: 86, s2: 87, ult: 98 } },
+  anubis: { mark: 'ankh', atk: 's1', melee: true, color: '#f0c040', h: 82, w: { idle: 72, walk: 72, hurt: 78, s1: 92, s2: 102, ult: 96 } },
 };
 for (const [id, j] of Object.entries(JOB_ART)) {
   const sheet = (n) => [n + '.png', j.w[n], j.h];
@@ -411,7 +413,7 @@ function artAnim(job, name) {
 }
 
 // 圖檔更新時改這個，手機才不會一直用快取的舊圖
-const ASSET_V = '20261023h';
+const ASSET_V = '20261023i';
 const ArtImages = {};
 function artSheet(job, sheet) {
   const a = ART[job], spec = a && a.sheets[sheet];
@@ -448,6 +450,8 @@ function drawArt(g, job, sheet, i, cx, bottom, scale, { flip = false, white = fa
 // 職業記號：小像素圖，戰鬥時飄在角色身邊
 const MARKS = {
   heart: { color: '#ff5c8d', light: '#ffc0d4', rows: ['.x.x.', 'xxxxx', 'xxxxx', '.xxx.', '..x..'] },
+  wisp: { color: '#b060e0', light: '#f0c0ff', rows: ['..x.', '.xx.', 'xxx.', '.xxx', '..x.'] },
+  ankh: { color: '#f0c040', light: '#fff0b0', rows: ['.x.', 'x.x', '.x.', 'xxx', '.x.', '.x.'] },
   pot: { color: '#606878', light: '#ffd080', rows: ['.x.x.', 'xxxxx', 'xxxxx', '.xxx.'] },
   wing: { color: '#f4f4ff', light: '#ffffff', rows: ['x....', 'xx...', 'xxx..', '.xxxx', '..xx.'] },
   crescent: { color: '#40d070', light: '#c0ffd0', rows: ['..xx', '...x', '...x', '..xx', 'xxx.'] },
