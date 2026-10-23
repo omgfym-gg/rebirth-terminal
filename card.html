@@ -254,12 +254,15 @@ const ITEMS = {
 let gear = (() => { try { return JSON.parse(localStorage.getItem(GEAR_KEY)) || null; } catch (e) { return null; } })() || { bag: [], eq: {} };
 const saveGear = () => { try { localStorage.setItem(GEAR_KEY, JSON.stringify(gear)); } catch (e) { /* 存不了就只在這次有效 */ } };
 const itemOf = (g) => ITEMS[g.id];
+// 神族只能用神器、魔族只能用邪物；專屬武器只有本人能用
+const kindFor = (id) => JOBS[id].side === '神' ? '神器' : '邪物';
+const canUse = (it, id) => it.own ? it.own === id : it.kind === kindFor(id);
 
-// 菁英掉一般的神器或邪物；魔王有四成機率掉這個角色的專屬武器
+// 菁英掉你這一族的神器或邪物；魔王有四成機率掉這個角色的專屬武器
 function rollGear(boss) {
   const ex = 'ex_' + heroId;
   if (boss && ITEMS[ex] && Math.random() < 0.4) return { uid: Date.now() + '' + rnd(0, 999), id: ex };
-  const pool = Object.keys(ITEMS).filter((k) => !ITEMS[k].own);
+  const pool = Object.keys(ITEMS).filter((k) => !ITEMS[k].own && ITEMS[k].kind === kindFor(heroId));
   return { uid: Date.now() + '' + rnd(0, 999), id: pool[rnd(0, pool.length - 1)] };
 }
 const statText = (st) => Object.entries(st).map(([k, v]) => `${STATS[k][0]} ${v > 0 ? '+' : ''}${v}${STATS[k][1]}`).join('、');
@@ -268,7 +271,7 @@ function gearStats(id = heroId) {
   const t = { crit: 0, steal: 0, dodge: 0, atk: 0, hp: 0, guard: 0, regen: 0, fx: {} };
   for (const uid of Object.values(gear.eq)) {
     const g = gear.bag.find((x) => x.uid === uid), it = g && itemOf(g);
-    if (!it || (it.own && it.own !== id)) continue;
+    if (!it || !canUse(it, id)) continue;
     for (const [k, v] of Object.entries(it.st)) t[k] += v;
     for (const [k, v] of Object.entries(it.fx)) t.fx[k] = typeof v === 'number' && t.fx[k] ? t.fx[k] + v : v;
   }
@@ -279,7 +282,7 @@ function gearEl(g, actions) {
   const it = itemOf(g), d = document.createElement('div');
   d.className = 'gear ' + (it.kind === '神器' ? 'holy' : 'cursed');
   const own = it.own ? `・${JOBS[it.own].name}專屬` : '';
-  const off = it.own && it.own !== heroId ? `<br><small class="warn">只有${JOBS[it.own].name}穿上才有效果</small>` : '';
+  const off = canUse(it, heroId) ? '' : `<br><small class="warn">${it.own ? `只有${JOBS[it.own].name}能用` : `${JOBS[heroId].side}族不能用${it.kind}`}</small>`;
   d.innerHTML = `<b>${it.n}</b> <small>${it.kind}・${SLOTS[it.slot]}${own}・${it.from}</small><br><span>${it.d}</span>${off}`;
   const row = document.createElement('div'); row.className = 'gear-actions';
   for (const [label, fn] of actions) { const b = document.createElement('button'); b.className = 'btn'; b.textContent = label; b.onclick = fn; row.append(b); }
@@ -291,7 +294,7 @@ function showGear(back) {
   showScreen('reward');
   const box = $('.screen-reward'); box.innerHTML = '';
   const T = gearStats();
-  box.append(Object.assign(document.createElement('div'), { className: 'panel', innerHTML: `<h3>裝備（${JOBS[heroId].name}）</h3><p class="muted">神器和邪物跟著靈魂走：換角色、轉生都會帶著。打倒菁英（第 3 層）和魔王（第 6 層）會掉落，魔王還可能掉角色的專屬武器。</p><p class="levelup">目前數值加成：${statText(Object.fromEntries(Object.entries(T).filter(([k, v]) => k !== 'fx' && v))) || '沒有'}</p>` }));
+  box.append(Object.assign(document.createElement('div'), { className: 'panel', innerHTML: `<h3>裝備（${JOBS[heroId].name}）</h3><p class="muted">神族只能用神器，魔族只能用邪物，專屬武器只有本人能用。背包跟著靈魂走：換角色、轉生都會帶著。打倒菁英（第 3 層）和魔王（第 6 層）會掉落，魔王還可能掉角色的專屬武器。</p><p class="levelup">目前數值加成：${statText(Object.fromEntries(Object.entries(T).filter(([k, v]) => k !== 'fx' && v))) || '沒有'}</p>` }));
   for (const [slot, name] of Object.entries(SLOTS)) {
     const g = gear.bag.find((x) => x.uid === gear.eq[slot]);
     box.append(Object.assign(document.createElement('h3'), { textContent: `${name}：${g ? '' : '（空）'}` }));
