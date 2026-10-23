@@ -1,0 +1,771 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>神魔共戰試玩</title>
+<link rel="stylesheet" href="style.css?v=20261023l">
+<style>
+  #app { padding: 8px 10px 28px; }
+  .stage { width: 100%; height: auto; border: 2px solid var(--line); background: #0b0a12; touch-action: manipulation; }
+  .top { display: flex; align-items: center; gap: 6px; font-size: 14px; margin-bottom: 4px; }
+  .top .floor { flex: 1; color: var(--gold); font-weight: bold; }
+  .top .btn { padding: 4px 10px; font-size: 13px; }
+  .tele { min-height: 22px; font-size: 13px; margin: 4px 0; color: var(--muted); }
+  .tele b { color: #ff8a8a; }
+  .tele b.win { color: var(--gold); }
+  .inter { display: grid; grid-template-columns: auto 1fr 1fr; gap: 6px; align-items: center; }
+  .ipbar { display: flex; gap: 3px; font-size: 12px; color: var(--muted); align-items: center; }
+  .ipbar i { display: inline-block; width: 14px; height: 14px; border: 2px solid #7a6a30; transform: rotate(45deg); margin: 0 2px; }
+  .ipbar i.on { background: var(--gold); border-color: var(--gold); }
+  .inter .btn { padding: 8px 2px; font-size: 15px; }
+  .inter .btn.hot { border-color: var(--gold); background: #3a3420; animation: glow 0.5s infinite alternate; }
+  @keyframes glow { from { box-shadow: 0 0 0 rgba(255,224,112,0); } to { box-shadow: 0 0 10px rgba(255,224,112,0.8); } }
+  .heroes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin-top: 6px; }
+  .hero { position: relative; padding: 4px 3px 5px; text-align: center; font-size: 12px; line-height: 1.3; overflow: hidden; }
+  .hero canvas { margin: 0 auto; height: 38px; }
+  .hero .hpb { height: 5px; background: #000; margin: 3px 0; }
+  .hero .hpb div { height: 100%; background: #5fd35f; }
+  .hero .cdv { position: absolute; left: 0; bottom: 0; width: 100%; background: rgba(0,0,0,0.6); pointer-events: none; }
+  .hero.ready { border-color: var(--gold); }
+  .hero.down { opacity: 0.35; }
+  .hand { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin-top: 6px; min-height: 74px; }
+  .card { padding: 4px; font-size: 11px; line-height: 1.35; text-align: left; border-color: #4a6a9a; }
+  .card b { display: block; font-size: 13px; color: var(--accent); }
+  .card.ex { border-color: #9a6a3a; } .card.ex b { color: #ffb070; }
+  .card.empty { opacity: 0.25; text-align: center; }
+  .meta { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .meta .art { color: var(--gold); }
+  .overlay { position: fixed; inset: 0; background: rgba(5,4,10,0.86); display: none; align-items: center; justify-content: center; padding: 16px; z-index: 5; }
+  .overlay.show { display: flex; }
+  .box { background: var(--panel); border: 2px solid var(--line); max-width: 440px; width: 100%; padding: 14px; max-height: 92vh; overflow-y: auto; }
+  .box h2 { margin-top: 0; }
+  .box p { font-size: 14px; line-height: 1.55; margin: 6px 0; }
+  .opt { display: block; width: 100%; text-align: left; margin-top: 8px; padding: 10px; font-size: 14px; line-height: 1.45; }
+  .opt b { color: var(--gold); }
+  details { margin-top: 10px; font-size: 13px; line-height: 1.55; }
+  details summary { color: var(--accent); }
+  details p { margin: 4px 0; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="top"><span class="floor"></span><button class="btn speed">速度 1×</button><button class="btn pause">暫停</button></div>
+  <canvas class="stage" width="384" height="216"></canvas>
+  <div class="tele"></div>
+  <div class="inter">
+    <div class="ipbar"></div>
+    <button class="btn int">打斷 ◆◆</button>
+    <button class="btn red">轉移 ◆</button>
+  </div>
+  <div class="heroes"></div>
+  <div class="hand"></div>
+  <div class="meta"></div>
+  <details>
+    <summary>玩法與技能說明</summary>
+    <div class="help"></div>
+  </details>
+</div>
+<div class="overlay"><div class="box"></div></div>
+<script src="js/data.js?v=20261023l"></script>
+<script src="js/jobs.js?v=20261023l"></script>
+<script src="js/sprites.js?v=20261023l"></script>
+<script>
+'use strict';
+(() => {
+// 神魔共戰：即時戰鬥原型。神魔自動普攻，玩家點技能、出卡，看準敵人蓄力時打斷或轉移。
+const W = 384, H = 216, GROUND = 200;
+const cv = document.querySelector('.stage'), g = cv.getContext('2d');
+g.imageSmoothingEnabled = false;
+const $ = (s) => document.querySelector(s);
+const rnd = (a, b) => a + Math.random() * (b - a);
+const pick = (a) => a[Math.floor(Math.random() * a.length)];
+const pct = (x) => Math.round(x * 100) + '%';
+
+// ───── 資料 ─────
+const HEROES = {
+  guangong: {
+    name: '關公', role: '守護', hp: 130, atk: 11, rate: 2.3, melee: true, x: 166, atkAnim: 'punch', skillAnim: 'ult', color: '#40d070',
+    skill: { name: '單刀赴會', cd: 9, desc: '衝向目標砍一刀，3 倍傷害。之後 5 秒嘲諷：敵人的重擊全部改打關公，關公受到的傷害減少三成。' },
+  },
+  yuelao: {
+    name: '月老', role: '支援', hp: 90, atk: 7, rate: 2.6, melee: true, x: 116, atkAnim: 'punch', skillAnim: 'cast', color: '#ff5c8d',
+    skill: { name: '千里一線牽', cd: 10, desc: '紅線綁住目標，另外兩位隊友立刻追擊它；同時替生命最低的隊友回復 25% 生命。' },
+  },
+  yukionna: {
+    name: '雪女', role: '控制', hp: 80, atk: 9, rate: 2.5, melee: false, x: 66, atkAnim: 'punch', skillAnim: 'ult', color: '#a0e0ff',
+    skill: { name: '吹雪', cd: 11, desc: '凍住目標 3 秒，期間不能行動。目標正在蓄力就等於免費打斷；在金色破綻時凍住算完美打斷。' },
+  },
+};
+const ORDER = ['guangong', 'yuelao', 'yukionna'];
+
+// 敵人：普通一種、精英一種，預告和應對方式不同
+const FOES = {
+  zombie: {
+    name: '夜行殭屍', sprite: 'zombie', hp: 150, light: 6, rate: 3.0, every: [5, 8],
+    heavy: [{ name: '撕咬', dmg: 30, charge: 2.4, win: 0.8 }],
+  },
+  warden: {
+    name: '無臉典獄長', sprite: 'boss', hp: 440, light: 9, rate: 2.6, every: [4.5, 6.5], elite: true,
+    heavy: [
+      { name: '鎖魂鏈', dmg: 48, charge: 2.6, win: 0.6 },
+      { name: '無臉凝視', dmg: 22, aoe: true, charge: 3.0, win: 0.5 },
+    ],
+  },
+};
+
+// 神器：不只加數值，會改變打法
+const ARTIFACTS = {
+  thunder: { name: '雷霆遺物', desc: '成功打斷後，全隊下一次攻擊傷害 ×2，被打中的敵人蓄力倒退 1 秒。鼓勵你主動找打斷時機。' },
+  soulfire: { name: '魂火結晶', desc: '有神魔倒下時，干涉點立刻補滿，並得到一次免費打斷。隊友越危險越有機會翻盤。' },
+  mask: { name: '因果面具', desc: '每次成功反制（打斷或轉移），下一位出手的隊友傷害 ×2.5，並吸取一半傷害為生命。鼓勵把反制和出手連在一起。' },
+};
+
+// 卡牌：一次性戰術，免費打出；每 8 秒補一張，手牌最多 3 張
+const CARDS = {
+  ward:  { name: '金鐘罩', desc: '6 秒內全隊受到的重擊傷害減半。' },
+  salve: { name: '還魂丹', desc: '生命最低的隊友回復 35% 生命。' },
+  rally: { name: '擂鼓', desc: '6 秒內全隊攻擊速度加快五成。' },
+  focus: { name: '凝神', desc: '立刻得到 2 點干涉點。' },
+  guagu: { name: '刮骨療毒', hero: 'guangong', desc: '關公回復 40% 生命，5 秒內受到的傷害減半。' },
+  book:  { name: '姻緣簿', hero: 'yuelao', desc: '所有神魔的技能冷卻立刻減少 5 秒。' },
+  snownight: { name: '雪夜之約', hero: 'yukionna', desc: '6 秒內所有敵人蓄力變慢一半，金色破綻也更好抓。' },
+  blade: { name: '青龍偃月', hero: 'guangong', desc: '關公下一次「單刀赴會」傷害再翻倍，並讓目標進入破綻。' },
+  thread: { name: '月下紅繩', hero: 'yuelao', desc: '把所有敵人綁在一起 5 秒：打中任何一個，其他敵人也受到一半傷害。' },
+  icicle: { name: '冰柱', hero: 'yukionna', desc: '雪女射出冰柱，對目標造成 4 倍傷害。目標被凍住時改為 6 倍。' },
+};
+const START_DECK = ['ward', 'salve', 'rally', 'focus', 'guagu', 'book', 'snownight'];
+const IP_MAX = 3, IP_REGEN = 7, CARD_EVERY = 8;
+
+// ───── 狀態 ─────
+let run, T = 0, units, heroes, foes, events, effects, shake, paused, speed, over, focus;
+let ip, ipT, hand, deck, discard, cardT, buffs, freeInt, stats, lastUi = 0;
+
+function newRun(art) {
+  run = { floor: 0, arts: art ? [art] : [], deck: [...START_DECK], hp: {}, stats: { int: 0, perfect: 0, red: 0, cards: 0, skills: 0, falls: 0 } };
+  for (const id of ORDER) run.hp[id] = HEROES[id].hp;
+  speed = 1; $('.speed').textContent = '速度 1×';
+  nextFloor();
+}
+
+function floorFoes(f) {
+  if (f % 3 === 0) return ['warden', ...(f >= 6 ? ['zombie'] : [])];
+  return Array(Math.min(3, 1 + Math.ceil(f / 2))).fill('zombie');
+}
+
+function nextFloor() {
+  run.floor++;
+  const f = run.floor, k = 1 + 0.2 * (f - 1);
+  T = 0; events = []; effects = []; shake = 0; over = false;
+  heroes = ORDER.map((id) => {
+    const H0 = HEROES[id];
+    return { id, ...H0, side: 'ally', art: id, maxHp: H0.hp, hp: run.hp[id], dead: run.hp[id] <= 0, atkT: rnd(0.3, 1.2), cdT: 0, anim: null, ox: 0, lunge: null, busy: 0, flash: 0, guard: 0, nextMult: 1 };
+  });
+  const keys = floorFoes(f);
+  foes = keys.map((key, i) => {
+    const F = FOES[key], n = keys.length;
+    const x = F.elite ? 300 : 248 + i * (n === 1 ? 0 : 100 / (n - 1));
+    return {
+      key, ...F, side: 'enemy', x, maxHp: Math.round(F.hp * k), hp: Math.round(F.hp * k), k, dead: false,
+      lightT: rnd(1.5, F.rate), heavyT: rnd(2.5, 4) + i * 1.8, charge: null, stagger: 0, frozen: 0, flash: 0, lunge: null, ox: 0, atkUntil: 0, hurtUntil: 0, next: 0,
+    };
+  });
+  units = [...heroes, ...foes];
+  focus = foes[0];
+  ip = Math.min(IP_MAX, 2); ipT = 0; cardT = 0; freeInt = 0;
+  buffs = { ward: 0, rally: 0, slow: 0, thread: 0, mask: false, thunder: false, blade: false };
+  deck = shuffle([...run.deck]); discard = []; hand = [];
+  draw(); draw();
+  // 先暫停讓玩家觀察戰場
+  paused = true;
+  const elite = keys.includes('warden');
+  showBox(`<h2>第 ${f} 層${elite ? '・精英' : ''}</h2>
+    <p>敵人：${keys.map((k2) => FOES[k2].name).join('、')}</p>
+    ${elite ? '<p>典獄長有兩種重擊：「鎖魂鏈」打單人，可以轉移；「無臉凝視」打全隊，<b>只能打斷</b>，破綻也比較短。</p>' : '<p>殭屍蓄力「撕咬」時會標出要咬誰。可以打斷，或轉移給關公扛。</p>'}
+    <button class="btn primary wide go">開打</button>`);
+  $('.box .go').onclick = () => { hideBox(); paused = false; };
+}
+
+function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+function draw() {
+  if (hand.length >= 3) return;
+  if (!deck.length) { deck = shuffle(discard); discard = []; }
+  if (deck.length) hand.push(deck.pop());
+}
+
+// ───── 時間排程（用遊戲時間，暫停時一起停）─────
+const later = (s, fn) => events.push({ at: T + s, fn });
+const fx = (e) => effects.push({ t0: T, ...e });
+const float = (u, text, color = '#fff') => fx({ type: 'text', x: u.x + u.ox, y: GROUND - 92, text, color, dur: 0.9 });
+const aliveH = () => heroes.filter((h) => !h.dead);
+const aliveF = () => foes.filter((e) => !e.dead);
+const hero = (id) => heroes.find((h) => h.id === id);
+
+function play(u, name) {
+  const a = artAnim(u.art, name) || artAnim(u.art, 'punch');
+  u.anim = { name: ART[u.art].anims ? name : name, t0: T, a };
+}
+
+// ───── 神魔出手 ─────
+function heroAttack(h, e, mult = 1, opt = {}) {
+  if (h.dead) return;
+  if (!e || e.dead) e = targetFoe();
+  if (!e) return;
+  const anim = opt.anim || h.atkAnim;
+  play(h, anim);
+  const tot = (h.anim.a ? h.anim.a.ms.reduce((x, y) => x + y, 0) : 500) / 1000;
+  h.busy = T + tot;
+  const hitAt = Math.min(0.45, tot * 0.6);
+  if (h.melee && !opt.ranged) h.lunge = { t0: T, dur: hitAt * 2, dist: e.x - 40 - h.x };
+  else if (opt.thread) fx({ type: 'thread', x1: h.x + 10, x2: e.x, dur: 0.6 });
+  else later(hitAt * 0.4, () => fx({ type: 'bolt', x1: h.x + 14, x2: e.x, color: h.color, dur: hitAt * 0.8 }));
+  later(hitAt, () => damageFoe(h, e, mult, opt));
+}
+
+function damageFoe(h, e, mult, opt = {}) {
+  if (e.dead) { const n = targetFoe(); if (!n) return; e = n; }
+  let m = mult * h.nextMult; h.nextMult = 1;
+  if (buffs.mask) { m *= 2.5; }
+  if (e.stagger > T) m *= 1.5;
+  let d = Math.max(1, Math.round(h.atk * m * rnd(0.9, 1.1)));
+  hurtFoe(e, d, h.color, opt.big || m >= 2);
+  if (buffs.mask) { buffs.mask = false; heal(h, Math.round(d / 2)); float(h, '因果', '#d0a0ff'); }
+  if (buffs.thread > T) for (const o of aliveF()) if (o !== e) hurtFoe(o, Math.round(d / 2), '#ff5c8d');
+  if (opt.after) opt.after(e);
+}
+
+function hurtFoe(e, d, color, big) {
+  if (e.dead) return;
+  e.hp -= d; e.flash = T + 0.18; e.hurtUntil = T + 0.25;
+  float(e, String(d), big ? '#ffe070' : '#fff');
+  fx({ type: 'burst', x: e.x, color, dur: 0.4, seed: Math.random() * 6 });
+  if (big) shake = 3;
+  if (e.hp <= 0) {
+    e.hp = 0; e.dead = true; e.deadAt = T; e.charge = null;
+    if (focus === e) focus = targetFoe();
+    if (!aliveF().length) winFight();
+  }
+}
+
+function targetFoe() { return (focus && !focus.dead) ? focus : aliveF()[0] || null; }
+
+function heal(h, n) {
+  if (h.dead) return;
+  const v = Math.min(n, h.maxHp - h.hp);
+  h.hp += v;
+  if (v > 0) { float(h, '+' + v, '#7fe07f'); fx({ type: 'sparkle', x: h.x, dur: 0.8 }); }
+}
+
+function useSkill(h) {
+  if (over || paused || h.dead || h.cdT > 0) return;
+  const e = targetFoe(); if (!e) return;
+  h.cdT = h.skill.cd; run.stats.skills++;
+  if (h.id === 'guangong') {
+    const blade = buffs.blade; buffs.blade = false;
+    heroAttack(h, e, blade ? 6 : 3, { anim: h.skillAnim, big: true, after: (t) => { if (blade) stagger(t, 2.5); } });
+    h.guard = Math.max(h.guard, T + 5); h.taunt = T + 5;
+    float(h, '嘲諷', '#40d070');
+  } else if (h.id === 'yuelao') {
+    heroAttack(h, e, 1, { anim: h.skillAnim, ranged: true, thread: true });
+    later(0.45, () => { for (const o of aliveH()) if (o !== h) followUp(o, e); });
+    const low = aliveH().sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)[0];
+    if (low) later(0.3, () => heal(low, Math.round(low.maxHp * 0.25)));
+  } else if (h.id === 'yukionna') {
+    heroAttack(h, e, 1, { anim: h.skillAnim, after: (t) => freeze(t, 3) });
+  }
+}
+
+function followUp(h, e) {
+  if (h.dead || !e || e.dead) return;
+  float(h, '追擊', '#ffe070');
+  h.atkT = h.rate;
+  heroAttack(h, e, 1);
+}
+
+function freeze(e, s) {
+  if (e.dead) return;
+  e.frozen = T + s;
+  fx({ type: 'ice', x: e.x, dur: s });
+  if (e.charge) interrupt(e, 'free');
+}
+
+function stagger(e, s) {
+  if (e.dead) return;
+  e.stagger = T + s; e.charge = null;
+  float(e, '破綻', '#ffe070');
+}
+
+// ───── 干涉 ─────
+function inWindow(e) { return e.charge && e.charge.dur - e.charge.t <= e.charge.win; }
+function chargingFoes() { return aliveF().filter((e) => e.charge).sort((a, b) => (a.charge.dur - a.charge.t) - (b.charge.dur - b.charge.t)); }
+
+// 點打斷：打斷最快要出手的那個（你鎖定的敵人正在蓄力就優先它）
+function doInterrupt() {
+  if (over || paused) return;
+  const list = chargingFoes(); if (!list.length) return;
+  const e = list.includes(focus) ? focus : list[0];
+  if (freeInt > 0) { freeInt--; interrupt(e, 'free'); return; }
+  if (ip < 2) return;
+  ip -= 2; interrupt(e, 'pay');
+}
+
+function interrupt(e, how) {
+  const perfect = inWindow(e);
+  const name = e.charge.name;
+  e.charge = null; e.heavyT = rnd(...e.every);
+  run.stats.int++;
+  fx({ type: 'flash', color: perfect ? 'rgba(255,224,112,A)' : 'rgba(160,220,255,A)', dur: 0.25 });
+  if (perfect) {
+    run.stats.perfect++;
+    if (how === 'pay') ip = Math.min(IP_MAX, ip + 1);
+    stagger(e, 2.5);
+    float(e, '完美打斷', '#ffe070');
+    for (const h of aliveH()) later(0.15 + Math.random() * 0.2, () => followUp(h, e));
+  } else {
+    float(e, '打斷「' + name + '」', '#a0e0ff');
+    e.next = T + 0.6;
+  }
+  countered(e, true);
+}
+
+// 點轉移：把正在瞄某位隊友的單體重擊，改打關公（關公擋下四成）
+function redirectable() {
+  const gg = hero('guangong');
+  return chargingFoes().find((e) => !e.charge.aoe && e.charge.target !== gg && !e.charge.moved) || null;
+}
+function doRedirect() {
+  if (over || paused || ip < 1) return;
+  const e = redirectable(); if (!e) return;
+  const gg = hero('guangong');
+  ip -= 1; run.stats.red++;
+  if (gg && !gg.dead) { e.charge.target = gg; e.charge.cut = 0.6; }
+  else { e.charge.target = aliveH().sort((a, b) => b.hp - a.hp)[0]; }
+  e.charge.moved = true;
+  float(e.charge.target, '我來擋', '#40d070');
+  countered(e, false);
+}
+
+function countered(e, wasInt) {
+  if (run.arts.includes('mask')) buffs.mask = true;
+  if (wasInt && run.arts.includes('thunder')) {
+    for (const h of aliveH()) h.nextMult = Math.max(h.nextMult, 2);
+    for (const o of aliveF()) if (o.charge) o.charge.t = Math.max(0, o.charge.t - 1);
+    fx({ type: 'flash', color: 'rgba(200,220,255,A)', dur: 0.3 });
+  }
+}
+
+// ───── 敵人 ─────
+function foeAct(e, dt) {
+  if (e.dead || e.stagger > T || e.frozen > T || e.next > T) return;
+  if (e.charge) {
+    e.charge.t += dt * (buffs.slow > T ? 0.5 : 1);
+    if (e.charge.target && e.charge.target.dead) { const a = aliveH(); e.charge.target = a.length ? pick(a) : null; }
+    if (e.charge.t >= e.charge.dur) release(e);
+    return;
+  }
+  e.heavyT -= dt; e.lightT -= dt;
+  if (e.heavyT <= 0) {
+    const p = pick(e.heavy), a = aliveH(); if (!a.length) return;
+    const gg = hero('guangong');
+    const target = p.aoe ? null : (gg && !gg.dead && gg.taunt > T ? gg : pick(a));
+    e.charge = { ...p, dur: p.charge, t: 0, target, cut: 1 };
+  } else if (e.lightT <= 0) {
+    e.lightT = e.rate * rnd(0.85, 1.15);
+    const a = aliveH(); if (!a.length) return;
+    const t = pick(a);
+    e.atkUntil = T + 0.35; e.lunge = { t0: T, dur: 0.4, dist: -24 };
+    later(0.2, () => hurtHero(t, Math.round(e.light * e.k), false));
+  }
+}
+
+function release(e) {
+  const c = e.charge; e.charge = null; e.heavyT = rnd(...e.every);
+  e.atkUntil = T + 0.5; e.lunge = { t0: T, dur: 0.5, dist: -60 };
+  const d = Math.round(c.dmg * e.k);
+  later(0.25, () => {
+    if (c.aoe) { fx({ type: 'flash', color: 'rgba(200,40,60,A)', dur: 0.4 }); for (const h of aliveH()) hurtHero(h, d, true); }
+    else if (c.target) hurtHero(c.target, Math.round(d * c.cut), true);
+    shake = 4;
+  });
+}
+
+function hurtHero(h, d, heavy) {
+  if (h.dead || over) return;
+  if (heavy && buffs.ward > T) d = Math.round(d * 0.5);
+  if (h.guard > T) d = Math.round(d * (h.id === 'guangong' && h.taunt > T ? 0.7 : 0.5));
+  d = Math.max(1, d);
+  h.hp -= d; h.flash = T + 0.18;
+  if (!h.busy || h.busy < T) play(h, 'hurt');
+  float(h, String(d), heavy ? '#ff7070' : '#ffb0b0');
+  if (h.hp <= 0) {
+    h.hp = 0; h.dead = true; run.stats.falls++;
+    play(h, 'hurt');
+    float(h, '倒下', '#ff7070');
+    if (run.arts.includes('soulfire')) { ip = IP_MAX; freeInt++; fx({ type: 'soul', x: h.x, dur: 1.5 }); }
+    if (!aliveH().length) loseRun();
+  }
+}
+
+// ───── 每一幀 ─────
+let lastNow = performance.now();
+function frame(now) {
+  const real = Math.min(0.05, (now - lastNow) / 1000); lastNow = now;
+  if (run && !paused && !over) step(real * speed);
+  render();
+  if (now - lastUi > 100) { lastUi = now; ui(); }
+  requestAnimationFrame(frame);
+}
+
+function step(dt) {
+  T += dt;
+  for (let i = events.length - 1; i >= 0; i--) if (events[i].at <= T) { const ev = events.splice(i, 1)[0]; ev.fn(); }
+  ipT += dt; if (ipT >= IP_REGEN) { ipT = 0; ip = Math.min(IP_MAX, ip + 1); }
+  cardT += dt; if (cardT >= CARD_EVERY) { cardT = 0; draw(); }
+  for (const h of heroes) {
+    if (h.dead) continue;
+    h.cdT = Math.max(0, h.cdT - dt);
+    h.atkT -= dt * (buffs.rally > T ? 1.5 : 1);
+    if (h.atkT <= 0 && h.busy < T) { h.atkT = h.rate * rnd(0.9, 1.1); heroAttack(h, targetFoe()); }
+  }
+  for (const e of foes) foeAct(e, dt);
+}
+
+// ───── 畫面 ─────
+function lungeX(u) {
+  if (!u.lunge) return 0;
+  const p = (T - u.lunge.t0) / u.lunge.dur;
+  if (p >= 1) { u.lunge = null; return 0; }
+  return u.lunge.dist * Math.sin(p * Math.PI);
+}
+
+function drawBackground() {
+  // 靈魂結算終端的地下走廊：拱門、魂燈、濕地板
+  g.fillStyle = '#1b1826'; g.fillRect(0, 0, W, 152);
+  for (let i = 0; i < 5; i++) {
+    const x = 8 + i * 80;
+    g.fillStyle = '#141120'; g.fillRect(x, 40, 56, 112);
+    g.fillStyle = '#2c2740'; g.fillRect(x - 4, 36, 64, 4); g.fillRect(x - 4, 36, 4, 116); g.fillRect(x + 56, 36, 4, 116);
+    const fl = 0.6 + 0.4 * Math.sin(T * 3 + i * 1.7);
+    g.fillStyle = `rgba(120,200,255,${0.5 * fl})`; g.fillRect(x + 25, 52, 6, 8);
+    const grd = g.createRadialGradient(x + 28, 56, 1, x + 28, 56, 40); grd.addColorStop(0, `rgba(120,200,255,${0.16 * fl})`); grd.addColorStop(1, 'rgba(120,200,255,0)');
+    g.fillStyle = grd; g.fillRect(x - 12, 16, 80, 80);
+  }
+  g.fillStyle = '#332d48'; g.fillRect(0, 148, W, 4);
+  g.fillStyle = '#25212f'; g.fillRect(0, 152, W, H - 152);
+  g.fillStyle = '#1e1b28';
+  for (let y = 152, k = 0; y < H; y += 8 + k * 2, k++) g.fillRect(0, y, W, 1);
+  for (let i = -8; i <= 8; i++) { g.strokeStyle = '#1e1b28'; g.beginPath(); g.moveTo(W / 2 + i * 30, 152); g.lineTo(W / 2 + i * 60, H); g.stroke(); }
+}
+
+function drawHero(h) {
+  h.ox = lungeX(h);
+  const x = h.x + h.ox;
+  let sheet = 'pose', i = 0;
+  if (h.anim && h.anim.a) {
+    const ms = h.anim.a.ms; let t = (T - h.anim.t0) * 1000; const tot = ms.reduce((a, b) => a + b, 0);
+    if (t < tot) { sheet = h.anim.a.sheet; while (i < ms.length - 1 && t >= ms[i]) t -= ms[i++]; }
+    else if (h.dead) { sheet = h.anim.a.sheet; i = ms.length - 1; }
+    else h.anim = null;
+  }
+  const white = h.flash > T && Math.floor((h.flash - T) / 0.06) % 2 === 0;
+  g.fillStyle = 'rgba(0,0,0,0.4)'; g.beginPath(); g.ellipse(x, GROUND, 22, 4, 0, 0, Math.PI * 2); g.fill();
+  if (h.dead) g.globalAlpha = 0.35;
+  drawArt(g, h.art, sheet, i, x, GROUND, 1, { white });
+  g.globalAlpha = 1;
+  if (h.dead) return;
+  const top = GROUND - ART[h.art].sheets.pose[2] - 4;
+  bar(x, top, h.hp / h.maxHp, '#5fd35f');
+  if (h.taunt > T) { g.strokeStyle = 'rgba(64,208,112,0.8)'; g.lineWidth = 2; g.beginPath(); g.ellipse(x, GROUND - 2, 28, 6, 0, 0, Math.PI * 2); g.stroke(); }
+  // 被重擊瞄準：頭上紅色驚嘆號
+  const aimed = foes.filter((e) => !e.dead && e.charge && (e.charge.aoe || e.charge.target === h));
+  if (aimed.length) {
+    const blink = Math.floor(T * 8) % 2;
+    g.fillStyle = blink ? '#ff4050' : '#ffb0b0';
+    g.fillRect(x - 2, top - 20, 4, 9); g.fillRect(x - 2, top - 9, 4, 3);
+  }
+}
+
+function drawFoe(e) {
+  e.ox = lungeX(e);
+  const x = e.x + e.ox;
+  const spr = 'u:' + e.sprite, sh = UNIT_ART[e.sprite][1];
+  let alpha = 1;
+  if (e.dead) { const k = (T - e.deadAt) / 0.6; if (k >= 1) return; alpha = 1 - k; }
+  const pose = T < e.hurtUntil || e.dead || e.stagger > T ? 2 : T < e.atkUntil ? 1 : 0;
+  const white = e.flash > T && Math.floor((e.flash - T) / 0.06) % 2 === 0;
+  const trem = e.charge ? Math.sin(T * 60) * (inWindow(e) ? 2 : 1) : 0;
+  g.fillStyle = 'rgba(0,0,0,0.4)'; g.beginPath(); g.ellipse(x, GROUND, e.elite ? 34 : 20, 4, 0, 0, Math.PI * 2); g.fill();
+  // 蓄力時腳下發紅光，進入破綻窗變金光
+  if (e.charge) {
+    const c = inWindow(e) ? '255,224,112' : '255,60,70';
+    const grd = g.createRadialGradient(x, GROUND - sh / 2, 4, x, GROUND - sh / 2, sh * 0.8);
+    grd.addColorStop(0, `rgba(${c},0.35)`); grd.addColorStop(1, `rgba(${c},0)`);
+    g.fillStyle = grd; g.fillRect(x - sh, GROUND - sh * 1.4, sh * 2, sh * 1.6);
+  }
+  g.globalAlpha = alpha;
+  if (e.frozen > T) g.filter = 'saturate(0.3) brightness(1.3) hue-rotate(160deg)';
+  drawArt(g, spr, 'pose', pose, x + trem, GROUND, 1, { flip: true, white });
+  g.filter = 'none'; g.globalAlpha = 1;
+  if (e.dead) return;
+  const top = GROUND - sh - 6;
+  bar(x, top, e.hp / e.maxHp, '#e05050');
+  if (e === focus) {
+    g.fillStyle = '#ffe070';
+    g.beginPath(); g.moveTo(x - 5, GROUND + 9); g.lineTo(x + 5, GROUND + 9); g.lineTo(x, GROUND + 3); g.fill();
+  }
+  g.font = 'bold 10px sans-serif'; g.textAlign = 'center';
+  if (e.stagger > T) { g.fillStyle = '#ffe070'; g.fillText('破綻', x, top - 4); }
+  else if (e.frozen > T) { g.fillStyle = '#a0e0ff'; g.fillText('冰凍', x, top - 4); }
+  if (e.charge) {
+    // 蓄力條：紅色是準備，最後金色那段是破綻窗
+    const c = e.charge, bw = 46, by = top - 20, bx = x - bw / 2;
+    const winX = bx + bw * (1 - c.win / c.dur);
+    g.fillStyle = '#000'; g.fillRect(bx - 1, by - 1, bw + 2, 6);
+    g.fillStyle = '#5a4a1a'; g.fillRect(winX, by, bx + bw - winX, 4);
+    g.fillStyle = inWindow(e) ? '#ffe070' : '#ff4050'; g.fillRect(bx, by, bw * Math.min(1, c.t / c.dur), 4);
+    g.fillStyle = inWindow(e) ? '#ffe070' : '#ffb0b0';
+    g.fillText((c.aoe ? '全隊・' : '') + c.name, x, by - 3);
+    if (c.target && !c.target.dead) {
+      g.strokeStyle = inWindow(e) ? 'rgba(255,224,112,0.7)' : 'rgba(255,64,80,0.55)'; g.lineWidth = 1.5; g.setLineDash([4, 3]);
+      g.beginPath(); g.moveTo(x - 20, GROUND - sh * 0.6); g.lineTo(c.target.x + c.target.ox + 14, GROUND - 46); g.stroke(); g.setLineDash([]);
+    }
+  }
+}
+
+function bar(x, y, k, color) {
+  g.fillStyle = '#000'; g.fillRect(x - 17, y - 1, 34, 5);
+  g.fillStyle = color; g.fillRect(x - 16, y, Math.max(0, 32 * k), 3);
+}
+
+function render() {
+  g.save();
+  if (shake > 0) { g.translate(rnd(-1, 1) * shake, rnd(-1, 1) * shake); shake = Math.max(0, shake - 0.3); }
+  drawBackground();
+  if (foes) {
+    // 無臉凝視：全隊腳下一條紅色危險區
+    if (foes.some((e) => !e.dead && e.charge && e.charge.aoe)) {
+      const blink = 0.18 + 0.12 * Math.sin(T * 14);
+      g.fillStyle = `rgba(255,40,60,${blink})`; g.fillRect(10, GROUND - 8, 180, 14);
+    }
+    for (const h of [...heroes].reverse()) drawHero(h);
+    for (const e of foes) drawFoe(e);
+  }
+  effects = (effects || []).filter((e) => T < e.t0 + e.dur);
+  for (const e of effects) drawFx(e);
+  const v = g.createRadialGradient(W / 2, H * 0.6, 80, W / 2, H * 0.6, 260); v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,0.5)');
+  g.fillStyle = v; g.fillRect(0, 0, W, H);
+  if (paused && !over && $('.overlay').classList.contains('show') === false) { g.fillStyle = 'rgba(0,0,0,0.5)'; g.fillRect(0, 0, W, H); g.fillStyle = '#ffe070'; g.font = 'bold 20px sans-serif'; g.textAlign = 'center'; g.fillText('暫停中', W / 2, H / 2); }
+  g.restore();
+}
+
+function drawFx(e) {
+  const k = (T - e.t0) / e.dur;
+  if (e.type === 'text') { g.globalAlpha = 1 - k; g.font = 'bold 13px sans-serif'; g.textAlign = 'center'; g.fillStyle = '#000'; g.fillText(e.text, e.x + 1, e.y - k * 20 + 1); g.fillStyle = e.color; g.fillText(e.text, e.x, e.y - k * 20); g.globalAlpha = 1; }
+  if (e.type === 'bolt') {
+    const p = Math.min(1, k), xx = e.x1 + (e.x2 - e.x1) * p, yy = GROUND - 46 - Math.sin(p * Math.PI) * 12;
+    for (let s = 0; s < 5; s++) { g.fillStyle = e.color; g.globalAlpha = 1 - s * 0.18; g.fillRect(Math.round(xx - s * 6 - 3), Math.round(yy - 3), 6 - s, 6 - s); }
+    g.globalAlpha = 1; g.fillStyle = '#fff'; g.fillRect(Math.round(xx - 2), Math.round(yy - 2), 4, 4);
+  }
+  if (e.type === 'thread') {
+    g.strokeStyle = '#ff3048'; g.lineWidth = 2; g.beginPath();
+    const p = Math.min(1, k * 2);
+    for (let s = 0; s <= 20; s++) { const t = s / 20 * p; const xx = e.x1 + (e.x2 - e.x1) * t, yy = GROUND - 50 - Math.sin(t * Math.PI) * 30 + Math.sin(t * 20 + T * 20) * 2; s ? g.lineTo(xx, yy) : g.moveTo(xx, yy); }
+    g.stroke();
+  }
+  if (e.type === 'burst') {
+    for (let s = 0; s < 10; s++) {
+      const ang = s * 0.63 + e.seed, d = 6 + k * 26;
+      g.globalAlpha = 1 - k; g.fillStyle = s % 3 ? e.color : '#fff';
+      g.fillRect(Math.round(e.x + Math.cos(ang) * d - 2), Math.round(GROUND - 40 + Math.sin(ang) * d * 0.8 - 2), 4, 4);
+    }
+    g.globalAlpha = 1;
+  }
+  if (e.type === 'sparkle') {
+    for (let s = 0; s < 5; s++) {
+      const xx = e.x - 16 + s * 8, yy = GROUND - 20 - ((k + s * 0.17) % 1) * 50;
+      g.globalAlpha = 1 - k; g.fillStyle = '#7fe07f';
+      g.fillRect(Math.round(xx - 1), Math.round(yy - 3), 2, 6); g.fillRect(Math.round(xx - 3), Math.round(yy - 1), 6, 2);
+    }
+    g.globalAlpha = 1;
+  }
+  if (e.type === 'ice') {
+    g.globalAlpha = 0.6 * (1 - k * 0.5);
+    for (let s = 0; s < 6; s++) { g.fillStyle = s % 2 ? '#c0ecff' : '#ffffff'; g.fillRect(Math.round(e.x - 20 + s * 8), Math.round(GROUND - 12 - (s % 3) * 8), 5, 12 + (s % 3) * 8); }
+    g.globalAlpha = 1;
+  }
+  if (e.type === 'soul') {
+    for (let s = 0; s < 6; s++) { g.globalAlpha = 1 - k; g.fillStyle = s % 2 ? '#80c0ff' : '#d0f0ff'; g.fillRect(Math.round(e.x - 10 + s * 4), Math.round(GROUND - 30 - k * 60 - (s % 3) * 6), 4, 6); }
+    g.globalAlpha = 1;
+  }
+  if (e.type === 'flash') { g.fillStyle = e.color.replace('A', (1 - k) * 0.5); g.fillRect(0, 0, W, H); }
+}
+
+// 點畫面上的敵人：設定集火目標
+cv.addEventListener('pointerdown', (ev) => {
+  if (!foes || over) return;
+  const r = cv.getBoundingClientRect(), x = (ev.clientX - r.left) * W / r.width;
+  let best = null, bd = 40;
+  for (const e of aliveF()) { const d = Math.abs(e.x - x); if (d < bd) { bd = d; best = e; } }
+  if (best) focus = best;
+});
+
+// ───── 介面 ─────
+function heroCards() {
+  const box = $('.heroes'); box.innerHTML = '';
+  for (const id of ORDER) {
+    const H0 = HEROES[id], b = document.createElement('button');
+    b.className = 'btn hero'; b.dataset.id = id;
+    b.appendChild(artImg(id, 38));
+    b.insertAdjacentHTML('beforeend', `<div><b>${H0.name}</b>・${H0.role}</div><div class="hpb"><div></div></div><div class="sk">${H0.skill.name}</div><div class="cdv"></div>`);
+    b.onclick = () => useSkill(hero(id));
+    box.appendChild(b);
+  }
+}
+
+function playCard(i) {
+  if (over || paused) return;
+  const id = hand[i], C = CARDS[id]; if (!C) return;
+  if (C.hero && hero(C.hero).dead) return;
+  hand.splice(i, 1); discard.push(id); run.stats.cards++;
+  const gg = hero('guangong');
+  if (id === 'ward') { buffs.ward = T + 6; for (const h of aliveH()) float(h, '金鐘罩', '#ffe070'); }
+  if (id === 'salve') { const low = aliveH().sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)[0]; if (low) heal(low, Math.round(low.maxHp * 0.35)); }
+  if (id === 'rally') { buffs.rally = T + 6; for (const h of aliveH()) float(h, '擂鼓', '#ff9a50'); }
+  if (id === 'focus') { ip = Math.min(IP_MAX, ip + 2); }
+  if (id === 'guagu') { heal(gg, Math.round(gg.maxHp * 0.4)); gg.guard = Math.max(gg.guard, T + 5); }
+  if (id === 'book') { for (const h of heroes) h.cdT = Math.max(0, h.cdT - 5); float(hero('yuelao'), '姻緣簿', '#ff5c8d'); }
+  if (id === 'snownight') { buffs.slow = T + 6; fx({ type: 'flash', color: 'rgba(160,220,255,A)', dur: 0.5 }); }
+  if (id === 'blade') { buffs.blade = true; float(gg, '青龍偃月', '#40d070'); }
+  if (id === 'thread') { buffs.thread = T + 5; for (const e of aliveF()) float(e, '紅繩', '#ff5c8d'); }
+  if (id === 'icicle') { const y = hero('yukionna'), e = targetFoe(); if (e) heroAttack(y, e, e.frozen > T ? 6 : 4, { anim: 's2', big: true }); }
+  ui();
+}
+
+function ui() {
+  if (!run) return;
+  $('.floor').textContent = `第 ${run.floor} 層`;
+  $('.ipbar').innerHTML = '干涉' + [0, 1, 2].map((i) => `<i class="${i < ip ? 'on' : ''}"></i>`).join('') + (freeInt ? `<span style="color:#80c0ff">＋魂火${freeInt}</span>` : '');
+  const ch = chargingFoes();
+  const canInt = ch.length && (ip >= 2 || freeInt > 0);
+  const hot = ch.some(inWindow);
+  const bi = $('.int'); bi.disabled = !canInt || over; bi.classList.toggle('hot', !!(canInt && hot));
+  bi.textContent = freeInt ? '打斷（免費）' : '打斷 ◆◆';
+  const br = $('.red'); br.disabled = !(redirectable() && ip >= 1) || over;
+  // 預告文字
+  const t = $('.tele');
+  if (ch.length) {
+    t.innerHTML = ch.map((e) => {
+      const tg = e.charge.aoe ? '全隊' : (e.charge.target ? e.charge.target.name : '');
+      return `${e.name}蓄力 <b class="${inWindow(e) ? 'win' : ''}">「${e.charge.name}」→ ${tg}${inWindow(e) ? '　破綻！現在打斷' : ''}</b>`;
+    }).join('<br>');
+  } else t.textContent = focus && !focus.dead ? `集火：${focus.name}（點畫面上的敵人可以換目標）` : '';
+  for (const b of document.querySelectorAll('.hero')) {
+    const h = hero(b.dataset.id); if (!h) continue;
+    b.querySelector('.hpb div').style.width = pct(h.hp / h.maxHp);
+    b.querySelector('.cdv').style.height = h.dead ? '100%' : pct(h.cdT / h.skill.cd);
+    b.querySelector('.sk').textContent = h.dead ? '倒下' : h.cdT > 0 ? `${h.skill.name} ${Math.ceil(h.cdT)}` : h.skill.name;
+    b.classList.toggle('ready', !h.dead && h.cdT <= 0);
+    b.classList.toggle('down', h.dead);
+  }
+  const hb = $('.hand'), key = hand.join(',') + '|' + heroes.map((h) => h.dead).join(',');
+  if (hb.dataset.key !== key) {
+    hb.dataset.key = key; hb.innerHTML = '';
+    for (let i = 0; i < 3; i++) {
+      const id = hand[i], C = CARDS[id], b = document.createElement('button');
+      if (!C) { b.className = 'btn card empty'; b.textContent = '補牌中'; b.disabled = true; }
+      else {
+        b.className = 'btn card' + (C.hero ? ' ex' : '');
+        b.innerHTML = `<b>${C.name}</b>${C.desc}`;
+        b.disabled = !!(C.hero && hero(C.hero).dead);
+        b.onclick = () => playCard(i);
+      }
+      hb.appendChild(b);
+    }
+  }
+  $('.meta').innerHTML = `神器：${run.arts.length ? run.arts.map((a) => `<span class="art">${ARTIFACTS[a].name}</span>`).join('、') : '無'}　｜　下一張牌 ${Math.ceil(CARD_EVERY - cardT)} 秒`;
+}
+
+function helpText() {
+  const hs = ORDER.map((id) => `<p><b>${HEROES[id].name}・${HEROES[id].skill.name}</b>（冷卻 ${HEROES[id].skill.cd} 秒）：${HEROES[id].skill.desc}</p>`).join('');
+  const as = Object.values(ARTIFACTS).map((a) => `<p><b>${a.name}</b>：${a.desc}</p>`).join('');
+  $('.help').innerHTML = `
+    <p>神魔會自己普攻你鎖定的敵人（腳下黃色箭頭）。點畫面上的敵人換目標。</p>
+    <p>敵人準備重擊時，頭上會出現蓄力條，紅線指向要打的人。蓄力條最後的<b>金色那段是破綻</b>。</p>
+    <p><b>打斷</b>（2 點干涉）：取消重擊。在金色破綻時打斷算<b>完美打斷</b>：退回 1 點、敵人破綻 2.5 秒（受到傷害 1.5 倍），全隊立刻追擊。</p>
+    <p><b>轉移</b>（1 點干涉）：把打單人的重擊改打關公，關公只受六成傷害。打全隊的招不能轉移。</p>
+    <p>干涉點最多 3 點，每 ${IP_REGEN} 秒回 1 點。卡牌免費打出，每 ${CARD_EVERY} 秒補一張，橘框是角色專屬卡，角色倒下就不能用。</p>
+    <p>倒下的神魔這一層不能再行動，下一層用三成生命回來。三位都倒下就重新開始。</p>
+    ${hs}<p style="margin-top:8px;color:var(--gold)">神器</p>${as}`;
+}
+
+// ───── 勝負、獎勵 ─────
+function winFight() {
+  if (over) return; over = true;
+  for (const h of heroes) run.hp[h.id] = h.dead ? Math.round(h.maxHp * 0.3) : Math.min(h.maxHp, h.hp + Math.round(h.maxHp * 0.15));
+  setTimeout(showReward, 900);
+}
+
+function rewardPool() {
+  const pool = [];
+  for (const a of Object.keys(ARTIFACTS)) if (!run.arts.includes(a)) pool.push({ kind: 'art', id: a });
+  for (const c of ['blade', 'thread', 'icicle', 'ward', 'salve', 'rally', 'focus', 'guagu', 'book', 'snownight']) pool.push({ kind: 'card', id: c });
+  pool.push({ kind: 'heal' });
+  shuffle(pool);
+  // 一定有一件神器可以選（還有的話）
+  const out = [], art = pool.find((p) => p.kind === 'art');
+  if (art) out.push(art);
+  for (const p of pool) { if (out.length >= 3) break; if (!out.includes(p) && !(p.kind === 'card' && out.some((o) => o.kind === 'card' && o.id === p.id))) out.push(p); }
+  return out;
+}
+
+function showReward() {
+  const opts = rewardPool(), s = run.stats;
+  showBox(`<h2>第 ${run.floor} 層通過</h2>
+    <p class="muted">打斷 ${s.int} 次（完美 ${s.perfect}）・轉移 ${s.red} 次・出卡 ${s.cards} 張・技能 ${s.skills} 次</p>
+    <p>選一項獎勵：</p>
+    ${opts.map((o, i) => `<button class="btn opt" data-i="${i}">${o.kind === 'art' ? `<b>神器・${ARTIFACTS[o.id].name}</b><br>${ARTIFACTS[o.id].desc}` : o.kind === 'card' ? `<b>加入卡牌・${CARDS[o.id].name}</b>${CARDS[o.id].hero ? `（${HEROES[CARDS[o.id].hero].name}專屬）` : ''}<br>${CARDS[o.id].desc}` : '<b>休息</b><br>全隊回復 40% 生命，倒下的隊友也回來。'}</button>`).join('')}`);
+  document.querySelectorAll('.box .opt').forEach((b) => b.onclick = () => {
+    const o = opts[+b.dataset.i];
+    if (o.kind === 'art') run.arts.push(o.id);
+    if (o.kind === 'card') run.deck.push(o.id);
+    if (o.kind === 'heal') for (const id of ORDER) run.hp[id] = Math.min(HEROES[id].hp, Math.max(run.hp[id], 0) + Math.round(HEROES[id].hp * 0.4));
+    hideBox(); nextFloor();
+  });
+}
+
+function loseRun() {
+  if (over) return; over = true;
+  const s = run.stats;
+  setTimeout(() => {
+    showBox(`<h2>全隊倒下</h2>
+      <p>爬到第 ${run.floor} 層。</p>
+      <p class="muted">打斷 ${s.int} 次（完美 ${s.perfect}）・轉移 ${s.red} 次・出卡 ${s.cards} 張・技能 ${s.skills} 次・倒下 ${s.falls} 次</p>
+      <button class="btn primary wide again">再爬一次</button>`);
+    $('.box .again').onclick = () => { hideBox(); startScreen(); };
+  }, 900);
+}
+
+function showBox(html) { $('.box').innerHTML = html; $('.overlay').classList.add('show'); }
+function hideBox() { $('.overlay').classList.remove('show'); }
+
+function startScreen() {
+  showBox(`<h2>神魔共戰・試玩</h2>
+    <p>三位神魔自己會打。你負責<b>看敵人的蓄力預告</b>，在對的時機<b>打斷</b>或<b>轉移</b>，再搭配技能和卡牌。</p>
+    <p>關公扛傷害、月老補血兼帶隊友追擊、雪女凍人打斷。每 3 層出現精英無臉典獄長。</p>
+    <p>先選一件起始神器，之後每過一層再選獎勵。換不同神器試試看，打法會不一樣。</p>
+    ${Object.entries(ARTIFACTS).map(([id, a]) => `<button class="btn opt" data-id="${id}"><b>${a.name}</b><br>${a.desc}</button>`).join('')}`);
+  document.querySelectorAll('.box .opt').forEach((b) => b.onclick = () => { hideBox(); newRun(b.dataset.id); });
+}
+
+$('.int').onclick = doInterrupt;
+$('.red').onclick = doRedirect;
+$('.pause').onclick = () => { if (over || $('.overlay').classList.contains('show')) return; paused = !paused; $('.pause').textContent = paused ? '繼續' : '暫停'; };
+$('.speed').onclick = () => { speed = speed === 1 ? 0.6 : speed === 0.6 ? 1.4 : 1; $('.speed').textContent = '速度 ' + speed + '×'; };
+
+window.__s = () => ({ run, heroes, foes });
+heroCards(); helpText(); startScreen();
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
