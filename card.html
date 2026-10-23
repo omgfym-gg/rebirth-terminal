@@ -49,7 +49,7 @@
 <body>
 <div id="app">
   <h2>卡牌戰鬥・試玩</h2>
-  <p class="muted" style="font-size:13px">每回合 3 點能量、抽 5 張牌。敵人頭上會顯示它下一步要做什麼。一路往上爬 6 層樓，打贏拿經驗升級、解鎖專屬技能；死掉從頭爬，但等級會留著。</p>
+  <p class="muted" style="font-size:13px">每回合 3 點能量、抽 5 張牌。敵人頭上會顯示它下一步要做什麼。一路往上爬，越高的樓層敵人越強；每 3 層有菁英、每 6 層有魔王。打贏拿經驗升級、解鎖專屬技能；死掉從 1 樓重爬，但等級和裝備都留著。</p>
   <div class="screen-pick"></div>
   <div class="screen-battle" style="display:none">
     <canvas class="stage" width="384" height="216"></canvas>
@@ -283,7 +283,8 @@ const DEBUFF = {
   curse: ['咒', '#d050a0'], mark: ['標', '#ff6060'], seal: ['封', '#e0c060'], slow: ['緩', '#80a0c0'],
 };
 
-const MAX_LV = 10;
+const MAX_LV = 30; // Lv10 技能全解鎖；之後每級生命 +4、每 2 級攻擊 +1
+const lvAtk = (lv) => Math.max(0, Math.floor((lv - 10) / 2));
 const ATK_K = 1.7, FOE_HP_K = 0.7; // 節奏：我方傷害、敵人血量的倍率
 const expNeed = (lv) => 20 + lv * 10; // 從 lv 升到 lv+1 要的經驗
 const HEROES = Object.keys(KITS);
@@ -335,7 +336,8 @@ const FOES = {
   printer: { name: '卡紙印表機', hp: 18, exp: 4, plan: [['weak', 2], ['atk', 2, 3], ['atk', 6]] },
   judge:   { name: '考績審判官', hp: 110, exp: 25, boss: true, plan: [['vuln', 2], ['atk', 14], ['def', 12], ['atk', 5, 3], ['buff', 3]] },
 };
-// 一路往上爬的 6 層樓；exp 是清完這層的額外獎勵（打倒每隻怪另外給經驗，越上層越多）
+// 6 層一輪、無限往上爬（第 7 層又從殭屍開始，但更強）；exp 是清完這層的額外獎勵（打倒每隻怪另外給經驗，越上層越多）
+const floorOf = (n) => FIGHTS[n % FIGHTS.length];
 const FIGHTS = [
   { foes: ['zombie', 'printer'], exp: 3 },
   { foes: ['shade', 'wisp', 'shade'], exp: 3 },
@@ -431,7 +433,7 @@ function showGear(back) {
   showScreen('reward');
   const box = $('.screen-reward'); box.innerHTML = '';
   const T = gearStats();
-  box.append(Object.assign(document.createElement('div'), { className: 'panel', innerHTML: `<h3>裝備（${JOBS[heroId].name}）</h3><p class="muted">神族只能用神器，魔族只能用邪物，專屬武器只有本人能用。背包跟著靈魂走：換角色、轉生都會帶著。打倒菁英（第 3 層）和魔王（第 6 層）會掉落，魔王還可能掉角色的專屬武器。</p><p class="levelup">目前數值加成：${statText(Object.fromEntries(Object.entries(T).filter(([k, v]) => k !== 'fx' && v))) || '沒有'}</p>` }));
+  box.append(Object.assign(document.createElement('div'), { className: 'panel', innerHTML: `<h3>裝備（${JOBS[heroId].name}）</h3><p class="muted">神族只能用神器，魔族只能用邪物，專屬武器只有本人能用。背包跟著靈魂走：換角色、轉生都會帶著。每 3 層的菁英和每 6 層的魔王會掉落，魔王還可能掉角色的專屬武器。</p><p class="levelup">目前數值加成：${statText(Object.fromEntries(Object.entries(T).filter(([k, v]) => k !== 'fx' && v))) || '沒有'}</p>` }));
   for (const [slot, name] of Object.entries(SLOTS)) {
     const g = gear.bag.find((x) => x.uid === gear.eq[slot]);
     box.append(Object.assign(document.createElement('h3'), { textContent: `${name}：${g ? '' : '（空）'}` }));
@@ -518,10 +520,11 @@ function startFight() {
   gen++;
   // 爬到一半換了裝備，這裡重算
   const G2 = gearStats(); run.maxHp += G2.hp - run.G.hp; run.hp = Math.max(1, Math.min(run.maxHp, run.hp + G2.hp - run.G.hp)); run.G = G2;
-  const hero = { id: 'hero', side: 'ally', name: JOBS[heroId].name, art: heroId, hp: run.hp, maxHp: run.maxHp, block: 0, str: 0, weak: 0, vuln: 0, x: 110 };
-  const F = FIGHTS[run.fight].foes;
+  const hero = { id: 'hero', side: 'ally', name: JOBS[heroId].name, art: heroId, hp: run.hp, maxHp: run.maxHp, block: 0, str: lvAtk(run.lv), weak: 0, vuln: 0, x: 110 };
+  const F = floorOf(run.fight).foes;
   // 越往上爬敵人越硬、打越痛
-  const hpK = FOE_HP_K * (1 + run.fight * 0.15), atkUp = Math.max(0, run.fight - 1);
+  const loop = Math.floor(run.fight / FIGHTS.length);
+  const hpK = FOE_HP_K * (1 + run.fight * 0.15) * Math.pow(1.25, loop), atkUp = Math.max(0, run.fight - 1) + loop * 2;
   const foes = F.map((k, i) => ({ id: 'e' + i, side: 'enemy', key: k, ...FOES[k], hp: Math.round(FOES[k].hp * hpK), maxHp: Math.round(FOES[k].hp * hpK), plan: FOES[k].plan.map(([kind, v, n]) => [kind, kind === 'atk' ? v + atkUp : v, n]), block: 0, str: 0, weak: 0, vuln: 0, stun: 0, confuse: 0, link: 0, step: rnd(0, 1), x: FOES[k].boss ? 290 : 228 + i * (F.length > 2 ? 56 : 70) }));
   for (const u of [hero, ...foes]) Object.assign(u, { ox: 0, oy: 0, flash: 0, anim: null, dead: false, atkUntil: 0, hurtUntil: 0 });
   B = { hero, foes, draw: shuffle(run.deck.map(cardById)), hand: [], discard: [], energy: 3, charge: run.lv >= 10 ? 50 : 0, turn: 0, nextAtk: 1, atkCount: 0, ups: [], expStart: run.gained, lvStart: run.lv, st: {}, knock: 0, ingot: 0, turnCards: 0, cardCount: 0, firstBonus: 0 };
@@ -533,7 +536,7 @@ function startFight() {
   if (cs === 'all') hero.weak = 1;
   if (run.G.fx.stunStart) for (const f of foes) f.stun = 1;
   showScreen('battle');
-  $('.log').textContent = `第 ${run.fight + 1} 層（共 ${FIGHTS.length} 層）：${foes.map((f) => f.name).join('、')}`;
+  $('.log').textContent = `第 ${run.fight + 1} 層：${foes.map((f) => f.name).join('、')}`;
   startTurn();
 }
 
@@ -889,7 +892,9 @@ function gainExp(n) {
     // 新牌直接加進牌組；戰鬥中的話直接發到手上
     for (const c of K.cards) if (c.lv === lv) { news.push(`新牌「${c.n}」`); run.deck.push(heroId + '.' + c.key); if (B && !B.over) B.hand.push(cardById(heroId + '.' + c.key)); }
     for (const p of K.passives) if (p.lv === lv) news.push(`被動「${p.n}」`);
-    if (lv >= 9) news.push(lv === 10 ? '每場大招條從一半開始' : '生命上限 +4');
+    if (lv === 9) news.push('生命上限 +4');
+    if (lv === 10) news.push('每場大招條從一半開始');
+    if (lv > 10) news.push(lv % 2 === 0 ? '生命 +4、攻擊 +1' : '生命 +4');
   }
   if (after > before) { run.maxHp += (after - before) * 4; run.hp += (after - before) * 4; run.lv = after; if (B && !B.over) { B.hero.maxHp += (after - before) * 4; B.hero.hp += (after - before) * 4; } }
   return { before, after, news };
@@ -905,13 +910,15 @@ function levelUpHtml(r) {
 function winFight() {
   B.over = true;
   run.hp = B.hero.hp;
-  const r = gainExp(FIGHTS[run.fight].exp);
+  const r = gainExp(floorOf(run.fight).exp + Math.floor(run.fight / FIGHTS.length) * 5);
   r.news = [...B.ups, ...r.news]; r.before = B.lvStart;
   const got = run.gained - B.expStart;
   run.fight++;
   const box = $('.screen-reward'); box.innerHTML = '';
   showScreen('reward');
-  const drop = FIGHTS[run.fight - 1].drop;
+  const drop = floorOf(run.fight - 1).drop;
+  // 最高紀錄
+  prog[heroId].best = Math.max(prog[heroId].best || 0, run.fight); saveProg();
   const dropBox = () => {
     if (!drop) return;
     const it = rollGear(drop === '魔王');
@@ -925,14 +932,8 @@ function winFight() {
     box.append(el);
     if (cur) box.append(Object.assign(document.createElement('p'), { className: 'muted', textContent: `目前的${SLOTS[slot]}：${itemOf(cur).n}。不穿的話會放進背包。` }));
   };
-  if (run.fight >= FIGHTS.length) {
-    box.innerHTML = `<div class="panel"><h3>登頂！</h3><p>${JOBS[heroId].name}打倒了考績審判官。這一世獲得 ${run.gained} 經驗，現在 ${expLine()}。</p>${levelUpHtml(r)}</div>`;
-    dropBox();
-    box.append(button('再爬一次', () => showPick()));
-    return;
-  }
   run.hp = Math.min(run.maxHp, run.hp + Math.round(run.maxHp * 0.15));
-  box.append(Object.assign(document.createElement('div'), { className: 'panel', innerHTML: `<h3>贏了！這層 +${got} 經驗</h3><p class="muted">${expLine()}，生命回復一成半（${run.hp}/${run.maxHp}）。</p>${levelUpHtml(r)}` }));
+  box.append(Object.assign(document.createElement('div'), { className: 'panel', innerHTML: `<h3>${drop === '魔王' ? '打倒魔王！' : '贏了！'}第 ${run.fight} 層 +${got} 經驗</h3><p class="muted">${expLine()}，生命回復一成半（${run.hp}/${run.maxHp}）。</p>${levelUpHtml(r)}` }));
   dropBox();
   box.append(Object.assign(document.createElement('p'), { textContent: '選一個獎勵：' }));
   // 獎勵：加一張自己已解鎖的牌，或把牌組裡一張牌升級
@@ -944,7 +945,7 @@ function winFight() {
     const id = upable[0], c = cardById(id + '+');
     hand.append(cardEl(c, () => { run.deck[run.deck.indexOf(id)] = id + '+'; startFight(); }, false, '升級一張'));
   }
-  box.append(hand, button('都不要，直接上樓', () => startFight()));
+  box.append(hand, button('都不要，直接上樓', () => startFight()), button('見好就收，回去轉生', () => showPick()));
 }
 
 function loseRun() {
@@ -953,7 +954,7 @@ function loseRun() {
   setTimeout(() => {
     showScreen('reward');
     const box = $('.screen-reward');
-    box.innerHTML = `<div class="panel"><h3>${JOBS[heroId].name}倒下了（第 ${run.fight + 1} 層）</h3><p>死亡就是力量：這一世共獲得 ${run.gained} 經驗（含死亡的 5 點），等級和解鎖的技能都會帶到下一世。現在 ${expLine()}。</p>${levelUpHtml(r)}</div>`;
+    box.innerHTML = `<div class="panel"><h3>${JOBS[heroId].name}倒下了（第 ${run.fight + 1} 層）</h3><p>死亡就是力量：這一世共獲得 ${run.gained} 經驗（含死亡的 5 點），等級和解鎖的技能都會帶到下一世。現在 ${expLine()}，最高紀錄第 ${(prog[heroId] && prog[heroId].best) || 0} 層。</p>${levelUpHtml(r)}</div>`;
     box.append(button('轉生，再爬一次', () => showPick()));
   }, 700);
 }
@@ -987,7 +988,7 @@ function showPick() {
     const J = JOBS[sel], o = ORIGINS[sel], K = KITS[sel], L = levelOf(sel);
     intro.innerHTML = '';
     if (o) intro.append(Object.assign(document.createElement('span'), { className: 'tag origin', textContent: o[0] }), `${J.name}（${J.side}族）：${o[1]}`);
-    intro.append(Object.assign(document.createElement('p'), { className: 'levelup', textContent: `${expLine(sel)}　${K.theme}` }));
+    intro.append(Object.assign(document.createElement('p'), { className: 'levelup', textContent: `${expLine(sel)}・最高第 ${(prog[sel] && prog[sel].best) || 0} 層　${K.theme}` }));
     const list = document.createElement('div'); list.className = 'skills';
     const rows = [...K.cards.map((c) => ({ ...cardById(sel + '.' + c.key), kind: c.type === 'ult' ? '大招' : `${c.cost} 費` })), ...K.passives.map((p) => ({ ...p, desc: p.d, kind: '被動' }))].sort((a, b) => a.lv - b.lv);
     for (const s of rows) {
