@@ -153,6 +153,136 @@ const KITS = {
     ],
   },
 };
+// ───── 另外 10 個角色：效果寫成函式（g 是出牌時的工具箱，見 runFx）─────
+// 說明文字裡 {D:6} 會換成實際傷害（乘上 ATK_K 與升級倍率），{B:6} 換成實際格擋／回血（只乘升級倍率）
+const C2 = (key, lv, n, cost, type, anim, d, fx) => ({ key, lv, n, cost, type, anim, d, fx });
+const P2 = (key, lv, n, d) => ({ key, lv, n, d });
+Object.assign(KITS, {
+  brigid: { hp: 46, theme: '火焰、鍛造與詩歌的女神：會補血、會燒人。', cards: [
+    C2('s1', 1, '聖火守護', 1, 'skill', 's1', '獲得 {B:6} 點格擋。', (g) => g.block(6)),
+    C2('s2', 1, '鐵砧重生', 1, 'atk', 's2', '造成 {D:6} 點傷害，下一張牌費用 -1。', (g) => { g.dmg(6); g.st.costMinus = 1; }),
+    C2('ult', 1, '詩歌療癒', 0, 'ult', 'ult', '回復 {B:15} 點生命，解除負面狀態。', (g) => { g.heal(15); g.cleanse(); }),
+    C2('cross', 2, '布麗姬十字', 1, 'skill', 's1', '這場戰鬥每回合開始回復 {B:2} 點生命。', (g) => { g.st.regen = (g.st.regen || 0) + g.n(2); }),
+    C2('flame', 4, '永恆之火', 2, 'atk', 's2', '造成 {D:4} 點傷害，燃燒 3 回合。', (g) => { g.dmg(4); g.est('burn', 3); }),
+    C2('well', 5, '聖泉', 1, 'skill', 's1', '抽 2 張牌。', (g) => g.draw(2)),
+    C2('spring', 7, '春之祭', 2, 'skill', 'ult', '獲得 {B:8} 點格擋、1 點能量。', (g) => { g.block(8); B.energy++; }),
+  ], passives: [
+    P2('triple', 3, '三面女神', '每回合打出的第一張牌，傷害、格擋、回血都 +2。'),
+    P2('smith', 6, '鐵匠之手', '打出會給格擋的牌後，下一張攻擊牌多 3 點傷害。'),
+    P2('undying', 8, '聖火不滅', '每場戰鬥第一次倒下時，以三成生命復活。'),
+  ] },
+  tudigong: { hp: 54, theme: '守護地方的福德正神：很硬，會存元寶、叫虎爺。', cards: [
+    C2('s1', 1, '基層維安', 1, 'skill', 's1', '獲得 {B:7} 點格擋。', (g) => g.block(7)),
+    C2('s2', 1, '地方情資', 1, 'atk', 's2', '造成 {D:5} 點傷害，抽 1 張牌。', (g) => { g.dmg(5); g.draw(1); }),
+    C2('ult', 1, '房地產區劃', 0, 'ult', 'ult', '造成 {D:18} 點傷害，目標虛弱 2 回合。', (g) => { g.dmg(18); g.est('weak', 2); }),
+    C2('temple', 2, '土地公廟', 2, 'skill', 's1', '這場戰鬥每回合開始獲得 {B:3} 點格擋。', (g) => { g.st.temple = (g.st.temple || 0) + g.n(3); }),
+    C2('ingot', 4, '招財進寶', 1, 'skill', 's2', '得 1 個元寶（集滿 3 個換 1 點能量），抽 1 張牌。', (g) => { g.ingot(1); g.draw(1); }),
+    C2('tiger', 5, '虎爺', 2, 'skill', 'ult', '召喚虎爺：之後 3 回合，每回合咬一個敵人 {D:4} 點。', (g) => { g.st.tiger = 3; g.st.tigerDmg = g.d(4); }),
+    C2('cane', 7, '拐杖敲地', 1, 'atk', 's1', '造成等於目前格擋一半的傷害（至少 {D:3}）。', (g) => g.dmgRaw(Math.max(g.d(3), Math.floor(g.h.block / 2)))),
+  ], passives: [
+    P2('fortune', 3, '福德', '打怪的經驗多一成。'),
+    P2('guardland', 6, '土地守護', '回合開始時，格擋最多保留 3 點不會消失。'),
+    P2('answer', 8, '有求必應', '生命低於四分之一時，每回合多抽 1 張、多 5 點格擋。'),
+  ] },
+  hermes: { hp: 40, theme: '眾神的信使、小偷之神：抽牌、搶能量、出手快。', cards: [
+    C2('s1', 1, '訊息傳遞', 1, 'atk', 's1', '造成 {D:4} 點傷害，抽 1 張牌。', (g) => { g.dmg(4); g.draw(1); }),
+    C2('s2', 1, '商業欺詐', 1, 'atk', 's2', '造成 {D:5} 點傷害，目標虛弱 1 回合。', (g) => { g.dmg(5); g.est('weak', 1); }),
+    C2('ult', 1, '極速外送', 0, 'ult', 'ult', '連打 4 次，每次 {D:4} 點傷害。', (g) => { for (let i = 0; i < 4; i++) g.dmg(4); }),
+    C2('cattle', 2, '偷牛小賊', 0, 'skill', 's1', '出生當天就偷了阿波羅的牛：抽 2 張，隨機丟 1 張。', (g) => { g.draw(2); g.discardRandom(1); }),
+    C2('lyre', 4, '七弦琴交易', 1, 'skill', 's2', '隨機丟 1 張牌，得 2 點能量。', (g) => { g.discardRandom(1); B.energy += 2; }),
+    C2('guide', 5, '引魂者', 2, 'atk', 'ult', '造成 {D:6} 點傷害；目標生命低於兩成（非魔王）直接帶走。', (g) => { if (!g.t.boss && g.t.hp <= g.t.maxHp * 0.2) g.execute(); else g.dmg(6); }),
+    C2('caduceus', 7, '雙蛇杖調停', 1, 'skill', 's2', '目標暈眩：下回合不行動。', (g) => g.est('stun', 1)),
+  ], passives: [
+    P2('sandals', 3, '神行涼鞋', '每回合多抽 1 張牌。'),
+    P2('trade', 6, '商業之神', '每回合打出第 4 張牌時，能量 +1。'),
+    P2('herald', 8, '眾神信使', '打出 0 費的牌後，再抽 1 張。'),
+  ] },
+  dagda: { hp: 60, theme: '凱爾特的「好神」：巨棒一端殺人、一端救人，大鍋吃不完。', cards: [
+    C2('s1', 1, '豐收之歌', 1, 'skill', 's1', '回復 {B:8} 點生命。', (g) => g.heal(8)),
+    C2('s2', 1, '巨棒決斷', 2, 'atk', 's2', '橫掃：造成 {D:10} 點傷害。', (g) => g.dmg(10)),
+    C2('ult', 1, '生死巨棒', 0, 'ult', 'ult', '造成 {D:24} 點傷害；打倒的話再回復 {B:12} 點生命。', (g) => { const t = g.t; g.dmg(24); if (t && t.dead) g.heal(12); }),
+    C2('cauldron', 2, '豐饒之鍋', 1, 'skill', 's1', '這場戰鬥每回合開始回復 {B:3} 點生命。', (g) => { g.st.regen = (g.st.regen || 0) + g.n(3); }),
+    C2('glutton', 4, '大胃王', 1, 'skill', 's1', '回復 {B:5} 點生命，下一張攻擊牌多 4 點傷害。', (g) => { g.heal(5); g.st.nextAtkPlus = (g.st.nextAtkPlus || 0) + 4; }),
+    C2('harp', 5, '季節豎琴', 2, 'skill', 'ult', '彈奏四季：目標暈眩 1 回合。', (g) => g.est('stun', 1)),
+    C2('drag', 7, '拖地巨棒', 1, 'atk', 's2', '打掉目標全部格擋，造成 {D:6} 點傷害。', (g) => { g.t.block = 0; g.dmg(6); }),
+  ], passives: [
+    P2('kind', 3, '善良之神', '每場戰鬥第一次受到的傷害減半。'),
+    P2('father', 6, '大地之父', '生命全滿時，每次攻擊多 3 點傷害。'),
+    P2('edge', 8, '生死一線', '每場戰鬥一次，致命傷改成剩 1 點生命。'),
+  ] },
+  hanako: { hp: 42, theme: '三樓廁所第三間的花子：敲門三下就爆發，還會詛咒。', cards: [
+    C2('s1', 1, '三樓隔間', 1, 'atk', 's1', '造成 {D:5} 點傷害，敲門 1 次。', (g) => { g.dmg(5); g.knock(1); }),
+    C2('s2', 1, '敲門三聲', 1, 'skill', 's2', '敲門 1 次。敲滿 3 次：造成 {D:15} 點傷害，詛咒 2 層。', (g) => g.knock(1)),
+    C2('ult', 1, '紅色披風', 0, 'ult', 'ult', '造成 {D:10} 點傷害，目標每層詛咒再多 {D:3}。', (g) => g.dmg(10 + 3 * (g.t.curse || 0))),
+    C2('anyone', 2, '花子在嗎？', 1, 'skill', 's1', '目標恐懼（下次攻擊傷害減半），抽 1 張牌。', (g) => { g.est('fear', 1); g.draw(1); }),
+    C2('paper', 4, '紅紙藍紙', 1, 'atk', 's2', '紅紙：造成 {D:8} 點傷害；生命低於一半時改選藍紙：回復 {B:6}。', (g) => { if (g.h.hp < g.h.maxHp / 2) g.heal(6); else g.dmg(8); }),
+    C2('flush', 5, '沖水', 2, 'skill', 'ult', '解除自己的負面狀態，目標詛咒 2 層。', (g) => { g.cleanse(); g.est('curse', 2); }),
+    C2('pull', 7, '拉進隔間', 2, 'atk', 's2', '造成 {D:6} 點傷害，目標暈眩 1 回合。', (g) => { g.dmg(6); g.est('stun', 1); }),
+  ], passives: [
+    P2('toilet', 3, '廁所之主', '回合開始時有敲門次數的話，獲得 2 點格擋。'),
+    P2('third', 6, '第三間', '每打出第 3 張牌，效果發動兩次。'),
+    P2('legend', 8, '學校怪談', '詛咒每回合造成每層 2 點傷害。'),
+  ] },
+  anubis: { hp: 48, theme: '秤心審判的冥界之神：看血量比例決定生死。', cards: [
+    C2('s1', 1, '靈魂審判', 1, 'atk', 's1', '權杖重擊：造成 {D:6} 點傷害。', (g) => g.dmg(6)),
+    C2('s2', 1, '資產查封', 1, 'atk', 's2', '造成 {D:4} 點傷害，目標封印（下回合只能普攻）。', (g) => { g.dmg(4); g.est('seal', 1); }),
+    C2('ult', 1, '冥界天秤', 0, 'ult', 'ult', '目標的生命比例比你低：造成 {D:25} 點傷害；否則回復 {B:15} 點生命。', (g) => { if (g.t.hp / g.t.maxHp < g.h.hp / g.h.maxHp) g.dmg(25); else g.heal(15); }),
+    C2('mummy', 2, '木乃伊包紮', 1, 'skill', 's1', '獲得 {B:6} 點格擋，解除負面狀態。', (g) => { g.block(6); g.cleanse(); }),
+    C2('weigh', 4, '秤心儀式', 2, 'atk', 'ult', '雙方生命比例每差一成，造成 {D:3} 點傷害（至少一次）。', (g) => g.dmg(3 * Math.max(1, Math.floor(Math.abs(g.t.hp / g.t.maxHp - g.h.hp / g.h.maxHp) * 10)))),
+    C2('ammit', 5, '吞噬者阿米特', 2, 'atk', 's2', '造成 {D:8} 點傷害；目標生命低於三成時加倍。', (g) => g.dmg(g.t.hp < g.t.maxHp * 0.3 ? 16 : 8)),
+    C2('tomb', 7, '守護墓穴', 1, 'skill', 's1', '獲得 {B:4} 點格擋，這回合受到的傷害反彈一半。', (g) => { g.block(4); g.st.reflect = 0.5; }),
+  ], passives: [
+    P2('guide', 3, '亡者引路', '打倒敵人時回復 5 點生命。'),
+    P2('feather', 6, '真理之羽', '目標每有一種負面狀態，你的傷害 +1。'),
+    P2('lord', 8, '冥界之主', '非魔王的敵人生命低於一成半時，直接處決。'),
+  ] },
+  hachi: { hp: 46, theme: '「波波波」的八尺大人：讓敵人恐懼、標記、跟到底。', cards: [
+    C2('s1', 1, '波波波', 1, 'atk', 's1', '造成 {D:4} 點傷害，目標恐懼。', (g) => { g.dmg(4); g.est('fear', 1); }),
+    C2('s2', 1, '八尺身影', 1, 'skill', 's2', '獲得 {B:6} 點格擋，下一次被攻擊有一半機率閃開。', (g) => { g.block(6); g.st.evade = 1; }),
+    C2('ult', 1, '凝視', 0, 'ult', 'ult', '造成 {D:20} 點傷害；目標恐懼時改成 {D:30}。', (g) => g.dmg(g.t.fear ? 30 : 20)),
+    C2('mimic', 2, '模仿聲音', 1, 'skill', 's1', '模仿人聲：重複你上一張打出的牌。', (g) => g.mimic()),
+    C2('wall', 4, '越過圍牆', 2, 'atk', 's2', '造成 {D:9} 點傷害，無視格擋。', (g) => g.dmg(9, true)),
+    C2('seven', 5, '七日之期', 2, 'skill', 'ult', '標記目標 7 回合，每回合扣 {D:2} 點生命。', (g) => g.est('mark', 7)),
+    C2('hat', 7, '白帽遮臉', 1, 'skill', 's2', '獲得 {B:3} 點格擋，接下來 2 回合受到的傷害少四成。', (g) => { g.block(3); g.st.hat = 2; }),
+  ], passives: [
+    P2('tall', 3, '兩米四', '恐懼中的敵人不能加格擋。'),
+    P2('stalk', 6, '糾纏不放', '有敵人被標記時，每回合多抽 1 張。'),
+    P2('onlyyou', 8, '只看你一人', '每讓敵人恐懼一次，大招條 +15%。'),
+  ] },
+  yukionna: { hp: 42, theme: '吐氣成冰的雪女：疊冰霜，再一口氣凍住。', cards: [
+    C2('s1', 1, '冰吻凍結', 1, 'atk', 's1', '造成 {D:4} 點傷害，冰霜 2 層。', (g) => { g.dmg(4); g.frost(2); }),
+    C2('s2', 1, '暴雪迷蹤', 1, 'skill', 's2', '獲得 {B:5} 點格擋，下一次被攻擊有一半機率閃開。', (g) => { g.block(5); g.st.evade = 1; }),
+    C2('ult', 1, '萬里冰封', 0, 'ult', 'ult', '目標每層冰霜造成 {D:4} 點傷害（至少一次），並凍結 1 回合。', (g) => { g.dmg(4 * Math.max(1, g.t.frost || 0)); g.est('stun', 1); }),
+    C2('icicle', 2, '冰柱', 1, 'atk', 's1', '造成 {D:6} 點傷害；目標冰霜 3 層以上時加倍。', (g) => g.dmg((g.t.frost || 0) >= 3 ? 12 : 6)),
+    C2('breath', 4, '白息', 2, 'skill', 's2', '冰霜 3 層，目標下回合攻擊少三成。', (g) => { g.frost(3); g.est('slow', 1); }),
+    C2('promise', 5, '守約', 1, 'skill', 's1', '回復 {B:6} 點生命；這場還沒受過傷的話再抽 2 張。', (g) => { g.heal(6); if (!g.st.hurt) g.draw(2); }),
+    C2('melt', 7, '融雪', 2, 'atk', 'ult', '消耗目標全部冰霜：每層造成 {D:2} 點傷害、回復 {B:2} 點生命。', (g) => { const f = g.t.frost || 0; g.t.frost = 0; g.dmg(2 * Math.max(1, f)); g.heal(2 * f); }),
+  ], passives: [
+    P2('winter', 3, '寒冬體質', '冰霜不會自然消退。'),
+    P2('touch', 6, '凍結之觸', '攻擊牌多附 1 層冰霜。'),
+    P2('snownight', 8, '雪夜之主', '冰霜疊到 10 層時，目標凍結 2 回合。'),
+  ] },
+  medusa: { hp: 44, theme: '看一眼就石化的蛇髮女妖：石化加蛇毒。', cards: [
+    C2('s1', 1, '石化資本', 1, 'atk', 's1', '造成 {D:4} 點傷害，石化 1 層（3 層就跳過一回合）。', (g) => { g.dmg(4); g.est('petrify', 1); }),
+    C2('s2', 1, '冷血管理', 1, 'atk', 's2', '造成 {D:5} 點傷害，蛇毒 2 層。', (g) => { g.dmg(5); g.est('poison', 2); }),
+    C2('ult', 1, '石化資產', 0, 'ult', 'ult', '目標身上有石化：暈眩 2 回合；否則造成 {D:16} 點傷害、石化 2 層。', (g) => { if ((g.t.petrify || 0) >= 1) { g.t.petrify = 0; g.est('stun', 2); } else { g.dmg(16); g.est('petrify', 2); } }),
+    C2('snakehair', 2, '蛇髮守衛', 1, 'skill', 's2', '獲得 {B:5} 點格擋；這回合打你的敵人中蛇毒 1 層。', (g) => { g.block(5); g.st.snake = 1; }),
+    C2('mirror', 4, '鏡面反照', 2, 'skill', 'ult', '反過來用柏修斯的鏡盾：下一次受到的傷害全部反彈。', (g) => { g.st.mirror = 1; }),
+    C2('athena', 5, '雅典娜的詛咒', 1, 'skill', 's1', '目標所有負面狀態 +1 層。', (g) => g.allDebuffPlus()),
+    C2('pegasus', 7, '飛馬之血', 2, 'skill', 'ult', '回復 {B:10} 點生命，抽 1 張牌。', (g) => { g.heal(10); g.draw(1); }),
+  ], passives: [
+    P2('grudge', 3, '千年怨念', '蛇毒每回合多 1 點傷害。'),
+    P2('stone', 6, '石之軀', '讓敵人石化時，自己獲得 3 點格擋。'),
+    P2('gorgon', 8, '戈爾貢之眼', '每回合開始，全體敵人石化 1 層。'),
+  ] },
+});
+
+// 敵人身上的負面狀態：名字、標籤顏色
+const DEBUFF = {
+  burn: ['燃', '#ff8a30'], poison: ['毒', '#70d060'], frost: ['冰', '#a0e0ff'], petrify: ['石', '#b0a090'], fear: ['懼', '#c080ff'],
+  curse: ['咒', '#d050a0'], mark: ['標', '#ff6060'], seal: ['封', '#e0c060'], slow: ['緩', '#80a0c0'],
+};
+
 const MAX_LV = 10;
 const ATK_K = 1.7, FOE_HP_K = 0.7; // 節奏：我方傷害、敵人血量的倍率
 const expNeed = (lv) => 20 + lv * 10; // 從 lv 升到 lv+1 要的經驗
@@ -176,6 +306,13 @@ function cardById(id) {
   const up = id.endsWith('+'), [job, key] = id.replace('+', '').split('.');
   const base = KITS[job].cards.find((c) => c.key === key);
   const c = { ...base, id, job, up };
+  if (base.fx) {
+    // 函式型的牌：升級後所有數值 ×1.3
+    c.k = up ? 1.3 : 1;
+    if (up) c.n += '+';
+    c.desc = base.d.replace(/\{([DB]):(\d+)\}/g, (m, t, v) => Math.round(v * (t === 'D' ? ATK_K : 1) * c.k));
+    return c;
+  }
   // 小黑：攻擊力高一點、一場不要打太久 → 所有傷害乘 ATK_K
   for (const k of ['dmg', 'fixed']) if (c[k]) c[k] = Math.round(c[k] * ATK_K);
   if (up) {
@@ -283,7 +420,7 @@ function gearEl(g, actions) {
   d.className = 'gear ' + (it.kind === '神器' ? 'holy' : 'cursed');
   const own = it.own ? `・${JOBS[it.own].name}專屬` : '';
   const off = canUse(it, heroId) ? '' : `<br><small class="warn">${it.own ? `只有${JOBS[it.own].name}能用` : `${JOBS[heroId].side}族不能用${it.kind}`}</small>`;
-  d.innerHTML = `<b>${it.n}</b> <small>${it.kind}・${SLOTS[it.slot]}${own}・${it.from}</small><br><span>${it.d}</span>${off}`;
+  d.innerHTML = `${lookOf(g.id)[0]} <b>${it.n}</b> <small>${it.kind}・${SLOTS[it.slot]}${own}・${it.from}</small><br><span>${it.d}</span>${off}`;
   const row = document.createElement('div'); row.className = 'gear-actions';
   for (const [label, fn] of actions) { const b = document.createElement('button'); b.className = 'btn'; b.textContent = label; b.onclick = fn; row.append(b); }
   if (actions.length) d.append(row);
@@ -307,13 +444,68 @@ function showGear(back) {
   box.append(button('返回', back));
 }
 
+// 裝備的樣子：圖示（顯示在角色腳邊）和身上的光效（spark 電光、glow 光暈、mist 氣、twinkle 閃光）
+const LOOK = {
+  mjolnir: ['⚡', '#a0d8ff', 'spark'], gungnir: ['🔱', '#ffe070', 'twinkle'], ruyi: ['🥢', '#ffc040', 'glow'],
+  aegis: ['🛡️', '#ffe070', 'glow'], jinlu: ['🥋', '#a0ffb0', 'glow'], hagoromo: ['🪶', '#e0f0ff', 'twinkle'],
+  grail: ['🏆', '#ffe070', 'glow'], yata: ['🪞', '#c0e8ff', 'twinkle'], qiankun: ['⭕', '#ffd070', 'glow'],
+  muramasa: ['🗡️', '#ff3040', 'mist'], dracula: ['🦇', '#a01030', 'mist'], annabelle: ['🪆', '#604070', 'mist'],
+  monkeypaw: ['🐾', '#a08060', 'mist'], pandora: ['📦', '#b060ff', 'mist'], hope: ['💎', '#4080ff', 'twinkle'],
+};
+function lookOf(id) {
+  const it = ITEMS[id];
+  return LOOK[id] || (it.own ? ['★', it.kind === '神器' ? '#ffe070' : '#c060ff', 'glow'] : ['◆', '#fff', 'glow']);
+}
+// 主角身上穿的、能用的裝備
+function wornItems() {
+  return Object.values(gear.eq).map((uid) => gear.bag.find((x) => x.uid === uid)).filter((g) => g && canUse(itemOf(g), heroId)).map((g) => g.id);
+}
+function drawAura(x, now, top) {
+  const ids = wornItems();
+  ids.forEach((id, n) => {
+    const [, col, style] = lookOf(id), strong = ITEMS[id].own ? 1.6 : 1;
+    g.save();
+    if (style === 'glow') {
+      const r = 30 + Math.sin(now / 300 + n) * 3, grd = g.createRadialGradient(x, GROUND - 40, 4, x, GROUND - 40, r * strong);
+      grd.addColorStop(0, col + '90'); grd.addColorStop(1, col + '00'); g.fillStyle = grd; g.fillRect(x - 60, GROUND - 100, 120, 100);
+    } else if (style === 'spark') {
+      g.strokeStyle = col; g.lineWidth = 1;
+      for (let k = 0; k < 2 * strong; k++) {
+        if (Math.floor(now / 90 + k * 7 + n) % 5) continue;
+        let px = x + rnd(-22, 22), py = GROUND - rnd(20, 80); g.beginPath(); g.moveTo(px, py);
+        for (let j = 0; j < 3; j++) { px += rnd(-5, 5); py += rnd(3, 7); g.lineTo(px, py); }
+        g.stroke();
+      }
+    } else if (style === 'mist') {
+      for (let k = 0; k < 6 * strong; k++) {
+        const p = (now / 2200 + k / 6 + n * 0.13) % 1;
+        g.globalAlpha = 0.85 * (1 - p); g.fillStyle = col;
+        g.fillRect(Math.round(x - 20 + ((k * 37) % 40) + Math.sin(p * 6 + k) * 3), Math.round(GROUND - 10 - p * 70), 4, 4);
+      }
+    } else {
+      for (let k = 0; k < 4 * strong; k++) {
+        const ph = (now / 600 + k * 0.37 + n) % 1; if (ph > 0.5) continue;
+        g.globalAlpha = 1 - ph * 2; g.fillStyle = col;
+        const px = x - 24 + ((k * 53 + n * 17) % 48), py = GROUND - 20 - ((k * 31) % 60);
+        g.fillRect(px - 1, py, 3, 1); g.fillRect(px, py - 1, 1, 3);
+      }
+    }
+    g.restore();
+  });
+  // 角色左邊一排小圖示
+  if (ids.length) {
+    g.font = '12px sans-serif'; g.textAlign = 'center';
+    ids.forEach((id, k) => { g.fillStyle = 'rgba(0,0,0,0.5)'; g.fillRect(x - 46, GROUND - 74 + k * 17, 16, 16); g.fillStyle = '#fff'; g.fillText(lookOf(id)[0], x - 38, GROUND - 61 + k * 17); });
+  }
+}
+
 // ───── 狀態 ─────
 let heroId = null, run = null, B = null, effects = [], shake = 0, busy = false, target = null;
 
 function startRun(id) {
   heroId = id;
   const L = levelOf(id);
-  const maxHp = 50 + L.lv * 4;
+  const maxHp = (KITS[id].hp || 50) + L.lv * 4;
   // 起手牌組：兩張基本招各 4 張，之後解鎖的牌各 1 張
   const deck = [];
   for (const c of unlockedCards(id, L.lv)) for (let k = 0; k < (c.lv === 1 ? 4 : 1); k++) deck.push(id + '.' + c.key);
@@ -332,7 +524,7 @@ function startFight() {
   const hpK = FOE_HP_K * (1 + run.fight * 0.15), atkUp = Math.max(0, run.fight - 1);
   const foes = F.map((k, i) => ({ id: 'e' + i, side: 'enemy', key: k, ...FOES[k], hp: Math.round(FOES[k].hp * hpK), maxHp: Math.round(FOES[k].hp * hpK), plan: FOES[k].plan.map(([kind, v, n]) => [kind, kind === 'atk' ? v + atkUp : v, n]), block: 0, str: 0, weak: 0, vuln: 0, stun: 0, confuse: 0, link: 0, step: rnd(0, 1), x: FOES[k].boss ? 290 : 228 + i * (F.length > 2 ? 56 : 70) }));
   for (const u of [hero, ...foes]) Object.assign(u, { ox: 0, oy: 0, flash: 0, anim: null, dead: false, atkUntil: 0, hurtUntil: 0 });
-  B = { hero, foes, draw: shuffle(run.deck.map(cardById)), hand: [], discard: [], energy: 3, charge: run.lv >= 10 ? 50 : 0, turn: 0, nextAtk: 1, atkCount: 0, ups: [], expStart: run.gained, lvStart: run.lv };
+  B = { hero, foes, draw: shuffle(run.deck.map(cardById)), hand: [], discard: [], energy: 3, charge: run.lv >= 10 ? 50 : 0, turn: 0, nextAtk: 1, atkCount: 0, ups: [], expStart: run.gained, lvStart: run.lv, st: {}, knock: 0, ingot: 0, turnCards: 0, cardCount: 0, firstBonus: 0 };
   target = foes[0];
   effects = [];
   // 開場就發動的神器／邪物
@@ -357,8 +549,21 @@ function drawCards(n) {
 }
 
 function startTurn() {
-  B.turn++; B.energy = 3; B.nextAtk = 1;
-  B.hero.block = hasPassive('loyal') ? Math.floor(B.hero.block / 2) : 0;
+  B.turn++; B.energy = 3; B.nextAtk = 1; B.turnCards = 0;
+  const st = B.st, h = B.hero;
+  h.block = hasPassive('loyal') ? Math.floor(h.block / 2) : hasPassive('guardland') ? Math.min(3, h.block) : 0;
+  st.turnAtk = 0; st.halfDmg = 0; st.reflect = 0; st.snake = 0;
+  if (st.hat > 0) st.hat--;
+  if (st.regen) heal(h, st.regen);
+  if (st.temple) { h.block += st.temple; float(h, '土地公廟 +' + st.temple, '#a0c8ff'); }
+  if (st.tiger > 0 && alive().length) { st.tiger--; const f = alive()[rnd(0, alive().length - 1)]; float(f, '虎爺咬！', '#ffc830'); damage(h, f, st.tigerDmg, true); }
+  if (hasPassive('gorgon')) for (const f of alive()) addDebuff(f, 'petrify', 1);
+  if (hasPassive('toilet') && B.knock > 0) h.block += 2;
+  let extra = 0;
+  if (hasPassive('sandals')) extra++;
+  if (hasPassive('answer') && h.hp < h.maxHp / 4) { extra++; h.block += 5; float(h, '有求必應', '#ffd070'); }
+  if (hasPassive('stalk') && alive().some((f) => f.mark > 0)) extra++;
+  if (!alive().length) return winFight();
   if (hasPassive('moon')) heal(B.hero, 2);
   const G = run.G;
   if (G.guard) B.hero.block += G.guard;
@@ -366,7 +571,7 @@ function startTurn() {
   if (G.fx.selfDmg && B.hero.hp > 1) { const n = Math.min(G.fx.selfDmg, B.hero.hp - 1); B.hero.hp -= n; float(B.hero, `邪物反噬 -${n}`, '#c060ff'); }
   if (B.turn === 1 && G.fx.energy1) { B.energy += G.fx.energy1; float(B.hero, `能量 +${G.fx.energy1}`, '#ffe070'); }
   B.aegisUsed = false;
-  drawCards(5);
+  drawCards(5 + extra);
   busy = false; render();
 }
 
@@ -379,12 +584,23 @@ function damage(src, dst, amount, pierce = false, spread = false) {
   const fromFoe = dst === B.hero && src && src !== B.hero;
   if (fromFoe && run.G.dodge && Math.random() * 100 < run.G.dodge) { float(dst, '閃避', '#c0a0ff'); return 0; }
   if (fromFoe && run.G.fx.aegis && !B.aegisUsed) { B.aegisUsed = true; src.weak = Math.max(src.weak, 2); float(src, '神盾：虛弱', '#a0a0c0'); }
+  const st = B.st;
+  if (fromFoe && st.evade) { st.evade = 0; if (Math.random() < 0.5) { float(dst, '閃開', '#c0a0ff'); return 0; } }
+  if (fromFoe && st.mirror) { st.mirror = 0; float(dst, '鏡面反照', '#a0e0ff'); setTimeout(() => { if (B && !src.dead) damage(null, src, amount, true); }, 120); return 0; }
   let d = amount;
   if (src && src.weak > 0) d = Math.floor(d * 0.75);
   if (dst.vuln > 0) d = Math.floor(d * 1.5);
+  if (fromFoe && hasPassive('kind') && !B.kindUsed) { B.kindUsed = true; d = Math.floor(d / 2); float(dst, '善良之神', '#ffd070'); }
+  if (fromFoe && st.halfDmg) d = Math.floor(d / 2);
+  if (fromFoe && st.hat > 0) d = Math.floor(d * 0.6);
   if (fromFoe && run.G.fx.armor) d = Math.max(0, d - run.G.fx.armor);
   if (!pierce && dst.block > 0) { const b = Math.min(dst.block, d); dst.block -= b; d -= b; if (b) float(dst, '格擋 ' + b, '#a0c8ff'); }
   if (d <= 0) return 0;
+  if (fromFoe) {
+    st.hurt = true;
+    if (st.reflect && !src.dead) { const back = Math.ceil(d * st.reflect); setTimeout(() => { if (B && !src.dead) damage(null, src, back, true); }, 120); }
+    if (st.snake && !src.dead) addDebuff(src, 'poison', 1);
+  }
   if (fromFoe && run.G.fx.reflect && !src.dead) { const back = Math.ceil(d * run.G.fx.reflect / 100); setTimeout(() => { if (B && !src.dead) damage(null, src, back, true); }, 120); }
   dst.hp -= d; dst.flash = performance.now() + 300; dst.hurtUntil = performance.now() + 450; shake = Math.min(6, 2 + d / 4);
   float(dst, '-' + d, spread ? '#ff90b0' : '#fff');
@@ -397,12 +613,15 @@ function damage(src, dst, amount, pierce = false, spread = false) {
       damage(src, o, Math.max(1, Math.floor(d * share)), true, true);
     }
   }
+  // 救命的被動
+  if (dst === B.hero && dst.hp <= 0 && hasPassive('undying') && !B.revived) { B.revived = true; dst.hp = Math.round(dst.maxHp * 0.3); float(dst, '聖火不滅！', '#ff8a30'); }
+  if (dst === B.hero && dst.hp <= 0 && hasPassive('edge') && !B.edgeUsed) { B.edgeUsed = true; dst.hp = 1; float(dst, '生死一線！', '#ffd070'); }
   if (dst.hp <= 0) {
     dst.hp = 0; dst.dead = true; dst.deadAt = performance.now() + 300;
     if (dst.art) dst.anim = { name: 'down', t0: performance.now() };
     float(dst, '倒下', '#ff9090');
     if (src === B.hero) B.charge = Math.min(100, B.charge + 10);
-    if (dst.side === 'enemy') killExp(dst);
+    if (dst.side === 'enemy') { killExp(dst); if (hasPassive('guide')) heal(B.hero, 5); }
     if (dst.link && hasPassive('destiny') && dst.side === 'enemy') { B.energy++; drawCards(1); float(B.hero, '姻緣天定', '#ff90b0'); }
   }
   return d;
@@ -412,12 +631,18 @@ function damage(src, dst, amount, pierce = false, spread = false) {
 async function playCard(i) {
   if (busy) return;
   const c = i === 'ult' ? cardById(heroId + '.ult') : B.hand[i];
-  if (i === 'ult' ? B.charge < 100 : c.cost > B.energy) return;
+  if (i === 'ult' ? B.charge < 100 : costOf(c) > B.energy) return;
   busy = true;
-  if (i === 'ult') B.charge = 0; else { B.energy -= c.cost; B.hand.splice(i, 1); B.discard.push(c); B.charge = Math.min(100, B.charge + (c.type === 'atk' ? 14 : 9)); }
+  if (i === 'ult') B.charge = 0; else { B.energy -= costOf(c); B.st.costMinus = 0; B.hand.splice(i, 1); B.discard.push(c); B.charge = Math.min(100, B.charge + (c.type === 'atk' ? 14 : 9)); }
+  B.firstBonus = hasPassive('triple') && B.turnCards === 0 ? 2 : 0;
+  B.turnCards++; B.cardCount++;
   if (!target || target.dead) target = alive()[0];
   render();
-  await resolveCard(c);
+  await (c.fx ? resolveFx(c) : resolveCard(c));
+  B.firstBonus = 0;
+  if (c.type !== 'ult' && c.key !== 'mimic') B.lastCard = c;
+  if (hasPassive('herald') && c.cost === 0 && c.type !== 'ult') { drawCards(1); float(B.hero, '眾神信使：抽 1', '#f0d070'); }
+  if (hasPassive('trade') && B.turnCards === 4) { B.energy++; float(B.hero, '商業之神：能量 +1', '#ffe070'); }
   if (c.type === 'atk' && run.G.fx.thunder && alive().length && Math.random() < 0.3) {
     effects.push({ type: 'flash', t0: performance.now(), ms: 250 }); $('.log').textContent = '妙爾尼爾：落雷！';
     for (const f of alive()) { effects.push({ type: 'bolt', x1: f.x, x2: f.x, color: '#a0d8ff', t0: performance.now(), ms: 300 }); damage(B.hero, f, run.G.fx.thunder, true); }
@@ -494,16 +719,119 @@ async function resolveCard(c) {
   await sleep(120);
 }
 
+// ───── 函式型的牌：出牌時給 fx 一個工具箱 g ─────
+const costOf = (c) => Math.max(0, c.cost - (B && B.st.costMinus || 0));
+const debuffCount = (t) => [...Object.keys(DEBUFF), 'weak', 'vuln', 'stun'].filter((k) => t[k] > 0).length;
+const DEBUFF_NAME = { weak: '虛弱', vuln: '易傷', stun: '暈眩', burn: '燃燒', poison: '蛇毒', frost: '冰霜', petrify: '石化', fear: '恐懼', curse: '詛咒', mark: '標記', seal: '封印', slow: '遲緩' };
+function addDebuff(t, name, n) {
+  if (!t || t.dead) return;
+  if (name === 'fear') { t.fear = 1; if (hasPassive('onlyyou')) B.charge = Math.min(100, B.charge + 15); }
+  else if (['poison', 'curse', 'frost', 'petrify'].includes(name)) t[name] = (t[name] || 0) + n;
+  else t[name] = Math.max(t[name] || 0, n);
+  float(t, DEBUFF_NAME[name] + (['poison', 'curse', 'frost', 'petrify'].includes(name) ? ' +' + n : ''), (DEBUFF[name] || ['', '#d0d0ff'])[1]);
+  if (name === 'petrify' && hasPassive('stone')) { B.hero.block += 3; float(B.hero, '石之軀 +3', '#a0c8ff'); }
+  if ((t.petrify || 0) >= 3) { t.petrify = 0; t.stun = Math.max(t.stun || 0, 1); float(t, '石化！', '#b0a090'); }
+  if ((t.frost || 0) >= 10 && hasPassive('snownight')) { t.frost = 0; t.stun = Math.max(t.stun || 0, 2); float(t, '雪夜凍結！', '#a0e0ff'); }
+}
+// 我方打一下：力量、裝備、被動、爆擊、吸血都在這裡算
+function hitFoe(t, d, pierce) {
+  const h = B.hero, st = B.st;
+  if (!t || t.dead) return 0;
+  d += h.str + (st.turnAtk || 0) + run.G.atk;
+  if (st.nextAtkPlus) { d += st.nextAtkPlus; st.nextAtkPlus = 0; }
+  if (hasPassive('father') && h.hp >= h.maxHp) d += 3;
+  if (hasPassive('feather')) d += debuffCount(t);
+  if (B.nextAtk > 1) { d *= B.nextAtk; B.nextAtk = 1; }
+  if (run.G.crit && Math.random() * 100 < run.G.crit) { d = Math.round(d * (run.G.fx.critX || 2)); float(t, '爆擊！', '#ff4040'); shake = 6; }
+  effects.push({ type: 'burst', x: t.x + t.ox, color: ART[heroId].color || '#fff', seed: Math.random() * 6, t0: performance.now(), ms: 500 });
+  const dealt = damage(h, t, d, pierce);
+  if (run.G.steal && dealt) heal(h, Math.max(1, Math.round(dealt * run.G.steal / 100)));
+  if (!t.dead && hasPassive('lord') && !t.boss && t.hp < t.maxHp * 0.15) { float(t, '冥界處決', '#ff6060'); damage(h, t, t.hp, true); }
+  return dealt;
+}
+function makeG(c) {
+  const h = B.hero, st = B.st;
+  const g = {
+    h, st,
+    get t() { return target && !target.dead ? target : alive()[0]; },
+    n: (v) => Math.round(v * (c.k || 1)),
+    d: (v) => Math.round(v * ATK_K * (c.k || 1)),
+    dmg: (v, pierce) => g.dmgRaw(g.d(v), pierce),
+    dmgRaw: (v, pierce) => hitFoe(g.t, v + B.firstBonus, pierce),
+    block(v) { const b = g.n(v) + B.firstBonus; h.block += b; float(h, '格擋 +' + b, '#a0c8ff'); if (hasPassive('smith')) st.nextAtkPlus = (st.nextAtkPlus || 0) + 3; },
+    heal: (v) => heal(h, g.n(v) + B.firstBonus),
+    draw: (n) => drawCards(n),
+    cleanse() { h.weak = h.vuln = 0; },
+    est: (name, n) => addDebuff(g.t, name, n),
+    frost: (n) => addDebuff(g.t, 'frost', n),
+    knock(n) {
+      B.knock += n; float(h, `敲門 ${Math.min(B.knock, 3)}/3`, '#c080ff');
+      if (B.knock >= 3) { B.knock = 0; float(h, '叩叩叩！', '#ff6080'); g.dmg(15); g.est('curse', 2); }
+    },
+    ingot(n) { B.ingot += n; float(h, `元寶 ${B.ingot}/3`, '#ffc830'); if (B.ingot >= 3) { B.ingot -= 3; B.energy++; float(h, '元寶換能量 +1', '#ffe070'); } },
+    discardRandom(n) { for (let i = 0; i < n && B.hand.length; i++) B.discard.push(...B.hand.splice(rnd(0, B.hand.length - 1), 1)); },
+    execute() { const t = g.t; if (t) { float(t, '帶走', '#ff6060'); damage(h, t, t.hp, true); } },
+    mimic() {
+      const L = B.lastCard;
+      if (L && L.fx) { float(h, '模仿：' + L.n, '#e8e8ff'); L.fx(makeG(L)); } else float(h, '沒有聲音可以模仿', '#a0a0a0');
+    },
+    allDebuffPlus() {
+      const t = g.t; if (!t) return;
+      for (const k of [...Object.keys(DEBUFF), 'weak', 'vuln']) if (t[k] > 0) t[k]++;
+      float(t, '詛咒加深', '#d050a0');
+      addDebuff(t, 'petrify', 0);
+    },
+  };
+  return g;
+}
+async function resolveFx(c) {
+  const h = B.hero, art = ART[heroId], col = art.color || '#fff';
+  const anim = artAnim(heroId, c.anim) ? c.anim : (c.type === 'skill' ? 'cast' : 'punch');
+  $('.log').textContent = c.type === 'ult' ? `${c.n}！` : `打出「${c.n}」。`;
+  if (c.type === 'ult') { effects.push({ type: 'flash', t0: performance.now(), ms: 450 }); shake = 6; }
+  if (!target || target.dead) target = alive()[0];
+  const run1 = () => {
+    const twice = hasPassive('third') && B.cardCount % 3 === 0;
+    if (twice) float(h, '第三間：兩次！', '#c080ff');
+    for (let k = 0; k < (twice ? 2 : 1); k++) if (alive().length) c.fx(makeG(c));
+    if (c.type === 'atk' && hasPassive('touch') && target && !target.dead) addDebuff(target, 'frost', 1);
+  };
+  if (c.type !== 'skill' && art.melee && target) {
+    const dx = target.x - h.x - 46;
+    h.anim = { name: 'walk', t0: performance.now() }; await tween(200, (t) => { h.ox = dx * t; });
+    h.anim = { name: anim, t0: performance.now() }; await sleep(260);
+    run1(); await sleep(300);
+    h.anim = { name: 'walk', t0: performance.now() }; await tween(200, (t) => { h.ox = dx * (1 - t); }); h.anim = null;
+  } else {
+    h.anim = { name: anim, t0: performance.now() }; await sleep(320);
+    if (c.type !== 'skill' && target) { effects.push({ type: 'bolt', x1: h.x + 20, x2: target.x, color: col, t0: performance.now(), ms: 420 }); await sleep(280); }
+    run1(); await sleep(300);
+  }
+  await sleep(120);
+}
+
 // ───── 敵人回合 ─────
 async function endTurn() {
   if (busy) return;
   busy = true;
   B.discard.push(...B.hand); B.hand = []; render();
+  // 持續傷害：燃燒、蛇毒、七日之期、詛咒
   for (const f of alive()) {
+    let dot = 0;
+    if (f.burn > 0) { dot += 4; f.burn--; }
+    if (f.poison > 0) { dot += f.poison + (hasPassive('grudge') ? 1 : 0); f.poison--; }
+    if (f.mark > 0) { dot += Math.round(2 * ATK_K); f.mark--; }
+    if (f.curse > 0 && hasPassive('legend')) dot += 2 * f.curse;
+    if (dot) { damage(null, f, dot, true); await sleep(220); }
+  }
+  if (!alive().length) return winFight();
+  for (const f of alive()) {
+    if (f.dead) continue;
     f.block = 0;
     await sleep(250);
-    if (f.stun) { f.stun = 0; float(f, '暈眩中', '#ffb0d0'); f.step++; await sleep(400); continue; }
+    if (f.stun) { f.stun--; float(f, '暈眩中', '#ffb0d0'); f.step++; await sleep(400); continue; }
     const [kind, v, times = 1] = intent(f);
+    if (f.seal > 0 && kind !== 'atk') { float(f, '被封印了', '#e0c060'); f.step++; await sleep(400); continue; }
     if (kind === 'atk') {
       let victim = B.hero;
       if (f.confuse) {
@@ -516,9 +844,12 @@ async function endTurn() {
       $('.log').textContent = `${f.name}攻擊${victim === B.hero ? '你' : victim.name}！`;
       const dx = victim === B.hero ? B.hero.x - f.x + 48 : victim === f ? 0 : victim.x - f.x + (victim.x < f.x ? 40 : -40);
       await tween(180, (t) => { f.ox = dx * t; });
-      for (let k = 0; k < times; k++) { f.atkUntil = performance.now() + 300; damage(f, victim, v + f.str); await sleep(220); }
+      let val = v + f.str;
+      if (f.fear) { val = Math.floor(val / 2); f.fear = 0; float(f, '嚇到了', '#c080ff'); }
+      if (f.slow > 0) val = Math.floor(val * 0.7);
+      for (let k = 0; k < times && !f.dead; k++) { f.atkUntil = performance.now() + 300; damage(f, victim, val); await sleep(220); }
       await tween(180, (t) => { f.ox = dx * (1 - t); });
-    } else if (kind === 'def') { f.block += v; float(f, '格擋 +' + v, '#a0c8ff'); }
+    } else if (kind === 'def') { if (f.fear && hasPassive('tall')) float(f, '嚇到不敢擋', '#c080ff'); else { f.block += v; float(f, '格擋 +' + v, '#a0c8ff'); } }
     else if (kind === 'buff') { f.str += v; float(f, '力量 +' + v, '#ffb040'); }
     else if (kind === 'weak') { B.hero.weak = Math.max(B.hero.weak, v); float(B.hero, '虛弱', '#a0a0c0'); f.atkUntil = performance.now() + 400; }
     else if (kind === 'vuln') { B.hero.vuln = Math.max(B.hero.vuln, v); float(B.hero, '易傷', '#d070ff'); f.atkUntil = performance.now() + 400; }
@@ -526,7 +857,11 @@ async function endTurn() {
     await sleep(300);
     if (B.hero.hp <= 0) return loseRun();
   }
-  for (const u of [B.hero, ...B.foes]) { if (u.weak > 0) u.weak--; if (u.vuln > 0) u.vuln--; }
+  for (const u of [B.hero, ...B.foes]) {
+    if (u.weak > 0) u.weak--; if (u.vuln > 0) u.vuln--;
+    if (u.slow > 0) u.slow--; if (u.seal > 0) u.seal--;
+    if (u.frost > 0 && !hasPassive('winter')) u.frost--;
+  }
   if (!alive().length) return winFight();
   startTurn();
 }
@@ -534,7 +869,7 @@ async function endTurn() {
 // ───── 經驗、升級、獎勵、死亡 ─────
 // 加經驗，回傳這次新解鎖的技能
 function killExp(f) {
-  const n = f.exp + run.fight;
+  const n = Math.round((f.exp + run.fight) * (hasPassive('fortune') ? 1.1 : 1));
   effects.push({ type: 'text', x: f.x, y: GROUND - 70, text: `+${n} 經驗`, color: '#ffd070', t0: performance.now() + 200, ms: 1100 });
   const r = gainExp(n);
   if (r.after > r.before) {
@@ -676,7 +1011,7 @@ function render() {
   $('.hp').textContent = `${h.name} Lv${run.lv} 生命 ${h.hp}/${h.maxHp}${h.block ? `・格擋 ${h.block}` : ''}${B.nextAtk > 1 ? '・下一擊加倍' : ''}・牌堆 ${B.draw.length}`;
   $('.energy').textContent = `能量 ${B.energy}/3`;
   const hand = $('.screen-battle .hand'); hand.innerHTML = '';
-  B.hand.forEach((c, i) => hand.append(cardEl(c, () => playCard(i), busy || c.cost > B.energy)));
+  B.hand.forEach((c, i) => hand.append(cardEl({ ...c, cost: costOf(c) }, () => playCard(i), busy || costOf(c) > B.energy)));
   const ult = cardById(heroId + '.ult');
   const ub = $('.ultbtn'); ub.textContent = `${ult.n} ${B.charge}%`; ub.disabled = busy || B.charge < 100; ub.classList.toggle('glow', B.charge >= 100);
   ub.onclick = () => playCard('ult');
@@ -712,6 +1047,7 @@ function drawUnit(u, now) {
       if (t < tot) { sheet = s; while (t >= ms[i]) t -= ms[i++]; } else u.anim = null;
     }
     if (u.dead && !u.anim) return;
+    if (u.side === 'ally') drawAura(x, now);
     drawArt(g, u.art, sheet, i, x, GROUND + u.oy, 1, { white });
     const mark = ART[u.art].mark;
     if (mark) for (let k = 0; k < 2; k++) { const p = (now / 1800 + k / 2) % 1; drawMark(g, mark, x + (k ? 18 : -28) + Math.sin(p * 6) * 3, GROUND - 50 - p * 40, 2, p < 0.2 ? p * 5 : 1 - (p - 0.2) / 0.8); }
@@ -729,8 +1065,13 @@ function drawUnit(u, now) {
   g.fillStyle = u.side === 'ally' ? '#5fd35f' : '#e05050'; g.fillRect(x - 16, top, Math.max(0, 32 * u.hp / u.maxHp), 3);
   if (u.block > 0) { g.fillStyle = '#4070c0'; g.fillRect(x - 26, top - 3, 9, 9); g.fillStyle = '#fff'; g.font = 'bold 8px sans-serif'; g.textAlign = 'center'; g.fillText(u.block, x - 21.5, top + 4); }
   g.font = 'bold 10px sans-serif'; g.textAlign = 'center';
-  const tags = [u.vuln > 0 ? ['傷', '#d070ff'] : null, u.weak > 0 ? ['弱', '#a0a0c0'] : null, u.stun > 0 ? ['暈', '#ffb0d0'] : null, u.confuse > 0 ? ['亂', '#ff8060'] : null, u.str > 0 ? ['力', '#ffb040'] : null, u.link ? ['線', '#ff4060'] : null].filter(Boolean);
-  tags.forEach(([t, c], k) => { g.fillStyle = c; g.fillText(t, x - 12 + k * 12, top + 14); });
+  const tags = [u.vuln > 0 ? ['傷', '#d070ff'] : null, u.weak > 0 ? ['弱', '#a0a0c0'] : null, u.stun > 0 ? ['暈', '#ffb0d0'] : null, u.confuse > 0 ? ['亂', '#ff8060'] : null, u.str > 0 ? ['力', '#ffb040'] : null, u.link ? ['線', '#ff4060'] : null,
+    ...Object.entries(DEBUFF).map(([k, [t, c]]) => u[k] > 0 ? [t + (['poison', 'curse', 'frost', 'petrify'].includes(k) ? u[k] : ''), c] : null)].filter(Boolean);
+  // 標籤一個接一個排，置中
+  const widths = tags.map(([t]) => g.measureText(t).width + 2), total = widths.reduce((a, b) => a + b, 0);
+  let tx = x - total / 2;
+  tags.forEach(([t, c], k) => { g.fillStyle = c; g.textAlign = 'left'; g.fillText(t, tx, top + 14); tx += widths[k]; });
+  g.textAlign = 'center';
   // 敵人意圖
   if (u.side === 'enemy' && !busy) {
     const [kind, v, times = 1] = intent(u);
