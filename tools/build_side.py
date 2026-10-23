@@ -5,7 +5,8 @@ h = open(R + 'side.html', encoding='utf8').read()
 h = re.sub(r'<link rel="stylesheet" href="style.css[^"]*">', lambda m: '<style>\n' + open(R + 'style.css', encoding='utf8').read() + '\n</style>', h)
 h = re.sub(r'<a class="btn wide" href="./"[^>]*>回遊戲</a>\n?', '', h)
 imgs = {}
-for d in sorted({a for a in re.findall(r"dir: '(assets/[^']+/)'", open(R + 'js/sprites.js', encoding='utf8').read())} | {'assets/units/'}):
+# assets/ 底下每個資料夾第一層的 png 都是遊戲用的圖（原圖放在更深的子資料夾）
+for d in sorted('assets/' + x + '/' for x in os.listdir(R + 'assets') if os.path.isdir(R + 'assets/' + x)):
     for f in os.listdir(R + d):
         if f.endswith('.png'): imgs[d + f] = 'data:image/png;base64,' + base64.b64encode(open(R + d + f, 'rb').read()).decode()
 
