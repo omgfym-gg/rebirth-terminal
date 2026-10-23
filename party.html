@@ -813,7 +813,7 @@ function damage0(src, dst, amount, pierce, spread) {
 }
 
 // 隊友倒下：他的牌全部變成魂火（0 費、用完就消失）
-const soulCard = (u) => ({ key: 'soul', id: 'soul', job: null, n: '魂火', cost: 0, type: 'skill', anim: 'cast', tags: 'exhaust', desc: `${u.name}留下的魂火：活著的隊友各回 5 點生命、獲得 4 點格擋。`, fx: () => { for (const p of aliveParty()) { heal(p, 5); p.block += 4; float(p, '魂火 +4', '#80c0ff'); } } });
+const soulCard = (u) => ({ key: 'soul', id: 'soul', job: null, n: '魂火', cost: 0, type: 'skill', anim: 'cast', tags: 'exhaust', desc: `${u.name}留下的魂火：所有活著的隊友（包含出牌的人）各回 5 點生命、獲得 4 點格擋。`, fx: () => { for (const p of aliveParty()) { const v = Math.min(5, p.maxHp - p.hp); p.hp += v; p.block += 4; effects.push({ type: 'thread', x1: B.hero.x, x2: p.x, t0: performance.now(), ms: 500 }); effects.push({ type: 'text', x: p.x, y: GROUND - 110, text: `魂火 +${v}血 +4擋`, color: '#80c0ff', t0: performance.now(), ms: 1400 }); } } });
 function heroDown(u) {
   float(u, '化為魂火', '#80c0ff');
   const conv = (arr) => arr.map((c) => c.job === u.job ? soulCard(u) : c);
