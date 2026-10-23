@@ -129,9 +129,9 @@ const KITS = {
   yuelao: {
     theme: '紅線：被綁上紅線的敵人受傷時，其他有紅線的敵人也會受一半傷害。',
     cards: [
-      { key: 's1', n: '情感牽線', lv: 1, cost: 1, type: 'atk', anim: 'punch', dmg: 6, link: 1, d: '造成 {dmg} 點傷害，把目標綁上紅線。' },
-      { key: 's2', n: '社群經營', lv: 1, cost: 1, type: 'skill', anim: 'cast', block: 6, heal: 2, d: '獲得 {block} 點格擋，回復 {heal} 點生命。' },
-      { key: 'ult', n: '人口普查', lv: 1, type: 'ult', anim: 'cast', fixed: 8, aoe: 1, link: 1, stun: 1, d: '翻開戶口名簿：全體敵人受到 {fixed} 點傷害（無視格擋）、綁上紅線並暈眩。' },
+      { key: 's1', n: '赤繩繫足', lv: 1, cost: 1, type: 'atk', anim: 'punch', dmg: 6, link: 1, d: '造成 {dmg} 點傷害，把目標綁上紅線。' },
+      { key: 's2', n: '定婚店', lv: 1, cost: 1, type: 'skill', anim: 'cast', block: 6, heal: 2, d: '獲得 {block} 點格擋，回復 {heal} 點生命。' },
+      { key: 'ult', n: '亂點鴛鴦譜', lv: 1, type: 'ult', anim: 'cast', fixed: 8, aoe: 1, link: 1, stun: 1, d: '翻開鴛鴦譜：全體敵人受到 {fixed} 點傷害（無視格擋）、綁上紅線並暈眩。' },
       { key: 'book', n: '姻緣簿', lv: 2, cost: 1, type: 'skill', anim: 'cast', draw: 2, block: 3, d: '翻閱姻緣簿：抽 {draw} 張牌，獲得 {block} 點格擋。' },
       { key: 'thread', n: '千里姻緣一線牽', lv: 4, cost: 2, type: 'atk', anim: 'cast', dmg: 5, aoe: 1, link: 1, d: '全體敵人受到 {dmg} 點傷害，全部綁上紅線。' },
       { key: 'match', n: '月下撮合', lv: 5, cost: 1, type: 'skill', anim: 'cast', matchmake: 1, block: 4, d: '有紅線的敵人全部陷入熱戀（混亂：下一次攻擊打自己的另一半），獲得 {block} 點格擋。' },
@@ -153,7 +153,7 @@ const hasTag = (c, t) => (c.tags || '').split(' ').includes(t);
 const P2 = (key, lv, n, d) => ({ key, lv, n, d });
 Object.assign(KITS, {
   guangong: { hp: 50, theme: '氣勢流：打攻擊牌累積氣勢（上限 10，每回合開始少 2），青龍斬和過五關會吃掉氣勢，越多越痛。', cards: [
-    C2('s1', 1, '信用審查', 1, 'atk', 's1', '青龍刀突刺：造成 {D:7} 點傷害，目標生命低於一半時加五成。氣勢 +1。', (g) => { g.dmg(g.t.hp < g.t.maxHp / 2 ? 10.5 : 7); g.mom(1); }),
+    C2('s1', 1, '刺顏良', 1, 'atk', 's1', '青龍刀突刺：造成 {D:7} 點傷害，目標生命低於一半時加五成。氣勢 +1。', (g) => { g.dmg(g.t.hp < g.t.maxHp / 2 ? 10.5 : 7); g.mom(1); }),
     C2('s2', 1, '橫刀立馬', 1, 'skill', 's2', '獲得 {B:7} 點格擋。敵人這回合要攻擊的話，氣勢再 +2。', (g) => { g.block(7); if (g.foeAtk()) g.mom(2); }, 'counter'),
     C2('ult', 1, '青龍斬', 0, 'ult', 'ult', '造成 {D:15} 點傷害，每點氣勢多 4 點，用掉全部氣勢。', (g) => { const m = B.mom; B.mom = 0; g.dmgRaw(g.d(15) + 4 * m); if (m) float(g.h, `氣勢 ${m} 全開！`, '#40d070'); }),
     C2('wine', 2, '溫酒斬華雄', 1, 'skill', 's2', '酒還溫著就回來了：本回合下一張攻擊牌傷害加倍，抽 1 張牌。', (g) => { B.nextAtk = 2; float(g.h, '下一擊加倍', '#ffb040'); g.draw(1); }, 'retain'),
@@ -182,9 +182,9 @@ Object.assign(KITS, {
     P2('undying', 8, '聖火不滅', '每場戰鬥第一次倒下時，以三成生命復活。'),
   ] },
   tudigong: { hp: 54, theme: '守護地方的福德正神：很硬，會存元寶、叫虎爺。', cards: [
-    C2('s1', 1, '基層維安', 1, 'skill', 's1', '獲得 {B:7} 點格擋。', (g) => g.block(7)),
-    C2('s2', 1, '地方情資', 1, 'atk', 's2', '造成 {D:5} 點傷害，抽 1 張牌。', (g) => { g.dmg(5); g.draw(1); }),
-    C2('ult', 1, '房地產區劃', 0, 'ult', 'ult', '造成 {D:18} 點傷害，目標虛弱 2 回合。', (g) => { g.dmg(18); g.est('weak', 2); }),
+    C2('s1', 1, '護境安民', 1, 'skill', 's1', '獲得 {B:7} 點格擋。', (g) => g.block(7)),
+    C2('s2', 1, '巡境', 1, 'atk', 's2', '造成 {D:5} 點傷害，抽 1 張牌。', (g) => { g.dmg(5); g.draw(1); }),
+    C2('ult', 1, '張福德顯靈', 0, 'ult', 'ult', '造成 {D:18} 點傷害，目標虛弱 2 回合。', (g) => { g.dmg(18); g.est('weak', 2); }),
     C2('temple', 2, '土地公廟', 2, 'skill', 's1', '這場戰鬥每回合開始獲得 {B:3} 點格擋。', (g) => { g.st.temple = (g.st.temple || 0) + g.n(3); }),
     C2('ingot', 4, '招財進寶', 1, 'skill', 's2', '得 1 個元寶（集滿 3 個換 1 點能量），抽 1 張牌。', (g) => { g.ingot(1); g.draw(1); }),
     C2('tiger', 5, '虎爺', 2, 'skill', 'ult', '召喚虎爺：之後 3 回合，每回合咬一個敵人 {D:4} 點。', (g) => { g.st.tiger = 3; g.st.tigerDmg = g.d(4); }),
@@ -195,9 +195,9 @@ Object.assign(KITS, {
     P2('answer', 8, '有求必應', '生命低於四分之一時，每回合多抽 1 張、多 5 點格擋。'),
   ] },
   hermes: { hp: 40, theme: '眾神的信使、小偷之神：抽牌、搶能量、出手快。', cards: [
-    C2('s1', 1, '訊息傳遞', 1, 'atk', 's1', '造成 {D:4} 點傷害，抽 1 張牌。', (g) => { g.dmg(4); g.draw(1); }),
-    C2('s2', 1, '商業欺詐', 1, 'atk', 's2', '造成 {D:5} 點傷害，目標虛弱 1 回合。', (g) => { g.dmg(5); g.est('weak', 1); }),
-    C2('ult', 1, '極速外送', 0, 'ult', 'ult', '連打 4 次，每次 {D:4} 點傷害。', (g) => { for (let i = 0; i < 4; i++) g.dmg(4); }),
+    C2('s1', 1, '神使傳令', 1, 'atk', 's1', '造成 {D:4} 點傷害，抽 1 張牌。', (g) => { g.dmg(4); g.draw(1); }),
+    C2('s2', 1, '騙過阿波羅', 1, 'atk', 's2', '造成 {D:5} 點傷害，目標虛弱 1 回合。', (g) => { g.dmg(5); g.est('weak', 1); }),
+    C2('ult', 1, '斬百眼巨人', 0, 'ult', 'ult', '連打 4 次，每次 {D:4} 點傷害。', (g) => { for (let i = 0; i < 4; i++) g.dmg(4); }),
     C2('cattle', 2, '偷牛小賊', 0, 'skill', 's1', '出生當天就偷了阿波羅的牛：抽 2 張，隨機丟 1 張。', (g) => { g.draw(2); g.discardRandom(1); }),
     C2('lyre', 4, '七弦琴交易', 1, 'skill', 's2', '隨機丟 1 張牌，得 2 點能量。', (g) => { g.discardRandom(1); B.energy += 2; }),
     C2('guide', 5, '引魂者', 2, 'atk', 'ult', '造成 {D:6} 點傷害；目標生命低於兩成（非魔王）直接帶走。', (g) => { if (!g.t.boss && g.t.hp <= g.t.maxHp * 0.2) g.execute(); else g.dmg(6); }),
@@ -235,7 +235,7 @@ Object.assign(KITS, {
   ] },
   anubis: { hp: 48, theme: '秤心審判的冥界之神：看血量比例決定生死。', cards: [
     C2('s1', 1, '靈魂審判', 1, 'atk', 's1', '權杖重擊：造成 {D:6} 點傷害。', (g) => g.dmg(6)),
-    C2('s2', 1, '資產查封', 1, 'atk', 's2', '造成 {D:4} 點傷害，目標封印（下回合只能普攻）。', (g) => { g.dmg(4); g.est('seal', 1); }),
+    C2('s2', 1, '法老的詛咒', 1, 'atk', 's2', '造成 {D:4} 點傷害，目標封印（下回合只能普攻）。', (g) => { g.dmg(4); g.est('seal', 1); }),
     C2('ult', 1, '冥界天秤', 0, 'ult', 'ult', '目標的生命比例比你低：造成 {D:25} 點傷害；否則回復 {B:15} 點生命。', (g) => { if (g.t.hp / g.t.maxHp < g.h.hp / g.h.maxHp) g.dmg(25); else g.heal(15); }),
     C2('mummy', 2, '木乃伊包紮', 1, 'skill', 's1', '獲得 {B:6} 點格擋，解除負面狀態。', (g) => { g.block(6); g.cleanse(); }),
     C2('weigh', 4, '秤心儀式', 2, 'atk', 'ult', '雙方生命比例每差一成，造成 {D:3} 點傷害（至少一次）。', (g) => g.dmg(3 * Math.max(1, Math.floor(Math.abs(g.t.hp / g.t.maxHp - g.h.hp / g.h.maxHp) * 10)))),
@@ -276,9 +276,9 @@ Object.assign(KITS, {
     P2('sigh', 8, '雪女的嘆息', '碎冰打倒敵人時，用掉的冰霜轉到另一個敵人身上。'),
   ] },
   medusa: { hp: 44, theme: '看一眼就石化的蛇髮女妖：石化加蛇毒。', cards: [
-    C2('s1', 1, '石化資本', 1, 'atk', 's1', '造成 {D:4} 點傷害，石化 1 層（3 層就跳過一回合）。', (g) => { g.dmg(4); g.est('petrify', 1); }),
-    C2('s2', 1, '冷血管理', 1, 'atk', 's2', '造成 {D:5} 點傷害，蛇毒 2 層。', (g) => { g.dmg(5); g.est('poison', 2); }),
-    C2('ult', 1, '石化資產', 0, 'ult', 'ult', '目標身上有石化：暈眩 2 回合；否則造成 {D:16} 點傷害、石化 2 層。', (g) => { if ((g.t.petrify || 0) >= 1) { g.t.petrify = 0; g.est('stun', 2); } else { g.dmg(16); g.est('petrify', 2); } }),
+    C2('s1', 1, '石化凝視', 1, 'atk', 's1', '造成 {D:4} 點傷害，石化 1 層（3 層就跳過一回合）。', (g) => { g.dmg(4); g.est('petrify', 1); }),
+    C2('s2', 1, '蛇髮噬咬', 1, 'atk', 's2', '造成 {D:5} 點傷害，蛇毒 2 層。', (g) => { g.dmg(5); g.est('poison', 2); }),
+    C2('ult', 1, '戈爾貢之首', 0, 'ult', 'ult', '目標身上有石化：暈眩 2 回合；否則造成 {D:16} 點傷害、石化 2 層。', (g) => { if ((g.t.petrify || 0) >= 1) { g.t.petrify = 0; g.est('stun', 2); } else { g.dmg(16); g.est('petrify', 2); } }),
     C2('snakehair', 2, '蛇髮守衛', 1, 'skill', 's2', '獲得 {B:5} 點格擋；這回合打你的敵人中蛇毒 1 層。', (g) => { g.block(5); g.st.snake = 1; }),
     C2('mirror', 4, '鏡面反照', 2, 'skill', 'ult', '反過來用柏修斯的鏡盾：下一次受到的傷害全部反彈。', (g) => { g.st.mirror = 1; }),
     C2('athena', 5, '雅典娜的詛咒', 1, 'skill', 's1', '目標所有負面狀態 +1 層。', (g) => g.allDebuffPlus()),
