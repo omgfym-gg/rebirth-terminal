@@ -683,6 +683,7 @@ function jobCard(id, g, showSide) {
     ART[id] ? artImg(id) : null,
     el('b', {}, `${j.name}${showSide ? `（${j.side}族）` : ''}`),
     el('small', { class: 'muted' }, `${j.title}　死對頭：${rival ? rival.name : '？'}`),
+    ORIGINS[id] ? el('small', { class: 'origin' }, el('span', { class: 'tag origin' }, ORIGINS[id][0]), ORIGINS[id][1]) : null,
     el('small', { class: 'quote' }, `「${j.quote}」`),
     el('small', {}, el('span', { class: 'tag' }, '被動'), `「${j.passive.n}」${describePassive(j.passive.p, g)}`),
     ...j.skills.map((sk) => el('small', {}, el('span', { class: 'tag' }, '技能'), `「${sk.n}」${describeSkill(sk, g)}`)),

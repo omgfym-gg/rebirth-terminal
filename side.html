@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>橫向戰鬥試玩</title>
-<link rel="stylesheet" href="style.css?v=20261023c">
+<link rel="stylesheet" href="style.css?v=20261023d">
 <style>
   .stage { width: 100%; height: auto; border: 2px solid var(--line); background: #0b0a12; touch-action: manipulation; }
   .bar { display: flex; justify-content: space-between; margin: 6px 0; font-size: 14px; }
@@ -16,6 +16,7 @@
   .pick { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
   .pick .btn { flex: 1 0 30%; padding: 8px 4px; font-size: 14px; }
   .pick .btn.active { border-color: var(--gold); background: #3a3420; }
+  .intro { font-size: 13px; line-height: 1.5; margin-bottom: 6px; }
   .log { font-size: 13px; color: var(--muted); margin-top: 6px; min-height: 40px; }
 </style>
 </head>
@@ -24,6 +25,7 @@
   <h2>橫向戰鬥・試玩</h2>
   <p class="muted" style="font-size:13px">試試看「左右對站」的打法。先選主角，打完可以換下一批敵人，最後一批是首領。</p>
   <div class="pick"></div>
+  <div class="intro"></div>
   <canvas class="stage" width="384" height="216"></canvas>
   <div class="bar"><span class="hp"></span><span class="who"></span></div>
   <div class="acts"></div>
@@ -31,9 +33,9 @@
   <div class="log"></div>
   <a class="btn wide" href="./" style="display:block;text-align:center;text-decoration:none;margin-top:10px">回遊戲</a>
 </div>
-<script src="js/data.js?v=20261023c"></script>
-<script src="js/jobs.js?v=20261023c"></script>
-<script src="js/sprites.js?v=20261023c"></script>
+<script src="js/data.js?v=20261023d"></script>
+<script src="js/jobs.js?v=20261023d"></script>
+<script src="js/sprites.js?v=20261023d"></script>
 <script>
 'use strict';
 // 橫向回合制原型：我方站左邊、敵人站右邊，各自有前後排。點技能，再點目標。
@@ -664,6 +666,10 @@ function renderPick() {
     };
     box.append(b);
   }
+  // 角色介紹：這是哪裡的神魔
+  const o = ORIGINS[heroId], J = JOBS[heroId], intro = $('.intro');
+  intro.innerHTML = '';
+  if (o) intro.append(Object.assign(document.createElement('span'), { className: 'tag origin', textContent: o[0] }), `${J.name}（${J.side}族・${J.title}）：${o[1]}`);
 }
 
 cv.addEventListener('pointerdown', (ev) => {

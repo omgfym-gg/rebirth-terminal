@@ -119,6 +119,8 @@ div.card.job { cursor: default; margin-top: 8px; }
 .card.job .quote { color: var(--muted); font-style: italic; }
 .tag { display: inline-block; font-size: 11px; padding: 0 4px; margin-right: 4px; border: 1px solid var(--accent); color: var(--accent); }
 .tag.ult { border-color: var(--gold); color: var(--gold); }
+.tag.origin { border-color: #7fd0a0; color: #7fd0a0; }
+small.origin { color: var(--text); }
 .small-note { font-size: 13px; margin-top: -4px; }
 canvas.art { image-rendering: pixelated; width: auto; align-self: center; }
 .skill-desc { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; font-size: 13px; line-height: 1.45; }
