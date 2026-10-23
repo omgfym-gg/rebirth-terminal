@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>橫向戰鬥試玩</title>
-<link rel="stylesheet" href="style.css?v=20261023a">
+<link rel="stylesheet" href="style.css?v=20261023b">
 <style>
   .stage { width: 100%; height: auto; border: 2px solid var(--line); background: #0b0a12; touch-action: manipulation; }
   .bar { display: flex; justify-content: space-between; margin: 6px 0; font-size: 14px; }
@@ -31,9 +31,9 @@
   <div class="log"></div>
   <a class="btn wide" href="./" style="display:block;text-align:center;text-decoration:none;margin-top:10px">回遊戲</a>
 </div>
-<script src="js/data.js?v=20261023a"></script>
-<script src="js/jobs.js?v=20261023a"></script>
-<script src="js/sprites.js?v=20261023a"></script>
+<script src="js/data.js?v=20261023b"></script>
+<script src="js/jobs.js?v=20261023b"></script>
+<script src="js/sprites.js?v=20261023b"></script>
 <script>
 'use strict';
 // 橫向回合制原型：我方站左邊、敵人站右邊，各自有前後排。點技能，再點目標。
@@ -89,13 +89,14 @@ const FOES = {
   shade:   { name: '影子怪',     hp: 12, atk: 5, def: 1, spd: 4 },
   husk:    { name: '空殼職員',   hp: 18, atk: 6, def: 2, spd: 3 },
   wisp:    { name: '鬼火',       hp: 8,  atk: 4, def: 0, spd: 6, ranged: true },
-  redgirl: { name: '紅衣小女孩', hp: 10, atk: 5, def: 1, spd: 7 },
   mirror:  { name: '鏡中人',     hp: 16, atk: 5, def: 0, spd: 5 },
   hunter:  { name: '追殺者',     hp: 20, atk: 7, def: 2, spd: 6 },
   boss:    { name: '無臉典獄長', hp: 50, atk: 8, def: 3, spd: 4, boss: true },
-  horus:   { name: '荷魯斯之影', hp: 52, atk: 7, def: 2, spd: 5, boss: true, ranged: true },
+  zombie:  { name: '加班殭屍',   hp: 22, atk: 6, def: 2, spd: 2 },
+  printer: { name: '卡紙印表機', hp: 14, atk: 5, def: 3, spd: 4, ranged: true },
+  judge:   { name: '考績審判官', hp: 60, atk: 9, def: 3, spd: 4, boss: true },
 };
-const WAVES = [['shade', 'husk', 'wisp'], ['mirror', 'hunter', 'shade'], ['boss']];
+const WAVES = [['zombie', 'printer', 'wisp'], ['mirror', 'hunter', 'zombie'], ['shade', 'husk', 'printer'], ['boss'], ['judge']];
 let wave = 0;
 
 function reset(next) {
