@@ -18,7 +18,8 @@ def split_rows(path, names, tmpdir):
     import numpy as np
     from PIL import Image
     im = Image.open(path).convert('RGB'); a = np.asarray(im).astype(int)
-    ink = ((a.min(axis=2) < 225) | (a.max(axis=2) - a.min(axis=2) > 30)).sum(axis=1) > 2
+    count = ((a.min(axis=2) < 225) | (a.max(axis=2) - a.min(axis=2) > 30)).sum(axis=1)
+    ink = count > 2
     runs, y = [], 0
     while y < len(ink):
         if ink[y]:
@@ -30,6 +31,17 @@ def split_rows(path, names, tmpdir):
     while len(runs) > len(names):  # 把最近的兩段併起來（角色身上的特效可能斷開）
         i = min(range(len(runs) - 1), key=lambda k: runs[k + 1][0] - runs[k][1])
         runs[i:i + 2] = [[runs[i][0], runs[i + 1][1]]]
+    if len(runs) < len(names):
+        # 排跟排黏在一起（特效碰到下一排）：在每個三等分線附近找墨水最少的那一列切開
+        n, H = len(names), len(count)
+        cuts = []
+        for k in range(1, n):
+            lo, hi = int(H * k / n - H / 8), int(H * k / n + H / 8)
+            cuts.append(lo + int(np.argmin(count[lo:hi])))
+        top, bottom = runs[0][0], runs[-1][1]
+        edges = [top] + cuts + [bottom]
+        runs = [[edges[i], edges[i + 1]] for i in range(n)]
+        print(f'注意：{os.path.basename(path)} 排與排相連，改用墨水最少的位置切開（{cuts}）', file=sys.stderr)
     if len(runs) != len(names): raise SystemExit(f'{path} 切出 {len(runs)} 排，應該是 {len(names)} 排')
     out = {}
     for n, (y0, y1) in zip(names, runs):
