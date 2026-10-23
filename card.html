@@ -7,6 +7,9 @@
 <link rel="stylesheet" href="style.css?v=20261023l">
 <style>
   .stage { width: 100%; height: auto; border: 2px solid var(--line); background: #0b0a12; touch-action: manipulation; }
+  .expbar { position: relative; height: 14px; border: 1px solid #6a5a30; background: #1a1610; margin-bottom: 4px; }
+  .expbar i { position: absolute; left: 0; top: 0; bottom: 0; background: #b08a30; transition: width 0.4s; }
+  .expbar span { position: relative; display: block; text-align: center; font-size: 11px; line-height: 14px; color: #ffe9b0; }
   .bar { display: flex; justify-content: space-between; align-items: center; margin: 6px 0; font-size: 14px; gap: 8px; }
   .energy { display: inline-block; min-width: 46px; text-align: center; padding: 2px 6px; border: 2px solid var(--gold); color: var(--gold); font-weight: bold; }
   .hand { display: flex; gap: 6px; overflow-x: auto; padding: 10px 2px 8px 10px; min-height: 150px; }
@@ -45,8 +48,10 @@
   <div class="screen-battle" style="display:none">
     <canvas class="stage" width="384" height="216"></canvas>
     <div class="bar"><span class="hp"></span><span class="energy"></span></div>
+    <div class="expbar"><i></i><span></span></div>
     <div class="hand"></div>
     <div class="row"><button class="btn ultbtn"></button><button class="btn primary endturn">結束回合</button></div>
+    <div class="row" style="margin-top:6px"><button class="btn fast"></button></div>
     <div class="log"></div>
   </div>
   <div class="screen-reward" style="display:none"></div>
@@ -94,8 +99,11 @@ const cv = document.querySelector('.stage'), g = cv.getContext('2d');
 g.imageSmoothingEnabled = false;
 const $ = (s) => document.querySelector(s);
 let gen = 0;
-const sleep = (ms) => { const my = gen; return new Promise((r) => setTimeout(() => { if (my === gen) r(); }, ms)); };
-const tween = (ms, fn) => { const my = gen; return new Promise((res) => { const t0 = performance.now(); const f = (n) => { if (my !== gen) return; const t = Math.min(1, (n - t0) / ms); fn(t); t < 1 ? requestAnimationFrame(f) : res(); }; requestAnimationFrame(f); }); };
+// 節奏：所有等待都乘上 PACE（一般 0.65；按「快轉」再快一倍）
+let PACE = 0.65;
+try { if (localStorage.getItem('rebirth-card-fast') === '1') PACE = 0.33; } catch (e) { /* 沒差 */ }
+const sleep = (ms) => { ms *= PACE; const my = gen; return new Promise((r) => setTimeout(() => { if (my === gen) r(); }, ms)); };
+const tween = (ms, fn) => { ms *= PACE; const my = gen; return new Promise((res) => { const t0 = performance.now(); const f = (n) => { if (my !== gen) return; const t = Math.min(1, (n - t0) / ms); fn(t); t < 1 ? requestAnimationFrame(f) : res(); }; requestAnimationFrame(f); }); };
 const rnd = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
 const shuffle = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = rnd(0, i); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 
@@ -172,23 +180,23 @@ function cardById(id) {
 
 // ───── 敵人：每隻有一串固定的意圖輪流做 ─────
 const FOES = {
-  shade:   { name: '影子怪',     hp: 18, plan: [['atk', 5], ['weak', 2], ['atk', 5]] },
-  husk:    { name: '空殼職員',   hp: 24, plan: [['def', 6], ['atk', 7], ['atk', 3, 2]] },
-  wisp:    { name: '鬼火',       hp: 12, plan: [['buff', 2], ['atk', 3, 2]] },
-  mirror:  { name: '鏡中人',     hp: 26, plan: [['atk', 7], ['vuln', 2], ['atk', 7]] },
-  hunter:  { name: '追殺者',     hp: 30, plan: [['def', 8], ['atk', 10], ['atk', 3, 3]] },
-  zombie:  { name: '加班殭屍',   hp: 28, plan: [['atk', 7], ['def', 6], ['atk', 7]] },
-  printer: { name: '卡紙印表機', hp: 18, plan: [['weak', 2], ['atk', 2, 3], ['atk', 6]] },
-  judge:   { name: '考績審判官', hp: 130, boss: true, plan: [['vuln', 2], ['atk', 14], ['def', 12], ['atk', 5, 3], ['buff', 3]] },
+  shade:   { name: '影子怪',     hp: 18, exp: 3, plan: [['atk', 5], ['weak', 2], ['atk', 5]] },
+  husk:    { name: '空殼職員',   hp: 24, exp: 4, plan: [['def', 6], ['atk', 7], ['atk', 3, 2]] },
+  wisp:    { name: '鬼火',       hp: 12, exp: 3, plan: [['buff', 2], ['atk', 3, 2]] },
+  mirror:  { name: '鏡中人',     hp: 26, exp: 5, plan: [['atk', 7], ['vuln', 2], ['atk', 7]] },
+  hunter:  { name: '追殺者',     hp: 30, exp: 6, plan: [['def', 8], ['atk', 10], ['atk', 3, 3]] },
+  zombie:  { name: '加班殭屍',   hp: 28, exp: 5, plan: [['atk', 7], ['def', 6], ['atk', 7]] },
+  printer: { name: '卡紙印表機', hp: 18, exp: 4, plan: [['weak', 2], ['atk', 2, 3], ['atk', 6]] },
+  judge:   { name: '考績審判官', hp: 130, exp: 25, boss: true, plan: [['vuln', 2], ['atk', 14], ['def', 12], ['atk', 5, 3], ['buff', 3]] },
 };
-// 一路往上爬的 6 層樓，越上面經驗越多
+// 一路往上爬的 6 層樓；exp 是清完這層的額外獎勵（打倒每隻怪另外給經驗，越上層越多）
 const FIGHTS = [
-  { foes: ['zombie', 'printer'], exp: 10 },
-  { foes: ['shade', 'wisp', 'shade'], exp: 10 },
-  { foes: ['mirror', 'hunter'], exp: 14 },
-  { foes: ['husk', 'printer', 'wisp'], exp: 14 },
-  { foes: ['hunter', 'zombie'], exp: 16 },
-  { foes: ['judge'], exp: 40 },
+  { foes: ['zombie', 'printer'], exp: 3 },
+  { foes: ['shade', 'wisp', 'shade'], exp: 3 },
+  { foes: ['mirror', 'hunter'], exp: 4 },
+  { foes: ['husk', 'printer', 'wisp'], exp: 4 },
+  { foes: ['hunter', 'zombie'], exp: 5 },
+  { foes: ['judge'], exp: 10 },
 ];
 
 // ───── 狀態 ─────
@@ -213,7 +221,7 @@ function startFight() {
   const hpK = 1 + run.fight * 0.15, atkUp = Math.max(0, run.fight - 1);
   const foes = F.map((k, i) => ({ id: 'e' + i, side: 'enemy', key: k, ...FOES[k], hp: Math.round(FOES[k].hp * hpK), maxHp: Math.round(FOES[k].hp * hpK), plan: FOES[k].plan.map(([kind, v, n]) => [kind, kind === 'atk' ? v + atkUp : v, n]), block: 0, str: 0, weak: 0, vuln: 0, stun: 0, confuse: 0, link: 0, step: rnd(0, 1), x: FOES[k].boss ? 290 : 228 + i * (F.length > 2 ? 56 : 70) }));
   for (const u of [hero, ...foes]) Object.assign(u, { ox: 0, oy: 0, flash: 0, anim: null, dead: false, atkUntil: 0, hurtUntil: 0 });
-  B = { hero, foes, draw: shuffle(run.deck.map(cardById)), hand: [], discard: [], energy: 3, charge: run.lv >= 10 ? 50 : 0, turn: 0, nextAtk: 1, atkCount: 0 };
+  B = { hero, foes, draw: shuffle(run.deck.map(cardById)), hand: [], discard: [], energy: 3, charge: run.lv >= 10 ? 50 : 0, turn: 0, nextAtk: 1, atkCount: 0, ups: [], expStart: run.gained, lvStart: run.lv };
   target = foes[0];
   effects = [];
   showScreen('battle');
@@ -267,6 +275,7 @@ function damage(src, dst, amount, pierce = false, spread = false) {
     if (dst.art) dst.anim = { name: 'down', t0: performance.now() };
     float(dst, '倒下', '#ff9090');
     if (src === B.hero) B.charge = Math.min(100, B.charge + 10);
+    if (dst.side === 'enemy') killExp(dst);
     if (dst.link && hasPassive('destiny') && dst.side === 'enemy') { B.energy++; drawCards(1); float(B.hero, '姻緣天定', '#ff90b0'); }
   }
   return d;
@@ -389,6 +398,17 @@ async function endTurn() {
 
 // ───── 經驗、升級、獎勵、死亡 ─────
 // 加經驗，回傳這次新解鎖的技能
+function killExp(f) {
+  const n = f.exp + run.fight;
+  effects.push({ type: 'text', x: f.x, y: GROUND - 70, text: `+${n} 經驗`, color: '#ffd070', t0: performance.now() + 200, ms: 1100 });
+  const r = gainExp(n);
+  if (r.after > r.before) {
+    B.ups.push(...r.news);
+    effects.push({ type: 'flash', t0: performance.now(), ms: 400 });
+    effects.push({ type: 'banner', text: `升級！Lv ${r.after}`, sub: r.news.join('、'), t0: performance.now(), ms: 1800 });
+  }
+  render();
+}
 function gainExp(n) {
   const before = levelOf(heroId).lv;
   prog[heroId] = prog[heroId] || { exp: 0 };
@@ -396,11 +416,12 @@ function gainExp(n) {
   const after = levelOf(heroId).lv, news = [];
   for (let lv = before + 1; lv <= after; lv++) {
     const K = KITS[heroId];
-    for (const c of K.cards) if (c.lv === lv) { news.push(`新牌「${c.n}」`); if (run.fight < FIGHTS.length) run.deck.push(heroId + '.' + c.key); }
+    // 新牌直接加進牌組；戰鬥中的話直接發到手上
+    for (const c of K.cards) if (c.lv === lv) { news.push(`新牌「${c.n}」`); run.deck.push(heroId + '.' + c.key); if (B && !B.over) B.hand.push(cardById(heroId + '.' + c.key)); }
     for (const p of K.passives) if (p.lv === lv) news.push(`被動「${p.n}」`);
     if (lv >= 9) news.push(lv === 10 ? '每場大招條從一半開始' : '生命上限 +4');
   }
-  if (after > before) { run.maxHp += (after - before) * 4; run.hp += (after - before) * 4; run.lv = after; }
+  if (after > before) { run.maxHp += (after - before) * 4; run.hp += (after - before) * 4; run.lv = after; if (B && !B.over) { B.hero.maxHp += (after - before) * 4; B.hero.hp += (after - before) * 4; } }
   return { before, after, news };
 }
 function expLine(id = heroId) {
@@ -412,8 +433,11 @@ function levelUpHtml(r) {
 }
 
 function winFight() {
+  B.over = true;
   run.hp = B.hero.hp;
   const r = gainExp(FIGHTS[run.fight].exp);
+  r.news = [...B.ups, ...r.news]; r.before = B.lvStart;
+  const got = run.gained - B.expStart;
   run.fight++;
   const box = $('.screen-reward'); box.innerHTML = '';
   showScreen('reward');
@@ -423,7 +447,7 @@ function winFight() {
     return;
   }
   run.hp = Math.min(run.maxHp, run.hp + Math.round(run.maxHp * 0.15));
-  box.append(Object.assign(document.createElement('div'), { className: 'panel', innerHTML: `<h3>贏了！+${FIGHTS[run.fight - 1].exp} 經驗</h3><p class="muted">${expLine()}，生命回復一成半（${run.hp}/${run.maxHp}）。</p>${levelUpHtml(r)}<p>選一個獎勵：</p>` }));
+  box.append(Object.assign(document.createElement('div'), { className: 'panel', innerHTML: `<h3>贏了！這層 +${got} 經驗</h3><p class="muted">${expLine()}，生命回復一成半（${run.hp}/${run.maxHp}）。</p>${levelUpHtml(r)}<p>選一個獎勵：</p>` }));
   // 獎勵：加一張自己已解鎖的牌，或把牌組裡一張牌升級
   const pool = shuffle(unlockedCards(heroId, run.lv).map((c) => heroId + '.' + c.key)).slice(0, 2);
   const upable = shuffle([...new Set(run.deck.filter((id) => !id.endsWith('+')))]);
@@ -437,7 +461,7 @@ function winFight() {
 }
 
 function loseRun() {
-  busy = true;
+  busy = true; B.over = true;
   const r = gainExp(5); // 死亡也是一種經驗
   setTimeout(() => {
     showScreen('reward');
@@ -504,7 +528,12 @@ function render() {
   const ub = $('.ultbtn'); ub.textContent = `${ult.n} ${B.charge}%`; ub.disabled = busy || B.charge < 100; ub.classList.toggle('glow', B.charge >= 100);
   ub.onclick = () => playCard('ult');
   $('.endturn').disabled = busy;
+  const L = levelOf(heroId);
+  $('.expbar i').style.width = (L.need ? 100 * L.exp / L.need : 100) + '%';
+  $('.expbar span').textContent = L.need ? `Lv ${L.lv}　經驗 ${L.exp}/${L.need}` : `Lv ${L.lv}（滿級）`;
+  $('.fast').textContent = PACE < 0.5 ? '快轉：開' : '快轉：關';
 }
+$('.fast').onclick = () => { PACE = PACE < 0.5 ? 0.65 : 0.33; try { localStorage.setItem('rebirth-card-fast', PACE < 0.5 ? '1' : '0'); } catch (e) { /* 沒差 */ } render(); };
 $('.endturn').onclick = () => endTurn();
 
 cv.addEventListener('pointerdown', (ev) => {
@@ -581,6 +610,12 @@ function draw(now) {
     if (e.type === 'burst') {
       for (let s = 0; s < 10; s++) { const ang = s * 0.63 + e.seed, d = 6 + k * 26; g.globalAlpha = 1 - k; g.fillStyle = s % 3 ? e.color : '#fff'; g.fillRect(Math.round(e.x + Math.cos(ang) * d - 2), Math.round(GROUND - 40 + Math.sin(ang) * d * 0.8 - 2), 4, 4); }
       g.globalAlpha = 1;
+    }
+    if (e.type === 'banner' && k >= 0) {
+      const a = k < 0.1 ? k * 10 : k > 0.8 ? (1 - k) * 5 : 1;
+      g.globalAlpha = a; g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(0, 70, W, 50);
+      g.textAlign = 'center'; g.font = 'bold 20px sans-serif'; g.fillStyle = '#ffd070'; g.fillText(e.text, W / 2, 94);
+      g.font = '11px sans-serif'; g.fillStyle = '#fff'; g.fillText(e.sub || '', W / 2, 111); g.globalAlpha = 1;
     }
     if (e.type === 'thread') {
       g.globalAlpha = 1 - k; g.strokeStyle = '#ff3050'; g.lineWidth = 2; g.beginPath();
