@@ -376,6 +376,9 @@ const JOB_ART = {
   dagda: { mark: 'pot', atk: 's2', melee: true, color: '#d8a060', h: 82, w: { idle: 77, walk: 77, hurt: 98, s1: 93, s2: 82, ult: 121 } },
   hanako: { mark: 'wisp', atk: 's2', melee: true, color: '#b060e0', h: 82, w: { idle: 71, walk: 68, hurt: 77, s1: 86, s2: 87, ult: 98 } },
   anubis: { mark: 'ankh', atk: 's1', melee: true, color: '#f0c040', h: 82, w: { idle: 72, walk: 72, hurt: 78, s1: 92, s2: 102, ult: 96 } },
+  hachi: { mark: 'hat', atk: 's1', melee: false, color: '#e8e8ff', h: 94, w: { idle: 66, walk: 64, hurt: 80, s1: 117, s2: 101, ult: 113 } },
+  yukionna: { mark: 'snow', atk: 's1', melee: false, color: '#a0e0ff', h: 82, w: { idle: 81, walk: 70, hurt: 96, s1: 156, s2: 112, ult: 144 } },
+  medusa: { mark: 'snake', atk: 's2', melee: true, color: '#70d060', h: 82, w: { idle: 68, walk: 64, hurt: 81, s1: 130, s2: 68, ult: 105 } },
 };
 for (const [id, j] of Object.entries(JOB_ART)) {
   const sheet = (n) => [n + '.png', j.w[n], j.h];
@@ -413,7 +416,7 @@ function artAnim(job, name) {
 }
 
 // 圖檔更新時改這個，手機才不會一直用快取的舊圖
-const ASSET_V = '20261023i';
+const ASSET_V = '20261023k';
 const ArtImages = {};
 function artSheet(job, sheet) {
   const a = ART[job], spec = a && a.sheets[sheet];
@@ -452,6 +455,9 @@ const MARKS = {
   heart: { color: '#ff5c8d', light: '#ffc0d4', rows: ['.x.x.', 'xxxxx', 'xxxxx', '.xxx.', '..x..'] },
   wisp: { color: '#b060e0', light: '#f0c0ff', rows: ['..x.', '.xx.', 'xxx.', '.xxx', '..x.'] },
   ankh: { color: '#f0c040', light: '#fff0b0', rows: ['.x.', 'x.x', '.x.', 'xxx', '.x.', '.x.'] },
+  hat: { color: '#f0f0ff', light: '#ffffff', rows: ['..xx..', '.xxxx.', 'xxxxxx'] },
+  snow: { color: '#c0ecff', light: '#ffffff', rows: ['x.x.x', '.xxx.', 'xx.xx', '.xxx.', 'x.x.x'] },
+  snake: { color: '#70d060', light: '#e0ffa0', rows: ['.xx..', 'x..x.', '..x..', '.x..x', '..xx.'] },
   pot: { color: '#606878', light: '#ffd080', rows: ['.x.x.', 'xxxxx', 'xxxxx', '.xxx.'] },
   wing: { color: '#f4f4ff', light: '#ffffff', rows: ['x....', 'xx...', 'xxx..', '.xxxx', '..xx.'] },
   crescent: { color: '#40d070', light: '#c0ffd0', rows: ['..xx', '...x', '...x', '..xx', 'xxx.'] },
