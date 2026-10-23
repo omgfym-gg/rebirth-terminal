@@ -363,7 +363,7 @@ const ART = {
     dir: 'assets/redgirl/',
     mark: 'fog', // 身邊飄紅色山霧
     // punch 是蹲低撲上去抓，cast 是揮手召出紅霧
-    sheets: { pose: ['sheet.png', 56, 78], walk: ['walk.png', 52, 78], punch: ['punch.png', 75, 78], cast: ['cast.png', 73, 78], hurt: ['hurt.png', 96, 78] },
+    sheets: { pose: ['sheet.png', 63, 76], walk: ['walk.png', 61, 76], punch: ['punch.png', 76, 76], cast: ['cast.png', 71, 76], hurt: ['hurt.png', 88, 76] },
   },
 };
 // 新一批職業圖（tools/job_art.py 產生，每張 3 格）：idle 待機、walk 走路、hurt 受傷、s1/s2 兩招技能、ult 大招
@@ -407,7 +407,7 @@ function artAnim(job, name) {
 }
 
 // 圖檔更新時改這個，手機才不會一直用快取的舊圖
-const ASSET_V = '20261023c';
+const ASSET_V = '20261023d';
 const ArtImages = {};
 function artSheet(job, sheet) {
   const a = ART[job], spec = a && a.sheets[sheet];
