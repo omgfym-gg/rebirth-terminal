@@ -195,13 +195,13 @@ const Game = {
 
   // ───────── 轉生櫃台 ─────────
 
-  // 前世之影：死過的每一世都能帶上場，停在死前的等級、穿著死前的裝備（同一位神魔只算最近那一世）
+  // 前世之影：死過的每一世都能帶上場，停在死前的等級、空手上場（同一位神魔只算最近那一世）
   shadowOptions(except) {
     const seen = new Set(), out = [];
     for (const h of [...this.save.history].reverse()) {
       if (!HEROES[h.hero] || h.hero === except || seen.has(h.hero)) continue;
       seen.add(h.hero);
-      out.push({ id: h.hero, level: h.level, gear: h.gear || [], life: h.life });
+      out.push({ id: h.hero, level: h.level, gear: [], life: h.life });
     }
     return out;
   },
@@ -223,7 +223,7 @@ const Game = {
       if (!pick.hero) return [];
       const opts = this.shadowOptions(pick.hero);
       const shadows = opts.length <= 2 ? opts : pick.shadows.map((i) => opts[i]).filter(Boolean);
-      const out = [{ id: pick.hero, tag: TAGS.now }, ...shadows.map((o) => ({ id: o.id, tag: TAGS.shadow, level: o.level, gear: o.gear, life: o.life }))];
+      const out = [{ id: pick.hero, tag: TAGS.now }, ...shadows.map((o) => ({ id: o.id, tag: TAGS.shadow, level: o.level, gear: [], life: o.life }))];
       if (opts.length <= 2) for (const id of s.offer.crew) { if (out.length >= 3) break; if (!out.some((p) => p.id === id)) out.push({ id, tag: TAGS.crew }); }
       return out;
     };
@@ -329,10 +329,10 @@ const Game = {
 
   // ───────── 爬塔：一層一場一筆紅線 ─────────
 
-  // 出戰的三位：今世和派遣同事穿這一世拿到的裝備，前世之影穿死前的裝備
+  // 出戰的三位：都穿這一世拿到的裝備（前世之影也是空手來的）
   battleParty() {
     const L = this.save.life;
-    return L.party.map((m) => ({ id: m.id, tag: m.tag, hp: L.hp[m.id], maxHp: L.maxHp[m.id], gear: m.tag === TAGS.shadow ? (m.gear || []) : this.eqOf(m.id) }));
+    return L.party.map((m) => ({ id: m.id, tag: m.tag, hp: L.hp[m.id], maxHp: L.maxHp[m.id], gear: this.eqOf(m.id) }));
   },
 
   floorFoes(f) {
@@ -358,14 +358,14 @@ const Game = {
       note: `<p class="muted">第 ${this.lifeNo} 世・一世共 ${LIFE_FLOORS} 層</p>`,
       foes, scale: 1 + 0.12 * (f - 1) + 0.1 * (this.lifeNo - 1), up: L.up,
       party: this.battleParty(),
-      gearButton: () => Redline.gearBox(this.gearStore(), () => this.fight(), '開始', L.party.filter((m) => m.tag === TAGS.shadow)),
+      gearButton: () => Redline.gearBox(this.gearStore(), () => this.fight(), '開始'),
       onEnd: (r) => this.afterFloor(f, r),
     });
   },
 
   gearStore() {
     const s = this.save, L = s.life;
-    return { note: '這一世拿到的裝備，轉生時會清空。', bag: s.vault, eq: s.eq, heroes: L.party.filter((m) => m.tag !== TAGS.shadow).map((m) => m.id), anyKind: (hid) => L.form === 'human' && hid === L.hero, save: () => this.persist() };
+    return { note: '這一世拿到的裝備，轉生時會清空。', bag: s.vault, eq: s.eq, heroes: L.party.map((m) => m.id), anyKind: (hid) => L.form === 'human' && hid === L.hero, save: () => this.persist() };
   },
 
   afterFloor(f, r) {
@@ -471,7 +471,7 @@ const Game = {
     };
     s.history.push(record);
     L.alive = false;
-    // 裝備不帶到下一世（前世之影穿著死前的裝備上場）
+    // 裝備不帶到下一世，前世之影也是空手上場
     s.vault = []; s.eq = {};
 
     let frag = L.floor * 3 + L.kills;
