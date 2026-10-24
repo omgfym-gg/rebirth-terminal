@@ -1,14 +1,14 @@
-# 技能像素圖 Gemini 提示詞（每角色一張圖）
+# 技能打擊特效 Gemini 提示詞（每角色一張圖，3 招各 5 格）
 
 共通前綴（每張都貼在最前面）：
 
 ```
-Pixel art sprite sheet, 16-bit SNES style, crisp hard pixels, no anti-aliasing, limited palette, thick dark outline on icons.
+Pixel art sprite sheet, 16-bit SNES style, crisp hard pixels, no anti-aliasing, limited palette, bright glowing battle VFX.
 PURE BLACK background (#000000) everywhere, no gradient, no ground, no text, no labels, no characters.
 Layout: exactly 3 rows, evenly spaced, with clear black gaps between rows and between cells.
-Each row = 5 square cells left to right:
-  cell 1 = a skill ICON: a bold symbol inside a small rounded square frame tinted in the main color, readable at 32px;
-  cells 2-5 = a 4-frame VISUAL EFFECT animation of that skill (start, grow, peak, fade), glowing bright colors on black, effect only, no caster.
+Each row = a 5-frame battle hit EFFECT animation of one skill, left to right, equal square cells:
+  frame 1 start, frame 2 grow, frame 3 big IMPACT flash, frame 4 sparks/debris flying out, frame 5 fade.
+Effect only: no caster, no target, no icon frame. Glowing bright colors on black, like a fighting-game hit effect.
 Main color: {COLOR}.
 Row 1: {S1}
 Row 2: {S2}
