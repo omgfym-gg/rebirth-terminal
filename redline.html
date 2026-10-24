@@ -31,6 +31,11 @@
   .box p { font-size: 14px; line-height: 1.55; margin: 6px 0; }
   .opt { display: block; width: 100%; text-align: left; margin-top: 8px; padding: 10px; font-size: 14px; line-height: 1.45; }
   .opt b { color: var(--gold); }
+  .who { flex-wrap: wrap; }
+  .gear-row { display: flex; gap: 5px; flex-basis: 100%; flex-wrap: wrap; }
+  .gear-chip { padding: 3px 7px; font-size: 12px; border-width: 2px; }
+  .gear-hero { margin-top: 10px; }
+  .gear-hero .opt { margin-top: 5px; }
   details { margin-top: 10px; font-size: 13px; line-height: 1.55; }
   details summary { color: var(--accent); }
   details p { margin: 4px 0; }
@@ -132,13 +137,14 @@ function nextFloor() {
   const keys = f % 3 === 0 ? ['warden', 'zombie', ...(f >= 6 ? ['wisp'] : [])] : f === 1 ? ['zombie', 'wisp'] : ['zombie', 'zombie', 'wisp', ...(f >= 4 ? ['wisp'] : [])];
   foes = keys.map((key) => ({ key, ...FOES[key], side: 'enemy', maxHp: Math.round(FOES[key].hp * k), hp: Math.round(FOES[key].hp * k), atk: Math.round(FOES[key].atk * k), dead: false, frozen: false, confused: false, flash: 0, x: 0, y: 0 }));
   place(true);
-  effects = []; turn = 0; who = -1; busy = false;
+  effects = []; turn = 0; who = -1; busy = false; gearNewRound(true);
   nextHero();
   showBox(`<h2>第 ${f} 層${keys.includes('warden') ? '・精英' : ''}</h2>
     <p>敵人：${keys.map((x) => FOES[x].name).join('、')}</p>
     ${keys.includes('warden') ? '<p>典獄長會拉出<b>鎖鏈</b>（灰色粗線）。直線和自由線碰到鎖鏈就會被剪斷，畫圈不受影響。</p>' : '<p>三位神魔輪流上場。輪到誰，就從下面選他的一招，照那招的畫法在戰場上畫，畫好按出招。</p>'}
     <button class="btn primary wide ok">開始</button>`);
   $('.box .ok').onclick = hideBox;
+  gearIntroButton();
 }
 
 // 站位：每一輪大家都換位置，路線每次都要重想
@@ -171,6 +177,7 @@ async function nextHero() {
 }
 
 async function newRound() {
+  gearNewRound();
   for (const h of heroes) h.taunt = false;
   // 新的一輪：敵人退回右邊重整隊形，神魔留在上一手停下的位置
   await Promise.all(foes.filter((e) => !e.dead).map((e) => e.x < 330 ? moveTo(e, { x: rnd(340, 545), y: e.y }, 0.8).then(() => { e.face = -1; }) : null));
@@ -226,16 +233,19 @@ function inPoly(p, poly) {
 const pathLen = () => path.reduce((s, p, i) => i ? s + dist(p, path[i - 1]) : 0, 0);
 const living = () => [...heroes, ...foes].filter((u) => !u.dead);
 
-// 直線：從神魔身上往手指方向拉，最長 len，碰到鎖鏈就停
+// 直線：從神魔身上往手指方向拉，最長 len，碰到戰場邊或鎖鏈就停（八咫鏡會反射、青龍偃月刀斬殺後會延長）
 function straight(to) {
-  const s = center(hero()), d = dist(s, to) || 1, L = Math.min(d, inkMax());
-  let end = { x: s.x + (to.x - s.x) / d * L, y: s.y + (to.y - s.y) / d * L };
-  for (const c of chains) if (segCross(s, end, { x: c.x1, y: c.y1 }, { x: c.x2, y: c.y2 })) end = cutAt(s, end, c);
-  path = [s, end];
-  hits = living().filter((u) => u !== hero() && segHitsCircle(s, end, center(u), HIT_R)).sort((a, b) => dist(center(a), s) - dist(center(b), s));
+  const h = hero(), s = center(h), d = dist(s, to) || 1, dir = { x: (to.x - s.x) / d, y: (to.y - s.y) / d };
+  path = rayPath(s, dir, Math.min(d, inkMax()));
+  hits = lineHits();
+  if (wears(h, 'ex_guangong')) for (let k = 0, extra = 0; k < 4; k++) {
+    const want = 160 * lineKills(); if (want <= extra) break;
+    extra = want; path = rayPath(s, dir, Math.min(d, inkMax()), extra); hits = lineHits();
+  }
 }
 
 cv.addEventListener('pointerdown', (ev) => {
+  if (flying && !$('.overlay').classList.contains('show')) { flying(toCanvas(ev)); return; }
   if (busy || !heroes || $('.overlay').classList.contains('show')) return;
   const p = toCanvas(ev), sk = skill(), h = hero();
   clearPath();
@@ -261,9 +271,9 @@ cv.addEventListener('pointermove', (ev) => {
     // 線每「穿進」敵人一次就多打一下；隊友只算一次
     for (const u of living()) {
       if (u === hero()) continue;
-      const touch = segHitsCircle(last, p, center(u), HIT_R);
+      const touch = segHitsCircle(last, p, center(u), hitR());
       if (touch && !inside.has(u) && (u.side === 'enemy' || !hits.includes(u))) { hits.push(u); hitAt.push(path.length - 1); }
-      if (dist(p, center(u)) < HIT_R) inside.add(u); else inside.delete(u);
+      if (dist(p, center(u)) < hitR()) inside.add(u); else inside.delete(u);
     }
   } else path.push(p);
   if (pathLen() >= max - 0.5) endDraw();
@@ -285,7 +295,7 @@ cv.addEventListener('pointercancel', endDraw);
 
 function results() {
   const h = hero(), en = hits.filter((u) => u.side === 'enemy'), al = hits.filter((u) => u.side === 'ally');
-  return skill().run(en, al, h).map((s) => (s.dmg ? { ...s, dmg: s.dmg + run.up.dmg } : s));
+  return gearResults(h, skill().run(en, al, h).map((s) => (s.dmg ? { ...s, dmg: s.dmg + run.up.dmg } : s)));
 }
 
 // ───── 出招 ─────
@@ -293,6 +303,7 @@ async function go() {
   if (busy || !hits.length) return;
   const h = hero(), sk = skill(), steps = results();
   busy = true; updateUi(); renderSkills();
+  gearLink(h);
   h.cds[skillIdx] = (sk.cd || 0) + 1;
   float(h, sk.name, h.color, 26);
   run.glow = { t0: performance.now(), ms: 99999 };
@@ -305,7 +316,7 @@ async function go() {
     for (const st of others) { apply(st); await wait(70); }
   } else {
     // 直線、自由線：沿著畫的線跑過去，經過誰就對誰出招，最後停在線的終點
-    const foot = path.map((p) => ({ x: p.x, y: p.y + 46 }));
+    const foot = densify(path).map((p) => ({ x: p.x, y: p.y + 46 }));
     const cum = [0]; for (let i = 1; i < foot.length; i++) cum.push(cum[i - 1] + dist(foot[i], foot[i - 1]));
     const at = (u) => { const c = { x: u.x, y: u.y }; let bi = 0, bd = 1e9; foot.forEach((p, i) => { const d = dist(p, c); if (d < bd) { bd = d; bi = i; } }); return Math.max(0, cum[bi] - 55); };
     // 自由線：照穿過的那一刻排；直線：照離起點的距離排
@@ -324,6 +335,7 @@ async function go() {
   }
   for (const st of self) apply(st);
   h.moving = false;
+  await gearAfterMove(h, sk);
   await settle();
   await wait(350);
   run.glow = null; path = []; hits = [];
@@ -406,6 +418,7 @@ function apply(s) {
   if (s.heal) { const v = Math.min(s.heal, u.maxHp - u.hp); if (v > 0) { u.hp += v; float(u, '+' + v, '#7fe07f'); fxPush({ type: 'ring', x: u.x, y: u.y - 46, color: '#7fe07f', dur: 500 }); } }
   if (s.shield) { u.shield += s.shield; setTimeout(() => float(u, '盾 +' + s.shield, '#ffe070'), 150); fxPush({ type: 'ring', x: u.x, y: u.y - 46, color: '#ffe070', dur: 500 }); }
   if (s.taunt) { u.taunt = true; for (const e of foes) if (!e.dead && !e.elite) e.intent = { target: u, dmg: e.atk }; float(u, '嘲諷', '#40d070'); }
+  gearOnApply(s);
 }
 
 async function enemyTurn() {
@@ -418,7 +431,7 @@ async function enemyTurn() {
       const mates = foes.filter((o) => !o.dead && o !== e);
       if (mates.length) {
         const o = pick(mates);
-        await approach(e, o);
+        if (!await approach(e, o)) { await wait(380); continue; }
         e.lunge = performance.now(); await wait(180);
         o.hp -= e.atk; o.flash = performance.now() + 200; float(o, String(e.atk), '#ff5c8d');
         if (o.hp <= 0) { o.hp = 0; o.dead = true; o.deadAt = performance.now(); }
@@ -429,7 +442,7 @@ async function enemyTurn() {
       for (const h of alive) hurt(h, e.intent.dmg);
     } else {
       const t = e.intent.target.dead ? pick(alive) : e.intent.target;
-      if (t) { await approach(e, t); e.lunge = performance.now(); await wait(180); hurt(t, e.intent.dmg); }
+      if (t && await approach(e, t)) { e.lunge = performance.now(); await wait(180); hurt(t, e.intent.dmg); }
     }
     await wait(380);
     if (heroes.every((h) => h.dead)) return lose();
@@ -444,8 +457,12 @@ async function enemyTurn() {
 async function approach(e, t) {
   let to = { x: t.x + 85, y: t.y + 2 };
   if (to.x > 555) to = { x: t.x - 85, y: t.y + 2 };
+  // 冰之吐息：路上踩到冰地就被凍住，這次打不出來
+  const ice = frostOnWay(e, to);
+  if (ice) { await moveTo(e, ice.at, 0.7); return frostStop(e, ice); }
   await moveTo(e, to, 0.7);
   e.face = t.x < e.x ? -1 : 1;
+  return ringHit(e);
 }
 
 function hurt(h, d) {
@@ -472,7 +489,7 @@ function winFloor() {
   setTimeout(() => {
     showBox(`<h2>第 ${run.floor} 層通過</h2><p>用了 ${turn} 手。選一項：</p>
       ${opts.map((o, i) => `<button class="btn opt" data-i="${i}"><b>${o.name}</b><br>${o.desc}</button>`).join('')}`);
-    document.querySelectorAll('.box .opt').forEach((b) => b.onclick = () => { opts[+b.dataset.i].fn(); hideBox(); nextFloor(); });
+    document.querySelectorAll('.box .opt').forEach((b) => b.onclick = () => { opts[+b.dataset.i].fn(); hideBox(); gearDrop(nextFloor); });
   }, 500);
 }
 function lose() {
@@ -483,6 +500,293 @@ function lose() {
 function showBox(html) { $('.box').innerHTML = html; $('.overlay').classList.add('show'); }
 function hideBox() { $('.overlay').classList.remove('show'); }
 function tip(html) { $('.tip').innerHTML = html; }
+
+// ───── 裝備：神器和邪物，效果都是改變線的畫法 ─────
+// 每位神魔兩格（兵器、法寶）。神族只能用神器、魔族只能用邪物，專屬兵器只有本人能用。背包跟著靈魂走，存在手機裡。
+const SLOT = { weapon: '兵器', charm: '法寶' };
+const SIDE = { guangong: '神', yuelao: '神', yukionna: '魔' };
+const GEAR = {
+  ex_guangong: { n: '青龍偃月刀', kind: '神器', slot: 'weapon', own: 'guangong', icon: '青', color: '#40d070', from: '三國演義',
+    d: '過關斬將：直線每砍死一個敵人，線就再往前多斬一段。直線招式傷害 +3。' },
+  ex_yuelao: { n: '姻緣簿', kind: '神器', slot: 'weapon', own: 'yuelao', icon: '緣', color: '#ff5c8d', from: '月下老人',
+    d: '一線牽：月老一招打到的敵人兩兩綁上紅線（到下一輪為止），其中一個受傷，另一個也受一半。' },
+  ex_yukionna: { n: '冰之吐息', kind: '邪物', slot: 'weapon', own: 'yukionna', icon: '霜', color: '#a0e0ff', from: '日本妖怪',
+    d: '雪地：雪女直線、自由線畫過的地方結冰一輪。第一個走過冰地去攻擊的敵人會被凍住、打不出來，冰也跟著碎掉。' },
+  yata: { n: '八咫鏡', kind: '神器', slot: 'weapon', icon: '鏡', color: '#ffe070', from: '日本三神器',
+    d: '照出天照大神的鏡子：直線碰到戰場邊緣會反射一次，剩下的墨水全部用來反彈。' },
+  ruyi: { n: '如意金箍棒', kind: '神器', slot: 'weapon', icon: '棒', color: '#ffb040', from: '西遊記',
+    d: '可大可小：線變粗 50%，比較容易掃到敵人。' },
+  qiankun: { n: '乾坤圈', kind: '神器', slot: 'weapon', icon: '圈', color: '#ffd060', from: '封神演義',
+    d: '哪吒的金圈：畫的圈會留在場上一輪，敵人走進圈裡攻擊時受 6 傷害。' },
+  muramasa: { n: '妖刀村正', kind: '邪物', slot: 'weapon', icon: '妖', color: '#c060ff', from: '日本妖刀傳說',
+    d: '出鞘必見血：自由線同一個敵人每多穿一次，那一下再 +3 傷害。代價：每多穿一次自己扣 1 生命。' },
+  hagoromo: { n: '天女的羽衣', kind: '神器', slot: 'charm', icon: '羽', color: '#c0f0ff', from: '日本傳說',
+    d: '穿上就能飛：出招後可以點戰場上任何地方飛過去，自己決定站哪。' },
+  dracula: { n: '德古拉的斗篷', kind: '邪物', slot: 'charm', icon: '血', color: '#e04060', from: '吸血鬼傳說',
+    d: '吸血鬼伯爵的披風：打出的傷害吸回 30% 生命。代價：每輪開始扣 1 生命（怕光）。' },
+};
+const GEAR_KEY = 'rebirth-redline-gear-v1';
+// 試玩：第一次玩先把三把專屬兵器發給三位
+const gs = (() => { try { return JSON.parse(localStorage.getItem(GEAR_KEY)) || null; } catch (e) { return null; } })()
+  || { bag: ['ex_guangong', 'ex_yuelao', 'ex_yukionna'], eq: { guangong: { weapon: 'ex_guangong' }, yuelao: { weapon: 'ex_yuelao' }, yukionna: { weapon: 'ex_yukionna' } } };
+const saveGear = () => { try { localStorage.setItem(GEAR_KEY, JSON.stringify(gs)); } catch (e) { /* 存不了就只在這次有效 */ } };
+const gearOf = (h) => Object.values(gs.eq[h.id] || {}).filter((id) => GEAR[id]);
+const wears = (h, id) => !!h && gearOf(h).includes(id);
+const canUse = (heroId, id) => { const it = GEAR[id]; return it.own ? it.own === heroId : it.kind === (SIDE[heroId] === '神' ? '神器' : '邪物'); };
+const hitR = () => HIT_R * (wears(hero(), 'ruyi') ? 1.5 : 1);
+const lineShape = (sk) => sk.shape === 'line' || sk.shape === 'dash';
+const freeShape = (sk) => sk.shape === 'free' || sk.shape === 'zigzag';
+let zones = [], flying = null;
+window.__g = () => ({ gs, zones, flying: !!flying });
+
+// 直線的路徑：碰到戰場邊就停；帶八咫鏡會反射一次；extra 是青龍偃月刀斬殺後多出來的長度
+function wallHit(p, d) {
+  const tx = d.x > 0 ? (W - 6 - p.x) / d.x : d.x < 0 ? (6 - p.x) / d.x : Infinity;
+  const ty = d.y > 0 ? (H - 6 - p.y) / d.y : d.y < 0 ? (FLOOR + 4 - p.y) / d.y : Infinity;
+  return { t: Math.max(0, Math.min(tx, ty)), flipX: tx <= ty };
+}
+function rayPath(s, dir, L, extra = 0) {
+  const pts = [s], ink = inkMax();
+  let p = s, d = { ...dir }, used = 0, rem = L, bounce = wears(hero(), 'yata') ? 1 : 0;
+  for (;;) {
+    const w = wallHit(p, d);
+    if (bounce && rem >= w.t - 2 && ink - used - w.t > 20) {
+      p = { x: p.x + d.x * w.t, y: p.y + d.y * w.t }; pts.push(p); used += w.t;
+      d = w.flipX ? { x: -d.x, y: d.y } : { x: d.x, y: -d.y };
+      rem = ink - used; bounce--; continue;
+    }
+    const len = Math.min(rem + extra, w.t);
+    pts.push({ x: p.x + d.x * len, y: p.y + d.y * len });
+    break;
+  }
+  // 鎖鏈把線剪斷
+  for (let i = 1; i < pts.length; i++) for (const c of chains) {
+    const a = pts[i - 1], b = pts[i];
+    if (segCross(a, b, { x: c.x1, y: c.y1 }, { x: c.x2, y: c.y2 })) { pts[i] = cutAt(a, b, c); pts.length = i + 1; }
+  }
+  return pts;
+}
+// 目標在線上的位置（從起點算的距離），拿來排出手順序
+function along(u) {
+  const c = center(u); let best = 1e9, at = 0, cum = 0;
+  for (let i = 1; i < path.length; i++) {
+    const a = path[i - 1], b = path[i], L = dist(a, b) || 1;
+    const t = Math.max(0, Math.min(1, ((c.x - a.x) * (b.x - a.x) + (c.y - a.y) * (b.y - a.y)) / (L * L)));
+    const dd = Math.hypot(a.x + (b.x - a.x) * t - c.x, a.y + (b.y - a.y) * t - c.y);
+    if (dd < best) { best = dd; at = cum + t * L; }
+    cum += L;
+  }
+  return at;
+}
+const lineHits = () => living().filter((u) => u !== hero() && path.some((p, i) => i && segHitsCircle(path[i - 1], p, center(u), hitR()))).sort((a, b) => along(a) - along(b));
+function lineKills() {
+  const sum = new Map();
+  for (const s of results()) if (s.dmg && s.u.side === 'enemy') sum.set(s.u, (sum.get(s.u) || 0) + s.dmg);
+  return [...sum].filter(([u, d]) => d >= u.hp).length;
+}
+function densify(pts, step = 12) {
+  const out = [pts[0]];
+  for (let i = 1; i < pts.length; i++) {
+    const a = pts[i - 1], b = pts[i], n = Math.max(1, Math.ceil(dist(a, b) / step));
+    for (let k = 1; k <= n; k++) out.push({ x: a.x + (b.x - a.x) * k / n, y: a.y + (b.y - a.y) * k / n });
+  }
+  return out;
+}
+
+// 裝備對出招結果的加成
+function gearResults(h, res) {
+  const sk = skill();
+  if (wears(h, 'ex_guangong') && lineShape(sk)) res = res.map((s) => (s.dmg && s.u.side === 'enemy' ? { ...s, dmg: s.dmg + 3 } : s));
+  if (wears(h, 'muramasa') && freeShape(sk)) {
+    const seen = new Map();
+    res = res.map((s) => {
+      if (!s.dmg || s.u.side !== 'enemy') return s;
+      const n = seen.get(s.u) || 0; seen.set(s.u, n + 1);
+      return n ? { ...s, dmg: s.dmg + 3 * n, cost: 1 } : s;
+    });
+  }
+  return res;
+}
+
+// 姻緣簿：出招前把這一招會打到的敵人兩兩綁起來
+function gearLink(h) {
+  if (!wears(h, 'ex_yuelao')) return;
+  const en = [...new Set(hits.filter((u) => u.side === 'enemy' && !u.dead))];
+  for (let i = 0; i + 1 < en.length; i += 2) { en[i].link = en[i + 1]; en[i + 1].link = en[i]; float(en[i + 1], '紅線', '#ff5c8d', 18); }
+}
+
+// 每一下打出去之後：紅線分傷、吸血、妖刀反噬
+function gearOnApply(s) {
+  const h = hero();
+  if (s.dmg && s.u.link && !s.linked && !s.u.link.dead) {
+    const o = s.u.link, v = Math.floor(s.dmg / 2);
+    if (v > 0) setTimeout(() => { fxPush({ type: 'thread', a: { x: s.u.x, y: s.u.y - 46 }, b: { x: o.x, y: o.y - 46 }, dur: 500 }); apply({ u: o, dmg: v, linked: true }); }, 160);
+  }
+  if (s.dmg && s.u.side === 'enemy' && wears(h, 'dracula')) {
+    const v = Math.min(Math.max(1, Math.round(s.dmg * 0.3)), h.maxHp - h.hp);
+    if (v > 0) { h.hp += v; float(h, '吸 +' + v, '#e04060', 18); }
+  }
+  if (s.cost && h.hp > 1) { h.hp -= 1; float(h, '妖刀 -1', '#c060ff', 18); }
+}
+
+// 出招跑完之後：留下冰地、乾坤圈；穿羽衣的可以飛
+async function gearAfterMove(h, sk) {
+  if (wears(h, 'ex_yukionna') && sk.shape !== 'circle' && sk.shape !== 'tap' && path.length > 1) zones.push({ type: 'frost', pts: densify(path, 10).map((p) => ({ x: p.x, y: p.y + 46 })) });
+  if (wears(h, 'qiankun') && sk.shape === 'circle' && closed) zones.push({ type: 'ring', poly: path.slice(), done: new Set() });
+  if (!wears(h, 'hagoromo')) return;
+  const go = $('.go'), txt = go.textContent;
+  go.textContent = '留在這'; go.disabled = false;
+  tip('<b>天女的羽衣</b>：點戰場上一個地方飛過去，或按「留在這」。');
+  const to = await new Promise((res) => { flying = res; });
+  flying = null; go.textContent = txt;
+  if (to) await moveTo(h, { x: to.x, y: to.y + 46 }, 1.2, true);
+  updateUi();
+}
+
+function gearNewRound(first) {
+  zones = [];
+  for (const e of foes || []) e.link = null;
+  if (first) return;
+  for (const h of heroes) if (!h.dead && wears(h, 'dracula') && h.hp > 1) { h.hp -= 1; float(h, '怕光 -1', '#e04060', 18); }
+}
+
+// 敵人走過去的路上有沒有冰地
+function frostOnWay(e, to) {
+  const a = { x: e.x, y: e.y }, n = Math.ceil(dist(a, to) / 8);
+  for (let k = 1; k <= n; k++) {
+    const p = { x: a.x + (to.x - a.x) * k / n, y: a.y + (to.y - a.y) * k / n };
+    const z = zones.find((z) => z.type === 'frost' && z.pts.some((q) => dist(q, p) < 26));
+    if (z) return { z, at: p };
+  }
+  return null;
+}
+async function frostStop(e, ice) {
+  zones = zones.filter((z) => z !== ice.z);
+  fxPush({ type: 'ice', x: e.x, y: e.y, dur: 800 }); float(e, '踩到冰，凍住', '#a0e0ff');
+  await wait(300);
+  return false;
+}
+// 乾坤圈：走進圈裡的敵人受傷，每個敵人一個圈只算一次
+function ringHit(e) {
+  for (const z of zones) {
+    if (z.type !== 'ring' || z.done.has(e) || !inPoly(center(e), z.poly)) continue;
+    z.done.add(e);
+    e.hp -= 6; e.flash = performance.now() + 200; float(e, '乾坤圈 6', '#ffd060');
+    fxPush({ type: 'ring', x: e.x, y: e.y - 46, color: '#ffd060', dur: 500 });
+    if (e.hp <= 0) { e.hp = 0; e.dead = true; e.deadAt = performance.now(); return false; }
+  }
+  return true;
+}
+
+// ───── 裝備的畫面 ─────
+function gearLine(h) {
+  const w = gearOf(h).find((id) => GEAR[id].slot === 'weapon');
+  const color = { ex_guangong: '#40d070', ex_yukionna: '#a0e0ff', muramasa: '#c060ff', ruyi: '#ffb040', yata: '#ffe070' }[w] || '#ff3048';
+  return { color, w: w === 'ruyi' ? 1.6 : 1 };
+}
+function gearDrawZones(now) {
+  for (const z of zones) {
+    if (z.type === 'frost') {
+      g.globalAlpha = 0.45 + 0.15 * Math.sin(now / 300); g.strokeStyle = '#c0ecff'; g.lineWidth = 22; g.lineCap = 'round'; g.lineJoin = 'round';
+      g.beginPath(); z.pts.forEach((p, i) => i ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y)); g.stroke();
+      g.fillStyle = '#fff'; z.pts.forEach((p, i) => { if (i % 4 === 0) g.fillRect(p.x - 2, p.y - 2, 4, 4); });
+      g.globalAlpha = 1;
+    } else if (z.type === 'ring') {
+      g.globalAlpha = 0.5 + 0.2 * Math.sin(now / 250); g.strokeStyle = '#ffd060'; g.lineWidth = 5; g.setLineDash([12, 8]);
+      g.beginPath(); z.poly.forEach((p, i) => i ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y)); g.closePath(); g.stroke(); g.setLineDash([]);
+      g.fillStyle = '#ffd060'; g.globalAlpha = 0.08; g.fill(); g.globalAlpha = 1;
+    }
+  }
+  // 姻緣簿的紅線
+  g.strokeStyle = '#ff5c8d'; g.lineWidth = 2; g.globalAlpha = 0.8;
+  for (const e of foes || []) if (e.link && !e.dead && !e.link.dead && foes.indexOf(e) < foes.indexOf(e.link)) {
+    const a = center(e), b = center(e.link), mx = (a.x + b.x) / 2, my = Math.max(a.y, b.y) + 40;
+    g.beginPath(); g.moveTo(a.x, a.y); g.quadraticCurveTo(mx, my, b.x, b.y); g.stroke();
+  }
+  g.globalAlpha = 1;
+  for (const e of effects || []) if (e.type === 'thread') {
+    const k = (now - e.t0) / e.dur; if (k >= 1) continue;
+    g.globalAlpha = 1 - k; g.strokeStyle = '#ff5c8d'; g.lineWidth = 5; g.beginPath(); g.moveTo(e.a.x, e.a.y); g.lineTo(e.b.x, e.b.y); g.stroke(); g.globalAlpha = 1;
+  }
+}
+// 名字上面的小方塊：身上的裝備
+function gearIcons(u, top) {
+  const ids = gearOf(u);
+  ids.forEach((id, i) => {
+    const it = GEAR[id], x = u.x - ids.length * 11 + i * 22, y = top - 46;
+    g.fillStyle = '#000'; g.fillRect(x, y, 20, 20);
+    g.strokeStyle = it.color; g.lineWidth = 2; g.strokeRect(x + 1, y + 1, 18, 18);
+    g.fillStyle = it.color; g.font = 'bold 13px sans-serif'; g.textAlign = 'center'; g.fillText(it.icon, x + 10, y + 15);
+  });
+}
+// 下方「輪到誰」旁邊列出裝備，點一下看效果
+function gearWho(h) {
+  const ids = gearOf(h); if (!ids.length) return;
+  const row = document.createElement('div'); row.className = 'gear-row';
+  ids.forEach((id) => {
+    const it = GEAR[id], b = document.createElement('button');
+    b.className = 'btn gear-chip'; b.style.borderColor = it.color; b.innerHTML = `<span style="color:${it.color}">${it.icon}</span> ${it.n}`;
+    b.onclick = () => tip(`<b>${it.n}</b>：${it.d}`);
+    row.appendChild(b);
+  });
+  $('.who').appendChild(row);
+}
+
+function gearIntroButton() {
+  const b = Object.assign(document.createElement('button'), { className: 'btn wide', textContent: '整理裝備' });
+  b.style.marginTop = '8px';
+  b.onclick = () => gearBox(hideBox, '開始');
+  $('.box').appendChild(b);
+}
+
+function gearBox(done, doneText = '繼續') {
+  const rows = ORDER.map((hid) => `<div class="gear-hero"><b style="color:${HEROES[hid].color}">${HEROES[hid].name}</b>（${SIDE[hid]}族・只能用${SIDE[hid] === '神' ? '神器' : '邪物'}）
+    ${Object.keys(SLOT).map((sl) => { const id = (gs.eq[hid] || {})[sl], it = GEAR[id];
+      return `<button class="btn opt gslot" data-h="${hid}" data-s="${sl}">${SLOT[sl]}：${it ? `<b style="color:${it.color}">${it.n}</b><br>${it.d}` : '<span class="muted">空的，點一下裝上</span>'}</button>`; }).join('')}</div>`).join('');
+  showBox(`<h2>裝備</h2><p class="muted">背包 ${gs.bag.length} 件。點欄位換裝。</p>${rows}<button class="btn primary wide gdone" style="margin-top:10px">${doneText}</button>`);
+  document.querySelectorAll('.box .gslot').forEach((b) => b.onclick = () => gearPickFor(b.dataset.h, b.dataset.s, done, doneText));
+  $('.box .gdone').onclick = () => { saveGear(); refreshGear(); done(); };
+}
+function gearPickFor(hid, sl, done, doneText) {
+  const list = gs.bag.filter((id) => GEAR[id].slot === sl && canUse(hid, id));
+  const holder = (id) => ORDER.find((o) => (gs.eq[o] || {})[sl] === id && o !== hid);
+  showBox(`<h2>${HEROES[hid].name}・${SLOT[sl]}</h2>
+    ${list.length ? list.map((id) => { const it = GEAR[id], o = holder(id);
+      return `<button class="btn opt gpick" data-id="${id}"><b style="color:${it.color}">${it.n}</b>（${it.kind}${it.from ? '・' + it.from : ''}）${o ? `<span class="muted">・現在在${HEROES[o].name}身上</span>` : ''}<br>${it.d}</button>`; }).join('') : '<p class="muted">背包裡沒有這一格能用的裝備。</p>'}
+    <button class="btn opt gpick" data-id="">卸下</button><button class="btn wide gback" style="margin-top:8px">返回</button>`);
+  document.querySelectorAll('.box .gpick').forEach((b) => b.onclick = () => {
+    const id = b.dataset.id, o = id && holder(id);
+    if (o) gs.eq[o][sl] = null;
+    gs.eq[hid] = gs.eq[hid] || {}; gs.eq[hid][sl] = id || null;
+    saveGear(); gearBox(done, doneText);
+  });
+  $('.box .gback').onclick = () => gearBox(done, doneText);
+}
+// 換了裝備，場上的神魔也要更新（例如出招說明、線的樣子）
+function refreshGear() { if (heroes && who >= 0 && !busy) renderSkills(); }
+
+// 掉落：精英層三選一；魔王層四成機率有專屬兵器；試玩版第 1 層也掉
+function gearDrop(next) {
+  const f = run.floor;
+  if (!(f === 1 || f % 3 === 0)) return next();
+  const usable = (id) => ORDER.some((hid) => canUse(hid, id));
+  const pool = Object.keys(GEAR).filter((id) => !gs.bag.includes(id) && !GEAR[id].own && usable(id)).sort(() => Math.random() - 0.5);
+  const ex = ORDER.map((hid) => 'ex_' + hid).filter((id) => GEAR[id] && !gs.bag.includes(id));
+  const opts = pool.slice(0, 3);
+  if (f % 6 === 0 && ex.length && Math.random() < 0.4) opts[0] = pick(ex);
+  if (!opts.length) return next();
+  const forWho = (id) => GEAR[id].own ? HEROES[GEAR[id].own].name + '專屬' : ORDER.filter((hid) => canUse(hid, id)).map((hid) => HEROES[hid].name).join('、') + '能用';
+  showBox(`<h2>${f % 3 === 0 ? '精英掉落' : '試玩：送你一件'}</h2><p>選一件放進背包：</p>
+    ${opts.map((id) => { const it = GEAR[id]; return `<button class="btn opt gget" data-id="${id}"><b style="color:${it.color}">${it.n}</b>（${it.kind}・${SLOT[it.slot]}・${forWho(id)}）<br>${it.d}</button>`; }).join('')}`);
+  document.querySelectorAll('.box .gget').forEach((b) => b.onclick = () => {
+    const id = b.dataset.id; gs.bag.push(id);
+    // 那一格空著就直接裝上
+    const hid = ORDER.find((h) => canUse(h, id) && !(gs.eq[h] || {})[GEAR[id].slot]);
+    if (hid) { gs.eq[hid] = gs.eq[hid] || {}; gs.eq[hid][GEAR[id].slot] = id; }
+    saveGear();
+    gearBox(() => { hideBox(); next(); }, '下一層');
+  });
+}
 
 // ───── 畫面 ─────
 function fxPush(e) { effects.push({ t0: performance.now(), ...e }); }
@@ -542,6 +846,7 @@ function drawUnit(u, now) {
   g.font = 'bold 15px sans-serif'; g.textAlign = 'center';
   if (u.side === 'ally') {
     g.fillStyle = u === hero() ? '#ffe070' : '#fff'; g.fillText(`${u.name} ${u.hp}`, u.x, top - 8);
+    gearIcons(u, top);
     if (u.shield) { g.fillStyle = '#ffe070'; g.fillText('盾 ' + u.shield, u.x + 52, top + 6); }
     const aimed = foes.some((e) => !e.dead && !e.frozen && !e.confused && e.intent && (e.intent.all || e.intent.target === u));
     if (aimed) { g.fillStyle = Math.floor(now / 250) % 2 ? '#ff4050' : '#ffb0b0'; g.fillRect(u.x - 52, top - 26, 6, 16); g.fillRect(u.x - 52, top - 7, 6, 5); }
@@ -554,6 +859,7 @@ function drawUnit(u, now) {
 function render(now) {
   drawBg(now);
   if (heroes && who >= 0) {
+    gearDrawZones(now);
     for (const c of chains) {
       g.strokeStyle = '#555060'; g.lineWidth = 9; g.beginPath(); g.moveTo(c.x1, c.y1); g.lineTo(c.x2, c.y2); g.stroke();
       g.strokeStyle = '#9a96a8'; g.lineWidth = 3; g.setLineDash([10, 6]); g.beginPath(); g.moveTo(c.x1, c.y1); g.lineTo(c.x2, c.y2); g.stroke(); g.setLineDash([]);
@@ -562,7 +868,8 @@ function render(now) {
     if (path.length > 1) {
       const sk = skill(), col = hero().color, glow = run.glow;
       g.lineCap = 'round'; g.lineJoin = 'round';
-      g.strokeStyle = glow ? col : '#ff3048'; g.lineWidth = glow ? 10 : 6;
+      const ls = gearLine(hero());
+      g.strokeStyle = glow ? col : ls.color; g.lineWidth = (glow ? 10 : 6) * ls.w;
       g.globalAlpha = glow ? Math.max(0, 1 - (now - glow.t0) / glow.ms * 0.7) : 0.9;
       if (glow) { g.shadowColor = col; g.shadowBlur = 18; }
       g.beginPath(); path.forEach((p, i) => i ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y));
@@ -617,6 +924,7 @@ function renderSkills() {
     b.onclick = () => { if (busy) return; skillIdx = i; clearPath(); renderSkills(); };
     box.appendChild(b);
   });
+  gearWho(h);
   updateUi();
 }
 
@@ -624,11 +932,12 @@ function updateUi() {
   if (!run || !heroes || who < 0) return;
   $('.floor').textContent = `第 ${run.floor} 層`;
   $('.turn').textContent = `第 ${turn} 手`;
-  const sk = skill(), used = sk.shape === 'line' && path.length > 1 ? dist(path[0], path[1]) : pathLen();
+  const sk = skill(), used = Math.min(inkMax(), pathLen());
   $('.ink div').style.width = Math.max(0, 100 - used / inkMax() * 100) + '%';
   $('.ink div').style.background = hero().color;
-  $('.go').disabled = busy || !hits.length || drawing;
+  $('.go').disabled = !flying && (busy || !hits.length || drawing);
   $('.redo').disabled = busy || !path.length;
+  if (flying) return;
   if (busy) tip(`${hero().name}出招中……`);
   else if (drawing) tip(HOW[sk.shape]);
   else if (!path.length) tip(`「${sk.name}」：${HOW[sk.shape]}`);
@@ -637,13 +946,15 @@ function updateUi() {
 }
 
 $('.redo').onclick = () => { if (!busy) clearPath(); };
-$('.go').onclick = go;
+$('.go').onclick = () => (flying ? flying(null) : go());
 $('.help').innerHTML = `
   <p>三位神魔輪流上場，<b>每次只動一位</b>，輪到的神魔腳下有金色光圈。選他的一招，照那招的畫法在戰場上畫，畫完會預覽每個目標受到的效果，按出招才算數。</p>
   <p><b>直線</b>：從神魔身上往外拉。<b>自由線</b>：從神魔身上開始一筆畫過去。<b>畫圈</b>：在任何地方圈一圈，頭尾要接起來。墨水條用完就不能再畫。</p>
   <p>神魔出招時會沿著你畫的線跑過去，最後停在線的終點，所以畫線也是在決定下一輪站哪裡。三位神魔各出一招之後，敵人才一起行動，會走到目標面前打。敵人頭上寫著這一輪要打誰、打多少，可以先凍住、先打死，或用護盾擋。</p>
   ${ORDER.map((id) => HEROES[id].skills.map((s) => `<p><b>${HEROES[id].name}・${s.name}</b>（${SHAPES[s.shape]}${s.cd ? `，冷卻 ${s.cd} 輪` : ''}）：${s.desc}</p>`).join('')).join('')}
-  <p>每 3 層有精英無臉典獄長，他的鎖鏈會剪斷直線和自由線，畫圈不受影響。</p>`;
+  <p>每 3 層有精英無臉典獄長，他的鎖鏈會剪斷直線和自由線，畫圈不受影響。</p>
+  <p><b>裝備</b>：每位神魔有兵器、法寶兩格。神族只能用神器，魔族只能用邪物，專屬兵器只有本人能用。精英層打完可以從三件裡選一件，魔王層有機會掉專屬兵器（試玩版第 1 層也會掉一件）。裝備會改變線的畫法，名字上面的小方塊就是身上的裝備。</p>
+  ${Object.values(GEAR).map((it) => `<p><b>${it.n}</b>（${it.kind}・${SLOT[it.slot]}${it.own ? `・${HEROES[it.own].name}專屬` : ''}）：${it.d}</p>`).join('')}`;
 window.__s = () => ({ run, heroes, foes, hits, path, chains, who, skillIdx, busy });
 newRun();
 requestAnimationFrame(render);
