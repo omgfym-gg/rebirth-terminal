@@ -91,7 +91,7 @@ const BASE_HP = { guangong: 52, yuelao: 40, yukionna: 36 };
 const HEROES = {
   guangong: {
     name: '關公', color: '#40d070', role: '近戰重擊',
-    passive: { n: '氣勢', d: '每打中一下氣勢 +1（最多 5），每輪少 1。青龍斬會吃掉全部氣勢。' },
+    passive: { n: '氣勢', d: '關公每打中敵人一下，氣勢 +1（最多 5，頭上顯示「勢」），每過一輪少 1。放青龍斬時用掉全部氣勢，每 1 點氣勢讓每一下多 4 傷害。' },
     talent: { n: '溫酒斬華雄', d: '隊友的線穿過關公（或穿過關公留下的線），關公下一招每一下傷害 +5、氣勢 +1。' },
     skills: [
       { name: '刺顏良', shape: 'dash', len: 300, melee: true, anim: 's1', desc: '衝到第一個敵人面前刺 9 傷害，目標生命不到一半改成 14。',
@@ -131,9 +131,9 @@ const HEROES = {
 };
 const ORDER = ['guangong', 'yuelao', 'yukionna'];
 const FOES = {
-  zombie: { name: '夜行殭屍', sprite: 'zombie', hp: 30, atk: 11 },
-  wisp:   { name: '鬼火', sprite: 'wisp', hp: 16, atk: 8 },
-  warden: { name: '無臉典獄長', sprite: 'boss', hp: 110, atk: 17, elite: true },
+  zombie: { name: '夜行殭屍', sprite: 'zombie', hp: 30, atk: 11, d: '半夜還抱著公文在走廊遊蕩的殭屍。會走到目標面前咬一口。' },
+  wisp:   { name: '鬼火', sprite: 'wisp', hp: 16, atk: 8, d: '飄忽不定的藍色火焰，生命不多，會飄到目標身邊燒一下。' },
+  warden: { name: '無臉典獄長', sprite: 'boss', hp: 110, atk: 17, elite: true, d: '精英。會拉出鎖鏈（灰色粗線），直線和自由線碰到就被剪斷，畫圈不受影響。有四成機率改用凝視打全隊（傷害六成）。不會被關公嘲諷。' },
 };
 
 let run, heroes, foes, chains = [], path = [], closed, hits = [], hitAt = [], inside = new Set(), drawing, busy, effects, turn, who = -1, skillIdx = 0;
@@ -292,7 +292,8 @@ cv.addEventListener('pointerdown', (ev) => {
   if (flying && !$('.overlay').classList.contains('show')) { flying(toCanvas(ev)); return; }
   if (busy || !heroes || $('.overlay').classList.contains('show')) return;
   const p = toCanvas(ev), sk = skill(), h = hero();
-  if (sk.shape === 'tap') { tapAt(p); return; }
+  pressStart(p, sk.shape === 'tap');
+  if (sk.shape === 'tap') return;
   clearPath();
   if (sk.shape !== 'circle' && dist(center(h), p) > HIT_R + 16) { tip(`這招要從<b>${h.name}身上</b>開始畫（腳下有金色光圈的那位）。`); return; }
   drawing = true;
@@ -303,6 +304,7 @@ cv.addEventListener('pointerdown', (ev) => {
   updateUi();
 });
 cv.addEventListener('pointermove', (ev) => {
+  pressMove(toCanvas(ev));
   if (!drawing) return;
   const p = toCanvas(ev), sk = skill();
   crossMemo = null;
@@ -358,8 +360,15 @@ function endDraw() {
   updateUi();
   if (skill().shape === 'circle' && !closed) tip('圈沒有<b>收口</b>，頭尾要接起來，再畫一次。');
 }
-cv.addEventListener('pointerup', endDraw);
-cv.addEventListener('pointercancel', endDraw);
+cv.addEventListener('pointerup', (ev) => {
+  endDraw();
+  const pr = pressEnd();
+  if (!pr || busy || $('.overlay').classList.contains('show')) return;
+  // 連點招式：點一下是選目標（長按才看說明）；其他招式：點一下角色就看說明
+  if (skill().shape === 'tap') tapAt(pr.p);
+  else if (pr.tap && pr.u) { clearPath(); showInfo(pr.u); }
+});
+cv.addEventListener('pointercancel', () => { endDraw(); pressEnd(); });
 
 function results() {
   const h = hero(), en = hits.filter((u) => u.side === 'enemy'), al = hits.filter((u) => u.side === 'ally');
@@ -962,6 +971,70 @@ function gearDrop(next) {
   });
 }
 
+// ───── 點角色看說明 ─────
+// 點一下角色或敵人（不拖動）就跳出說明；連點招式時點一下是選目標，要長按才看說明
+let press = null;
+const unitAt = (p) => [...heroes, ...foes].filter((u) => !u.dead || u.side === 'ally').map((u) => ({ u, d: Math.min(dist(center(u), p), dist({ x: u.x, y: u.y - 20 }, p)) })).filter((x) => x.d < 52).sort((a, b) => a.d - b.d).map((x) => x.u)[0];
+function pressStart(p, holdOnly) {
+  const u = unitAt(p);
+  press = { p, t: performance.now(), u, moved: 0, holdOnly, timer: null, done: false };
+  if (u) press.timer = setTimeout(() => {
+    if (!press || press.moved > 12) return;
+    press.done = true; drawing = false; clearPath(); showInfo(press.u);
+  }, 500);
+}
+function pressMove(p) { if (press) press.moved = Math.max(press.moved, dist(p, press.p)); }
+function pressEnd() {
+  if (!press) return null;
+  clearTimeout(press.timer);
+  const pr = press; press = null;
+  if (pr.done) return null;
+  return { p: pr.p, u: pr.u, tap: !pr.holdOnly && pr.moved < 12 && performance.now() - pr.t < 400 };
+}
+
+const FROST_MAX = 3;
+function statusRows(u) {
+  const r = [];
+  if (u.side === 'ally') {
+    if (u.dead) r.push(['倒下', '這一層不能行動，過關後回復三成生命。']);
+    if (u.shield) r.push([`護盾 ${u.shield}`, '先替他擋掉這麼多傷害。']);
+    if (u.id === 'guangong') r.push([`氣勢 ${u.mom}/5`, HEROES.guangong.passive.d]);
+    if (u.wine) r.push(['溫酒', `天賦「${u.talent.n}」發動中：下一招每一下傷害 +${u.wine}。`]);
+    if (u.taunt) r.push(['嘲諷', '這一輪一般敵人都改打他（精英不受影響）。']);
+    const aim = foes.filter((e) => !e.dead && !e.frozen && !e.confused && e.intent && (e.intent.all || e.intent.target === u));
+    if (aim.length) r.push(['被盯上', aim.map((e) => `${e.name}要打他 ${e.intent.dmg}`).join('、') + '。']);
+  } else {
+    if (u.frozen) r.push(['凍住', '下一次輪到他時不能行動，之後解凍。']);
+    if (u.frost) r.push([`冰霜 ${u.frost}/${FROST_MAX}`, `疊到 ${FROST_MAX} 層就凍住，每過一輪少 1 層。雪女的冰柱打凍住的敵人會碎冰重擊。`]);
+    if (u.red) r.push(['紅線（緣）', '月老綁上的紅線，到下一輪為止：他受傷時，其他綁紅線的敵人也受一半。']);
+    if (u.link && !u.link.dead) r.push(['姻緣簿', `和${u.link.name}綁在一起：其中一個受傷，另一個也受一半。`]);
+    if (u.confused) r.push(['亂點鴛鴦', '下一次行動改打自己的同伴。']);
+  }
+  return r;
+}
+function showInfo(u) {
+  const st = statusRows(u), row = (k, v, c) => `<p><b style="color:${c || 'var(--gold)'}">${k}</b>：${v}</p>`;
+  let html;
+  if (u.side === 'ally') {
+    const H = HEROES[u.id];
+    html = `<h2 style="color:${H.color}">${H.name}</h2><p class="muted">${H.role}・${SIDE[u.id]}族</p>
+      <p>生命 ${u.hp}/${u.maxHp}</p>
+      ${st.length ? '<h3>現在的狀態</h3>' + st.map(([k, v]) => row(k, v)).join('') : ''}
+      <h3>被動與天賦</h3>${row('被動・' + H.passive.n, H.passive.d, H.color)}${row('天賦・' + H.talent.n, H.talent.d, H.color)}
+      <h3>招式</h3>${H.skills.map((sk, i) => row(`${sk.name}${i === 2 ? '★' : ''}`, `（${SHAPES[sk.shape]}${sk.melee ? '・近身' : ''}${sk.cd ? `・冷卻 ${sk.cd}` : ''}${u.cds[i] > 0 ? `・還要 ${u.cds[i]} 輪` : ''}）${sk.desc}`)).join('')}
+      ${gearOf(u).length ? '<h3>裝備</h3>' + gearOf(u).map((id) => row(GEAR[id].n, GEAR[id].d, GEAR[id].color)).join('') : ''}`;
+  } else {
+    const F = FOES[u.key], it = u.intent;
+    const intent = u.frozen ? '凍住了，這一輪不會行動。' : u.confused ? '被亂點鴛鴦，下一次會打自己的同伴。' : !it ? '還沒決定。' : it.all ? `凝視全隊，每人 ${it.dmg} 傷害。` : `走到${it.target.name}面前打 ${it.dmg}。`;
+    html = `<h2 style="color:#ff8a8a">${u.name}</h2><p class="muted">${F.elite ? '精英敵人' : '敵人'}</p>
+      <p>生命 ${u.hp}/${u.maxHp}・攻擊 ${u.atk}</p>${row('這一輪要做什麼', intent, '#ff8a8a')}
+      ${st.length ? '<h3>現在的狀態</h3>' + st.map(([k, v]) => row(k, v)).join('') : '<p class="muted">沒有特殊狀態。</p>'}
+      ${F.d ? '<h3>特性</h3><p>' + F.d + '</p>' : ''}`;
+  }
+  showBox(html + '<button class="btn primary wide info-ok">知道了</button>');
+  $('.box .info-ok').onclick = hideBox;
+}
+
 // ───── 畫面 ─────
 function fxPush(e) { effects.push({ t0: performance.now(), ...e }); }
 function float(u, text, color, size = 22) { fxPush({ type: 'text', x: u.x, y: u.y - 112, text, color, size, dur: 1000 }); }
@@ -1151,7 +1224,8 @@ function renderSkills() {
     box.appendChild(b);
   });
   $('.traits').innerHTML = [['被動', h.passive, h.id === 'guangong' ? `（現在 ${h.mom}/5）` : ''], ['天賦', h.talent, '']]
-    .map(([k, t, x]) => `<div><b style="color:${h.color}">${k}・${t.n}</b>${x}：${t.d}</div>`).join('');
+    .map(([k, t, x]) => `<div><b style="color:${h.color}">${k}・${t.n}</b>${x}：${t.d}</div>`).join('')
+    + `<div>點戰場上的角色或敵人可以看說明${h.skills.some((x) => x.shape === 'tap') ? '（用連點招式時要長按）' : ''}。</div>`;
   gearWho(h);
   updateUi();
 }
@@ -1179,6 +1253,7 @@ function updateUi() {
 $('.redo').onclick = () => { if (!busy) clearPath(); };
 $('.go').onclick = () => (flying ? flying(null) : go());
 $('.help').innerHTML = `
+  <p><b>看說明</b>：點一下戰場上的角色或敵人，會跳出生命、狀態（勢、冰霜、紅線、凍住…）、招式和裝備的說明。用連點招式時，點一下是選目標，要<b>長按</b>才看說明。</p>
   <p>三位神魔輪流上場，<b>每次只動一位</b>，輪到的神魔腳下有金色光圈。選他的一招，照那招的畫法在戰場上畫，畫完會預覽每個目標受到的效果，按出招才算數。</p>
   ${Object.keys(SHAPES).map((k) => `<p><b>${SHAPES[k]}</b>：${HOW[k]}</p>`).join('')}
   <p>墨水條用完就不能再畫。標「近身」的招式神魔會自己跑過去打，其他招式站在原地放出去。</p>
