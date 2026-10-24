@@ -405,7 +405,7 @@ function makeChains() {
 
 const hero = () => heroes && heroes[who];
 const skill = () => hero().skills[skillIdx];
-const inkMax = () => Math.round(skill().len * run.up.ink * (hero().ink || 1));
+const inkMax = () => Math.round(skill().len * run.up.ink * (hero().ink || 1) * (hero().inkBuff || 1));
 function clearPath() { path = []; hits = []; hitAt = []; inside = new Set(); zz = new Map(); closed = false; drawing = false; crossMemo = null; updateUi(); }
 
 // ───── 畫線 ─────
@@ -867,12 +867,16 @@ async function enemyTurn() {
 
 // 敵人走到目標旁邊（預設站右邊、面向左；右邊沒位置就站左邊）
 async function approach(e, t) {
+  if (!await gearApproach(e, t)) return false;
   let to = { x: t.x + 85, y: t.y + 2 };
   if (to.x > 555) to = { x: t.x - 85, y: t.y + 2 };
   // 冰之吐息：路上踩到冰地就被凍住，這次打不出來
   const ice = frostOnWay(e, to);
   if (ice) { await moveTo(e, ice.at, 0.7); return frostStop(e, ice); }
   // 雪地足跡：踩過雪地疊 2 層冰霜，疊滿就凍在半路
+  // 聖火之路：走過火路就燒起來（照樣攻擊）
+  const fire = frostOnWay(e, to, 'fire');
+  if (fire) { fire.z.done.add(e); addBurn(e, 2); fxPush({ type: 'burst', x: fire.at.x, y: fire.at.y - 30, color: '#ff8a30', dur: 450, seed: 1 }); }
   const snow = frostOnWay(e, to, 'snow');
   if (snow) {
     await moveTo(e, snow.at, 0.7); snow.z.done.add(e);
@@ -884,6 +888,7 @@ async function approach(e, t) {
 }
 
 function hurt(h, d) {
+  d = gearHurt(h, d);
   const blocked = Math.min(h.shield, d); h.shield -= blocked; d -= blocked;
   if (blocked) float(h, '擋 ' + blocked, '#ffe070');
   if (d <= 0) return;
@@ -941,12 +946,40 @@ const GEAR = {
   hagoromo: { n: '天女的羽衣', kind: '神器', slot: 'charm', icon: '羽', color: '#c0f0ff', from: '日本傳說',
     d: '穿上就能飛：出招後可以點戰場上任何地方飛過去，自己決定站哪。' },
   dracula: { n: '德古拉的斗篷', kind: '邪物', slot: 'charm', icon: '血', color: '#e04060', from: '吸血鬼傳說',
-    d: '吸血鬼伯爵的披風：打出的傷害吸回 30% 生命。代價：每輪開始扣 1 生命（怕光）。' },
+    d: '吸血鬼伯爵的披風：打出的傷害吸回 30% 生命。代價：每輪開始扣 1 生命（怕光）。', roundCost: 1 },
+  // 另外 10 位的專屬兵器
+  ex_brigid: { n: '布麗姬的聖火', kind: '神器', slot: 'weapon', own: 'brigid', icon: '火', color: '#ff8a30', from: '凱爾特神話',
+    d: '聖火之路：布麗姬直線、自由線畫過的地方燒一輪。敵人走過火路去攻擊，會燃燒 2 輪。' },
+  ex_tudigong: { n: '福德拐杖', kind: '神器', slot: 'weapon', own: 'tudigong', icon: '廟', color: '#ffc830', from: '民間信仰',
+    d: '土地廟：土地公出招後停下的地方立起一座小廟（到下一輪）。站在廟附近的隊友，每次受到的傷害 -3。' },
+  ex_hermes: { n: '雙蛇杖', kind: '神器', slot: 'weapon', own: 'hermes', icon: '杖', color: '#f0d070', from: '希臘神話',
+    d: '信使之杖：赫爾墨斯的線經過的隊友，下一招的墨水 +50%。' },
+  ex_dagda: { n: '無底大鍋', kind: '神器', slot: 'weapon', own: 'dagda', icon: '鍋', color: '#d8a060', from: '凱爾特神話',
+    d: '吃不完的大鍋：達格達每打中敵人一下，自己回 2 生命（滿了就存成飽足）。' },
+  ex_hanako: { n: '第三間的門把', kind: '邪物', slot: 'weapon', own: 'hanako', icon: '門', color: '#b060e0', from: '日本學校怪談',
+    d: '關進隔間：花子打到的敵人這一輪走不出隔間，只能打身邊很近的人，要走過去打人就會落空。代價：每輪開始扣 1 生命。', roundCost: 1 },
+  ex_anubis: { n: '冥界天秤', kind: '邪物', slot: 'weapon', own: 'anubis', icon: '秤', color: '#f0c040', from: '埃及神話',
+    d: '秤心：阿努比斯打完，生命剩不到四分之一的一般敵人直接被吞掉（精英除外）。代價：每吞一個自己扣 2 生命。' },
+  ex_hachi: { n: '白色寬簷帽', kind: '邪物', slot: 'weapon', own: 'hachi', icon: '帽', color: '#e8e8ff', from: '日本網路怪談',
+    d: '高處俯視：八尺大人的線打到的敵人被嚇得往後退一大段，要多走好遠才打得到人。代價：每輪開始扣 1 生命。', roundCost: 1 },
+  ex_medusa: { n: '石化之眼', kind: '邪物', slot: 'weapon', own: 'medusa', icon: '蛇', color: '#70d060', from: '希臘神話',
+    d: '最後一眼：美杜莎的線畫到哪裡停，那附近的敵人各疊 1 層石化。代價：每輪開始扣 1 生命。', roundCost: 1 },
+  ex_horusshadow: { n: '碎裂的荷魯斯之眼', kind: '邪物', slot: 'weapon', own: 'horusshadow', icon: '瞳', color: '#e0b850', from: '埃及神話',
+    d: '被挖出的那隻眼：荷魯斯之影的線每碰到一個敵人，就多撿 1 片眼之碎片。代價：每輪開始扣 1 生命。', roundCost: 1 },
+  ex_redgirl: { n: '紅色雨衣', kind: '邪物', slot: 'weapon', own: 'redgirl', icon: '衣', color: '#ff4050', from: '臺灣都市傳說',
+    d: '山裡的那件紅衣：每輪第一個要打紅衣小女孩的敵人會在山裡迷路，走到別的地方、這次打不到人。代價：每輪開始扣 1 生命。', roundCost: 1 },
 };
 const GEAR_KEY = 'rebirth-redline-gear-v1';
 // 試玩：第一次玩先把三把專屬兵器發給三位
 const gs = (() => { try { return JSON.parse(localStorage.getItem(GEAR_KEY)) || null; } catch (e) { return null; } })()
   || { bag: ['ex_guangong', 'ex_yuelao', 'ex_yukionna'], eq: { guangong: { weapon: 'ex_guangong' }, yuelao: { weapon: 'ex_yuelao' }, yukionna: { weapon: 'ex_yukionna' } } };
+// 試玩：每位神魔都先拿到自己的專屬兵器，兵器格空著就直接裝上
+for (const id of ALL_IDS) {
+  const ex = 'ex_' + id; if (!GEAR[ex]) continue;
+  if (!gs.bag.includes(ex)) gs.bag.push(ex);
+  gs.eq[id] = gs.eq[id] || {};
+  if (!gs.eq[id].weapon) gs.eq[id].weapon = ex;
+}
 const saveGear = () => { try { localStorage.setItem(GEAR_KEY, JSON.stringify(gs)); } catch (e) { /* 存不了就只在這次有效 */ } };
 const gearOf = (h) => Object.values(gs.eq[h.id] || {}).filter((id) => GEAR[id]);
 const wears = (h, id) => !!h && gearOf(h).includes(id);
@@ -1028,6 +1061,7 @@ function gearResults(h, res) {
 
 // 姻緣簿：出招前把這一招會打到的敵人兩兩綁起來
 function gearLink(h) {
+  h.inkBuff = 0;
   if (!wears(h, 'ex_yuelao')) return;
   const en = [...new Set(hits.filter((u) => u.side === 'enemy' && !u.dead))];
   for (let i = 0; i + 1 < en.length; i += 2) { en[i].link = en[i + 1]; en[i + 1].link = en[i]; float(en[i + 1], '紅線', '#ff5c8d', 18); }
@@ -1036,6 +1070,18 @@ function gearLink(h) {
 // 每一下打出去之後：紅線分傷、吸血、妖刀反噬
 function gearOnApply(s) {
   const h = hero();
+  if (s.dmg && s.u.side === 'enemy' && !s.linked && !s.shared) {
+    if (wears(h, 'ex_dagda')) apply({ u: h, heal: 2 });
+    const u = s.u;
+    if (wears(h, 'ex_anubis') && !u.dead && !u.elite && u.hp <= u.maxHp / 4) {
+      setTimeout(() => {
+        if (u.dead) return;
+        u.hp = 0; u.dead = true; u.deadAt = performance.now(); float(u, '秤心：吞掉', '#f0c040', 20);
+        fxPush({ type: 'ring', x: u.x, y: u.y - 46, color: '#f0c040', dur: 600 });
+        if (h.hp > 2) { h.hp -= 2; float(h, '天秤 -2', '#f0c040', 18); }
+      }, 260);
+    }
+  }
   if (s.dmg && s.u.link && !s.linked && !s.u.link.dead) {
     const o = s.u.link, v = Math.floor(s.dmg / 2);
     if (v > 0) setTimeout(() => { fxPush({ type: 'thread', a: { x: s.u.x, y: s.u.y - 46 }, b: { x: o.x, y: o.y - 46 }, dur: 500 }); apply({ u: o, dmg: v, linked: true }); }, 160);
@@ -1049,6 +1095,15 @@ function gearOnApply(s) {
 
 // 出招跑完之後：留下冰地、乾坤圈；穿羽衣的可以飛
 async function gearAfterMove(h, sk) {
+  const en = [...new Set(hits.filter((u) => u.side === 'enemy' && !u.dead))];
+  const foot = path.length > 1 ? densify(path, 10).map((p) => ({ x: p.x, y: p.y + 46 })) : [];
+  if (wears(h, 'ex_brigid') && sk.shape !== 'circle' && sk.shape !== 'tap' && foot.length) zones.push({ type: 'fire', pts: foot, done: new Set() });
+  if (wears(h, 'ex_tudigong')) { zones.push({ type: 'shrine', x: h.x, y: h.y }); float(h, '土地廟', '#ffc830', 18); }
+  if (wears(h, 'ex_hermes')) for (const a of hits) if (a.side === 'ally' && a !== h && !a.dead) { a.inkBuff = 1.5; float(a, '墨水 +50%', '#f0d070', 18); }
+  if (wears(h, 'ex_hanako')) for (const e of en) { e.trapped = true; float(e, '關進隔間', '#b060e0', 18); }
+  if (wears(h, 'ex_horusshadow') && en.length) addRes(h, en.length);
+  if (wears(h, 'ex_medusa') && path.length) { const end = path[path.length - 1]; for (const e of foes) if (!e.dead && dist(center(e), end) < 110) addStone(e, 1); fxPush({ type: 'ring', x: end.x, y: end.y, color: '#70d060', dur: 600 }); }
+  if (wears(h, 'ex_hachi') && en.length) await Promise.all(en.map((e) => { float(e, '嚇退', '#e8e8ff', 18); return moveTo(e, { x: Math.min(555, e.x + 110), y: e.y }, 0.9).then(() => { e.face = -1; }); }));
   if (wears(h, 'ex_yukionna') && sk.shape !== 'circle' && sk.shape !== 'tap' && path.length > 1) zones.push({ type: 'frost', pts: densify(path, 10).map((p) => ({ x: p.x, y: p.y + 46 })) });
   if (wears(h, 'qiankun') && sk.shape === 'circle' && closed) zones.push({ type: 'ring', poly: path.slice(), done: new Set() });
   if (!wears(h, 'hagoromo')) return;
@@ -1063,9 +1118,31 @@ async function gearAfterMove(h, sk) {
 
 function gearNewRound(first) {
   zones = [];
-  for (const e of foes || []) e.link = null;
+  for (const e of foes || []) { e.link = null; e.trapped = false; }
+  for (const h of heroes || []) h.rainUsed = false;
   if (first) return;
-  for (const h of heroes) if (!h.dead && wears(h, 'dracula') && h.hp > 1) { h.hp -= 1; float(h, '怕光 -1', '#e04060', 18); }
+  // 邪物的代價：每輪開始扣生命（不會扣到倒下）
+  for (const h of heroes) {
+    const cost = gearOf(h).reduce((a, id) => a + (GEAR[id].roundCost || 0), 0);
+    if (!h.dead && cost && h.hp > 1) { const v = Math.min(cost, h.hp - 1); h.hp -= v; float(h, '邪物 -' + v, '#c060ff', 18); }
+  }
+}
+// 土地廟：附近的隊友受傷 -3
+function gearHurt(h, d) {
+  const z = zones.find((z) => z.type === 'shrine' && dist(z, h) < 150);
+  if (!z || d <= 0) return d;
+  float(h, '土地廟 -3', '#ffc830', 16);
+  return Math.max(0, d - 3);
+}
+// 敵人要走過去打人之前：紅色雨衣讓他迷路、隔間關住他
+async function gearApproach(e, t) {
+  if (t.side === 'ally' && wears(t, 'ex_redgirl') && !t.rainUsed) {
+    t.rainUsed = true; float(e, '在山裡迷路', '#ff4050');
+    await moveTo(e, { x: rnd(300, 550), y: rnd(320, 660) }, 0.8);
+    return false;
+  }
+  if (e.trapped && dist(e, t) > 150) { float(e, '走不出隔間', '#b060e0'); await wait(300); return false; }
+  return true;
 }
 
 // 敵人走過去的路上有沒有冰地
@@ -1099,7 +1176,7 @@ function ringHit(e) {
 // ───── 裝備的畫面 ─────
 function gearLine(h) {
   const w = gearOf(h).find((id) => GEAR[id].slot === 'weapon');
-  const color = { ex_guangong: '#40d070', ex_yukionna: '#a0e0ff', muramasa: '#c060ff', ruyi: '#ffb040', yata: '#ffe070' }[w] || '#ff3048';
+  const color = { muramasa: '#c060ff', ruyi: '#ffb040', yata: '#ffe070' }[w] || (w && GEAR[w].own ? GEAR[w].color : '#ff3048');
   return { color, w: w === 'ruyi' ? 1.6 : 1 };
 }
 function gearDrawZones(now) {
@@ -1109,6 +1186,15 @@ function gearDrawZones(now) {
       g.beginPath(); z.pts.forEach((p, i) => i ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y)); g.stroke();
       g.globalAlpha = 0.8; g.fillStyle = '#e0f4ff'; z.pts.forEach((p, i) => { if (i % 3 === 0) g.fillRect(p.x - 3 + (i % 2) * 6, p.y - 3, 4, 4); });
       g.globalAlpha = 1;
+    } else if (z.type === 'fire') {
+      g.globalAlpha = 0.35 + 0.15 * Math.sin(now / 120); g.strokeStyle = '#ff8a30'; g.lineWidth = 18; g.lineCap = 'round'; g.lineJoin = 'round';
+      g.beginPath(); z.pts.forEach((p, i) => i ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y)); g.stroke();
+      g.globalAlpha = 0.9; g.fillStyle = '#ffe070'; z.pts.forEach((p, i) => { if (i % 4 === 0) g.fillRect(p.x - 2, p.y - 6 - ((now / 60 + i) % 8), 4, 6); });
+      g.globalAlpha = 1;
+    } else if (z.type === 'shrine') {
+      g.globalAlpha = 0.5; g.strokeStyle = '#ffc830'; g.lineWidth = 3; g.setLineDash([10, 8]);
+      g.beginPath(); g.ellipse(z.x, z.y, 150, 40, 0, 0, Math.PI * 2); g.stroke(); g.setLineDash([]);
+      g.globalAlpha = 1; g.fillStyle = '#a03020'; g.fillRect(z.x - 14, z.y - 30, 28, 22); g.fillStyle = '#ffc830'; g.fillRect(z.x - 18, z.y - 36, 36, 7);
     } else if (z.type === 'frost') {
       g.globalAlpha = 0.45 + 0.15 * Math.sin(now / 300); g.strokeStyle = '#c0ecff'; g.lineWidth = 22; g.lineCap = 'round'; g.lineJoin = 'round';
       g.beginPath(); z.pts.forEach((p, i) => i ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y)); g.stroke();
@@ -1240,6 +1326,7 @@ function statusRows(u) {
     if (u.shield) r.push([`護盾 ${u.shield}`, '先替他擋掉這麼多傷害。']);
     const R = HEROES[u.id].res;
     if (R) r.push([`${R[0]} ${u.res}/${R[1]}`, u.passive.d]);
+    if (u.inkBuff) r.push(['雙蛇杖', '下一招的墨水 +50%。']);
     if (u.wine) r.push(['溫酒', `天賦「${u.talent.n}」發動中：下一招每一下傷害 +${u.wine}。`]);
     if (u.taunt) r.push(['嘲諷', '這一輪一般敵人都改打他（精英不受影響）。']);
     const aim = foes.filter((e) => !e.dead && !e.frozen && !e.confused && e.intent && (e.intent.all || e.intent.target === u));
@@ -1250,6 +1337,7 @@ function statusRows(u) {
     if (u.red) r.push(['紅線（緣）', '月老綁上的紅線，到下一輪為止：他受傷時，其他綁紅線的敵人也受一半。']);
     if (u.link && !u.link.dead) r.push(['姻緣簿', `和${u.link.name}綁在一起：其中一個受傷，另一個也受一半。`]);
     if (u.confused) r.push(['錯亂', '被亂點鴛鴦或迷路了：下一次行動改打自己的同伴。']);
+    if (u.trapped) r.push(['關在隔間', '這一輪走不出去，只能打身邊很近的人。']);
     if (u.stun) r.push(['石像', '被美杜莎石化：下一次輪到他時不能行動。雅典娜的詛咒打石像會碎掉重擊。']);
     if (u.stone) r.push([`石化 ${u.stone}/3`, '疊到 3 層變成石像，下次不能行動。']);
     if (u.burn) r.push([`燃燒 ${u.burn} 輪`, '每輪開始受 3 傷害。布麗姬打燃燒中的敵人每一下多 4。']);
