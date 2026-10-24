@@ -107,7 +107,7 @@ const HEROES = {
     skills: [
       { name: '刺顏良', shape: 'dash', len: 300, melee: true, anim: 's1', desc: '衝到第一個敵人面前刺 9 傷害，目標生命不到一半改成 14。',
         run: (en) => firstEnemy(en).map((u) => ({ u, dmg: u.hp < u.maxHp / 2 ? 14 : 9 })) },
-      { name: '過五關斬六將', shape: 'zigzag', len: 900, cd: 1, melee: true, anim: 's2', desc: '每穿過敵人一次過一關，在敵人身上轉彎再多一關，最多 5 關，傷害 5、8、11、14、17。',
+      { name: '過五關斬六將', xc: { d: '多過一關（接著算傷害），打在最後一個敵人身上', fx: (res, n, h, en) => { const t = en.slice(0, 5); const u = t[t.length - 1]; if (!u) return res; return [...res, ...Array.from({ length: n }, (_, i) => ({ u, dmg: 5 + (t.length + i) * 3 + run.up.dmg + (h.wine || 0) }))]; } }, shape: 'zigzag', len: 900, cd: 1, melee: true, anim: 's2', desc: '每穿過敵人一次過一關，在敵人身上轉彎再多一關，最多 5 關，傷害 5、8、11、14、17。',
         run: (en) => en.slice(0, 5).map((u, i) => ({ u, dmg: 5 + i * 3 })) },
       { name: '青龍斬', shape: 'line', len: 560, cd: 3, anim: 'ult', spendRes: true, desc: '揮出一道刀氣，直線上的敵人各受 12 傷害，每點氣勢多 4，用掉全部氣勢。',
         run: (en, al, h) => en.map((u) => ({ u, dmg: 12 + 4 * h.res })) },
@@ -119,7 +119,7 @@ const HEROES = {
     talent: { n: '向月檢書', d: '隊友的線穿過月老（或穿過月老這回合留下的線），月老回 6 生命，那條線打到的敵人全部綁紅線。' },
     talentFx: (t, c) => { apply({ u: t, heal: 6 }); for (const e of c.en) e.red = true; },
     skills: [
-      { name: '赤繩繫足', shape: 'free', len: 820, anim: 'cast', desc: '紅繩飛過去：經過的敵人各受 5 傷害並綁紅線，經過的隊友各回 6 生命。',
+      { name: '赤繩繫足', xc: { d: '全隊各回 3 生命', fx: (res, n) => [...res, ...heroes.filter((u) => !u.dead).map((u) => ({ u, heal: 3 * n }))] }, shape: 'free', len: 820, anim: 'cast', desc: '紅繩飛過去：經過的敵人各受 5 傷害並綁紅線，經過的隊友各回 6 生命。',
         run: (en, al) => [...en.map((u) => ({ u, dmg: 5, red: true })), ...al.map((u) => ({ u, heal: 6 }))] },
       { name: '千里姻緣一線牽', shape: 'tap', max: 4, any: true, len: 1, cd: 1, anim: 'cast', desc: '依序點最多 4 個目標串起來：敵人各受 4 傷害並綁紅線，隊友各得 6 護盾。',
         run: (en, al) => [...en.map((u) => ({ u, dmg: 4, red: true })), ...al.map((u) => ({ u, shield: 6 }))] },
@@ -133,7 +133,7 @@ const HEROES = {
     talent: { n: '雪地足跡', d: '隊友的線穿過雪女（或穿過雪女這回合留下的線），那條線結成雪地，敵人走過去打人時疊 2 層冰霜。' },
     talentFx: (t, c) => c.later(() => { if (path.length > 1) zones.push({ type: 'snow', pts: densify(path, 10).map((p) => ({ x: p.x, y: p.y + 46 })), done: new Set() }); }),
     skills: [
-      { name: '冰柱', shape: 'line', len: 540, anim: 's1', desc: '射出冰柱：直線上的敵人各受 8 傷害、冰霜 1 層。凍住的敵人改成碎冰 16 傷害，但會解凍。',
+      { name: '冰柱', xc: { d: '每個敵人多疊 1 層冰霜', fx: (res, n) => res.map((s) => (s.frost ? { ...s, frost: s.frost + n } : s)) }, shape: 'line', len: 540, anim: 's1', desc: '射出冰柱：直線上的敵人各受 8 傷害、冰霜 1 層。凍住的敵人改成碎冰 16 傷害，但會解凍。',
         run: (en) => en.map((u) => (u.frozen ? { u, dmg: 16, thaw: true } : { u, dmg: 8, frost: 1 })) },
       { name: '吹雪', shape: 'circle', len: 640, cd: 1, anim: 's2', desc: '圈住的敵人各受 4 傷害、冰霜 2 層。',
         run: (en) => en.map((u) => ({ u, dmg: 4, frost: 2 })) },
@@ -148,7 +148,7 @@ const HEROES = {
     mod: (h, s) => (s.dmg && s.u.burn ? { ...s, dmg: s.dmg + 4 } : s),
     talentFx: (t, c) => { for (const e of c.en) addBurn(e, 2); },
     skills: [
-      { name: '基爾代爾聖火', shape: 'free', len: 800, anim: 's2', desc: '聖火沿著線燒過去：經過的敵人各受 5 傷害、燃燒 2 輪。',
+      { name: '基爾代爾聖火', xc: { d: '燃燒多 1 輪', fx: (res, n) => res.map((s) => (s.burn ? { ...s, burn: s.burn + n } : s)) }, shape: 'free', len: 800, anim: 's2', desc: '聖火沿著線燒過去：經過的敵人各受 5 傷害、燃燒 2 輪。',
         run: (en) => en.map((u) => ({ u, dmg: 5, burn: 2 })) },
       { name: '鐵砧鍛造', shape: 'circle', len: 700, cd: 1, anim: 's1', desc: '圈住的隊友各得 8 護盾，圈住的敵人各受 4 傷害。',
         run: (en, al) => [...al.map((u) => ({ u, shield: 8 })), ...en.map((u) => ({ u, dmg: 4 }))] },
@@ -163,7 +163,7 @@ const HEROES = {
     onHit: (h) => addRes(h, 1),
     talentFx: (t, c) => { const e = c.en[0]; if (e) setTimeout(() => { float(e, '虎爺！', '#ffc830', 18); apply({ u: e, dmg: 8, shared: true }); }, 200); },
     skills: [
-      { name: '巡境', shape: 'free', len: 760, anim: 's2', desc: '拐杖指路，金光沿線巡過去：經過的敵人各受 5 傷害。',
+      { name: '巡境', xc: { d: '元寶 +1', fx: (res, n, h) => [...res, { u: h, res: n }] }, shape: 'free', len: 760, anim: 's2', desc: '拐杖指路，金光沿線巡過去：經過的敵人各受 5 傷害。',
         run: (en) => en.map((u) => ({ u, dmg: 5 })) },
       { name: '護境安民', shape: 'circle', len: 700, cd: 1, anim: 's1', desc: '圈住的隊友各得 9 護盾；圈到幾位隊友，元寶就加幾個。',
         run: (en, al, h) => [...al.map((u) => ({ u, shield: 9 })), ...(al.length ? [{ u: h, res: al.filter((u) => u !== h).length || 1 }] : [])] },
@@ -177,7 +177,7 @@ const HEROES = {
     talent: { n: '引魂者', d: '隊友的線穿過赫爾墨斯（或穿過他這回合留下的線），那條線打到、生命不到兩成的敵人直接被帶走（精英除外）。' },
     talentFx: (t, c) => { for (const e of c.en) if (!e.elite && e.hp <= e.maxHp * 0.2) apply({ u: e, execute: '引魂' }); },
     skills: [
-      { name: '神使傳令', shape: 'free', len: 900, melee: true, anim: 's2', desc: '飛奔穿過去：經過的敵人各受 4 傷害，同一個敵人每多穿一次再 +2。',
+      { name: '神使傳令', xc: { d: '每一下 +2 傷害', fx: (res, n) => res.map((s) => (s.dmg ? { ...s, dmg: s.dmg + 2 * n } : s)) }, shape: 'free', len: 900, melee: true, anim: 's2', desc: '飛奔穿過去：經過的敵人各受 4 傷害，同一個敵人每多穿一次再 +2。',
         run: (en) => { const n = new Map(); return en.map((u) => { const k = n.get(u) || 0; n.set(u, k + 1); return { u, dmg: 4 + 2 * k }; }); } },
       { name: '偷牛小賊', shape: 'dash', len: 340, cd: 1, melee: true, anim: 's1', desc: '衝到第一個敵人面前偷襲 7 傷害，順手偷走他的力氣：他下次攻擊減半（恐懼）。',
         run: (en) => firstEnemy(en).map((u) => ({ u, dmg: 7, fear: true })) },
@@ -193,7 +193,7 @@ const HEROES = {
     skills: [
       { name: '巨棒決斷', shape: 'line', len: 380, melee: true, wide: true, anim: 's2', spendRes: true, desc: '扛著巨棒衝過去橫掃（判定特別寬）：直線上的敵人各受 9 傷害，用掉全部飽足，每點多 1。',
         run: (en, al, h) => en.map((u) => ({ u, dmg: 9 + h.res })) },
-      { name: '豐收之歌', shape: 'circle', len: 700, cd: 1, anim: 's1', desc: '彈奏豐收之歌：圈住的隊友各回 10 生命（達格達自己回滿的部分變飽足）。',
+      { name: '豐收之歌', xc: { d: '每位隊友多回 4 生命', fx: (res, n) => res.map((s) => (s.heal ? { ...s, heal: s.heal + 4 * n } : s)) }, shape: 'circle', len: 700, cd: 1, anim: 's1', desc: '彈奏豐收之歌：圈住的隊友各回 10 生命（達格達自己回滿的部分變飽足）。',
         run: (en, al) => al.map((u) => ({ u, heal: 10 })) },
       { name: '生死巨棒', shape: 'dash', len: 320, cd: 3, melee: true, anim: 'ult', desc: '巨棒一端殺人一端救人：衝去砸第一個敵人 26 傷害；打倒的話全隊回 8 生命。',
         run: (en) => firstEnemy(en).map((u) => ({ u, dmg: 26, killHeal: 8 })) },
@@ -210,7 +210,7 @@ const HEROES = {
     skills: [
       { name: '敲門三聲', shape: 'tap', max: 3, len: 1, anim: 's1', desc: '點最多 3 個敵人，各敲一下門：各受 4 傷害。',
         run: (en) => en.map((u) => ({ u, dmg: 4 })) },
-      { name: '花子在嗎？', shape: 'circle', len: 700, cd: 1, anim: 's2', desc: '圈住的敵人各受 3 傷害並恐懼（下次攻擊減半）。',
+      { name: '花子在嗎？', xc: { d: '多敲一次門', fx: (res, n, h) => [...res, { u: h, res: n }] }, shape: 'circle', len: 700, cd: 1, anim: 's2', desc: '圈住的敵人各受 3 傷害並恐懼（下次攻擊減半）。',
         run: (en) => en.map((u) => ({ u, dmg: 3, fear: true })) },
       { name: '紅色披風', shape: 'free', len: 900, cd: 3, anim: 'ult', desc: '紅色披風捲過去：經過的敵人各受 8 傷害，恐懼中的改受 16。',
         run: (en) => en.map((u) => ({ u, dmg: u.fear ? 16 : 8 })) },
@@ -225,7 +225,7 @@ const HEROES = {
     skills: [
       { name: '靈魂審判', shape: 'dash', len: 320, melee: true, anim: 's1', desc: '衝去用權杖重擊第一個敵人 9 傷害。',
         run: (en) => firstEnemy(en).map((u) => ({ u, dmg: 9 })) },
-      { name: '法老的詛咒', shape: 'line', len: 560, cd: 1, anim: 's2', desc: '直線上的敵人各受 5 傷害並恐懼（下次攻擊減半）。',
+      { name: '法老的詛咒', xc: { d: '每一下 +3 傷害', fx: (res, n) => res.map((s) => (s.dmg ? { ...s, dmg: s.dmg + 3 * n } : s)) }, shape: 'line', len: 560, cd: 1, anim: 's2', desc: '直線上的敵人各受 5 傷害並恐懼（下次攻擊減半）。',
         run: (en) => en.map((u) => ({ u, dmg: 5, fear: true })) },
       { name: '吞噬者阿米特', shape: 'dash', len: 360, cd: 3, melee: true, anim: 'ult', desc: '衝向第一個敵人：生命不到三成的一般敵人直接被吞掉、阿努比斯回 10；其他的受 20 傷害。',
         run: (en, al, h) => firstEnemy(en).flatMap((u) => (!u.elite && u.hp < u.maxHp * 0.3 ? [{ u, execute: '吞掉' }, { u: h, heal: 10 }] : [{ u, dmg: 20 }])) },
@@ -238,7 +238,7 @@ const HEROES = {
     onHit: (h, s) => { s.u.mark = true; },
     talentFx: (t, c) => { for (const e of c.en) e.mark = true; },
     skills: [
-      { name: '波波波', shape: 'line', len: 560, anim: 's1', desc: '低沉的「波、波、波」：直線上的敵人各受 6 傷害並恐懼。',
+      { name: '波波波', xc: { d: '每個敵人再多「波」一下（3 傷害）', fx: (res, n, h, en) => [...res, ...[...new Set(en)].flatMap((u) => Array.from({ length: n }, () => ({ u, dmg: 3 })))] }, shape: 'line', len: 560, anim: 's1', desc: '低沉的「波、波、波」：直線上的敵人各受 6 傷害並恐懼。',
         run: (en) => en.map((u) => ({ u, dmg: 6, fear: true })) },
       { name: '八尺身影', shape: 'circle', len: 700, cd: 1, anim: 's2', desc: '圈住的隊友各得 7 護盾，圈住的敵人各受 2 傷害並恐懼。',
         run: (en, al) => [...al.map((u) => ({ u, shield: 7 })), ...en.map((u) => ({ u, dmg: 2, fear: true }))] },
@@ -255,7 +255,7 @@ const HEROES = {
     skills: [
       { name: '蛇髮', shape: 'free', len: 760, melee: true, anim: 's2', desc: '蛇髮一路咬過去：經過的敵人各受 5 傷害。',
         run: (en) => en.map((u) => ({ u, dmg: 5 })) },
-      { name: '石化凝視', shape: 'line', len: 600, cd: 1, anim: 's1', desc: '直線上的敵人各受 4 傷害、多疊 1 層石化。',
+      { name: '石化凝視', xc: { d: '每個敵人多疊 1 層石化', fx: (res, n) => res.map((s) => (s.stone ? { ...s, stone: s.stone + n } : s)) }, shape: 'line', len: 600, cd: 1, anim: 's1', desc: '直線上的敵人各受 4 傷害、多疊 1 層石化。',
         run: (en) => en.map((u) => ({ u, dmg: 4, stone: 1 })) },
       { name: '雅典娜的詛咒', shape: 'circle', len: 700, cd: 3, anim: 'ult', desc: '圈住的敵人各受 6 傷害、多疊 2 層石化；已經是石像的直接碎掉，改受 20。',
         run: (en) => en.map((u) => (u.stun ? { u, dmg: 20, unstun: true } : { u, dmg: 6, stone: 2 })) },
@@ -267,7 +267,7 @@ const HEROES = {
     talent: { n: '真知之眼', d: '隊友的線穿過荷魯斯之影（或穿過他這回合留下的線），眼之碎片 +2。' },
     talentFx: (t) => addRes(t, 2),
     skills: [
-      { name: '權杖金光', shape: 'line', len: 600, anim: 'punch', desc: '權杖射出金光：直線上的敵人各受 7 傷害。',
+      { name: '權杖金光', xc: { d: '眼之碎片 +1', fx: (res, n, h) => [...res, { u: h, res: n }] }, shape: 'line', len: 600, anim: 'punch', desc: '權杖射出金光：直線上的敵人各受 7 傷害。',
         run: (en) => en.map((u) => ({ u, dmg: 7 })) },
       { name: '暗影之眼', shape: 'tap', max: 3, len: 1, cd: 1, anim: 'cast', desc: '點最多 3 個敵人，面具上的眼睛放出暗影：各受 5 傷害。',
         run: (en) => en.map((u) => ({ u, dmg: 5 })) },
@@ -284,13 +284,15 @@ const HEROES = {
     skills: [
       { name: '牽手', shape: 'dash', len: 320, melee: true, anim: 'punch', desc: '撲到第一個敵人面前抓住他：6 傷害、多疊 2 層迷途。',
         run: (en) => firstEnemy(en).map((u) => ({ u, dmg: 6, lost: 2 })) },
-      { name: '紅霧', shape: 'circle', len: 700, cd: 1, anim: 'cast', desc: '召出紅色山霧：圈住的敵人各受 3 傷害、多疊 1 層迷途。',
+      { name: '紅霧', xc: { d: '每個敵人多疊 1 層迷途', fx: (res, n) => res.map((s) => (s.lost ? { ...s, lost: s.lost + n } : s)) }, shape: 'circle', len: 700, cd: 1, anim: 'cast', desc: '召出紅色山霧：圈住的敵人各受 3 傷害、多疊 1 層迷途。',
         run: (en) => en.map((u) => ({ u, dmg: 3, lost: 1 })) },
       { name: '深山迷途', shape: 'free', len: 1000, cd: 3, anim: 'cast', desc: '把敵人帶進深山：經過的敵人各受 5 傷害、多疊 2 層迷途；已經迷路的再多受 10。',
         run: (en) => en.map((u) => ({ u, dmg: u.confused ? 15 : 5, lost: 2 })) },
     ],
   },
 };
+// 交會加成：這招的線每交會一處，額外的效果（寫進招式說明）
+for (const H of Object.values(HEROES)) for (const sk of H.skills) if (sk.xc) sk.desc += `<b>交會加成</b>：每交會一處，${sk.xc.d}。`;
 const ALL_IDS = Object.keys(HEROES);
 const PARTY_KEY = 'rebirth-redline-party-v1';
 // 這次出戰的三位（存在手機裡，下次預設同一隊）
@@ -572,6 +574,8 @@ function results() {
   // 七日之期：被標記的敵人每一下 +2
   res = res.map((s) => (s.dmg && s.u.mark ? { ...s, dmg: s.dmg + 2 } : s));
   if (h.post) res = h.post(h, res);
+  const xn = crossings().length;
+  if (xn && skill().xc) res = skill().xc.fx(res, xn, h, en, al);
   res = gearResults(h, res);
   // 紅線交會：交叉點附近的敵人各受 6 傷害
   for (const c of crossings()) for (const e of foes) if (!e.dead && dist(center(e), c) < 90) res.push({ u: e, dmg: 6, cross: c });
@@ -1700,7 +1704,7 @@ function updateUi() {
   else if (!path.length) demo || tip(`「${sk.name}」：${HOW[sk.shape]}`);
   else if (hits.length) {
     const tal = talentsHit(), cx = crossings();
-    tip(`「${sk.name}」會打 ${results().filter((x) => x.u.side === 'enemy' && x.dmg && !x.cross).length} 下（${new Set(hits.filter((u) => u.side === 'enemy')).size} 個敵人）${tal.length ? `，觸發天賦 <b>${tal.map((t) => t.name + '・' + t.talent.n).join('、')}</b>` : ''}${cx.length ? `，<b>紅線交會 ${cx.length} 處</b>` : ''}。${sk.shape === 'tap' && hits.length < sk.max ? '可以繼續點，' : ''}滿意就按出招，不滿意按重畫。`);
+    tip(`「${sk.name}」會打 ${results().filter((x) => x.u.side === 'enemy' && x.dmg && !x.cross).length} 下（${new Set(hits.filter((u) => u.side === 'enemy')).size} 個敵人）${tal.length ? `，觸發天賦 <b>${tal.map((t) => t.name + '・' + t.talent.n).join('、')}</b>` : ''}${cx.length ? `，<b>紅線交會 ${cx.length} 處</b>${sk.xc ? `（交會加成 ×${cx.length}：${sk.xc.d}）` : ''}` : ''}。${sk.shape === 'tap' && hits.length < sk.max ? '可以繼續點，' : ''}滿意就按出招，不滿意按重畫。`);
   }
   else tip(`這條線沒有碰到目標，按重畫再來。`);
 }
@@ -1714,7 +1718,7 @@ $('.help').innerHTML = `
   <p>三位神魔輪流上場，<b>每次只動一位</b>，輪到的神魔腳下有金色光圈。選他的一招，照那招的畫法在戰場上畫，畫完會預覽每個目標受到的效果，按出招才算數。</p>
   ${Object.keys(SHAPES).map((k) => `<p><b>${SHAPES[k]}</b>：${HOW[k]}</p>`).join('')}
   <p>墨水條用完就不能再畫。標「近身」的招式神魔會自己跑過去打，其他招式站在原地放出去。</p>
-  <p><b>天賦</b>：線穿過隊友，會發動那位隊友的天賦。<b>紅線交會</b>：同一回合隊友畫過的線會留在地上（淡淡的虛線，換回合就清掉），你的線跟它交叉，交叉點會炸開，附近敵人各受 6 傷害，也會發動那條線主人的天賦。</p>
+  <p><b>天賦</b>：線穿過隊友，會發動那位隊友的天賦。<b>紅線交會</b>：同一回合隊友畫過的線會留在地上（淡淡的虛線，換回合就清掉），你的線跟它交叉，交叉點會炸開，附近敵人各受 6 傷害，也會發動那條線主人的天賦。有些招式還有<b>交會加成</b>（寫在招式說明裡），每交會一處效果再加一份，一招最多算 3 處。</p>
   <p>神魔出招時會沿著你畫的線跑過去，最後停在線的終點，所以畫線也是在決定下一輪站哪裡。三位神魔各出一招之後，敵人才一起行動，會走到目標面前打。敵人頭上寫著這一輪要打誰、打多少，可以先凍住、先打死，或用護盾擋。</p>
   ${ORDER.map((id) => { const H = HEROES[id]; return H.skills.map((s) => `<p><b>${H.name}・${s.name}</b>（${SHAPES[s.shape]}${s.melee ? '・近身' : ''}${s.cd ? `，冷卻 ${s.cd} 輪` : ''}）：${s.desc}</p>`).join('') + `<p><b>${H.name}・被動・${H.passive.n}</b>：${H.passive.d}</p><p><b>${H.name}・天賦・${H.talent.n}</b>：${H.talent.d}</p>`; }).join('')}
   <p>每 3 層有精英無臉典獄長，他的鎖鏈會剪斷直線和自由線，畫圈不受影響。</p>
