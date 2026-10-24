@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>一筆紅線試玩</title>
+<link rel="stylesheet" href="style.css?v=20261024a">
+<style>
+  #app { padding: 8px 10px 28px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="top"><span class="floor"></span><span class="turn muted"></span></div>
+  <canvas class="stage" width="600" height="700"></canvas>
+  <div class="ink"><div></div></div>
+  <div class="who"></div>
+  <div class="skills"></div>
+  <div class="traits"></div>
+  <div class="tip"></div>
+  <div class="acts"><button class="btn how">怎麼畫</button><button class="btn redo">重畫</button><button class="btn primary go">出招</button></div>
+  <details>
+    <summary>玩法說明</summary>
+    <div class="help"></div>
+  </details>
+</div>
+<div class="overlay"><div class="box"></div></div>
+<script src="js/data.js?v=20261024a"></script>
+<script src="js/jobs.js?v=20261024a"></script>
+<script src="js/sprites.js?v=20261024a"></script>
+<script src="js/redline.js?v=20261024a"></script>
+<script>
+'use strict';
+// 試玩：自選三位、無限爬樓，每層打完選一項強化。戰鬥本身在 js/redline.js（跟主遊戲共用）。
+(() => {
+const { HEROES, GEAR, ALL_IDS, showBox, hideBox } = Redline;
+const $ = (s) => document.querySelector(s);
+const pick = (a) => a[Math.floor(Math.random() * a.length)];
+const PARTY_KEY = 'rebirth-redline-party-v1', GEAR_KEY = 'rebirth-redline-gear-v1';
+// 這次出戰的三位（存在手機裡，下次預設同一隊）
+let ORDER = (() => { try { const p = JSON.parse(localStorage.getItem(PARTY_KEY)); if (Array.isArray(p) && p.length === 3 && p.every((id) => HEROES[id])) return p; } catch (e) { /* 沒存過 */ } return ['guangong', 'yuelao', 'yukionna']; })();
+// 試玩：每位神魔都先拿到自己的專屬兵器，兵器格空著就直接裝上
+const gs = (() => { try { return JSON.parse(localStorage.getItem(GEAR_KEY)) || null; } catch (e) { return null; } })() || { bag: [], eq: {} };
+for (const id of ALL_IDS) {
+  const ex = 'ex_' + id; if (!GEAR[ex]) continue;
+  if (!gs.bag.includes(ex)) gs.bag.push(ex);
+  gs.eq[id] = gs.eq[id] || {};
+  if (!gs.eq[id].weapon) gs.eq[id].weapon = ex;
+}
+const store = { bag: gs.bag, eq: gs.eq, get heroes() { return ORDER; }, save: () => { try { localStorage.setItem(GEAR_KEY, JSON.stringify(gs)); } catch (e) { /* 存不了就只在這次有效 */ } } };
+const gearOf = (id) => Object.values(gs.eq[id] || {}).filter((g) => GEAR[g]);
+
+let run;
+function newRun() {
+  pickParty(() => {
+    run = { floor: 0, up: { dmg: 0, ink: 1 }, maxHp: {}, hp: {} };
+    for (const id of ORDER) run.maxHp[id] = run.hp[id] = HEROES[id].hp;
+    nextFloor();
+  });
+}
+
+// 出發前選三位神魔（順序就是出手順序）
+function pickParty(done) {
+  let sel = ORDER.slice();
+  const draw = () => {
+    showBox(`<h2>選三位出戰</h2><p class="muted">已選 ${sel.length}/3，點一下加入或拿掉。號碼是出手順序。</p>
+      ${ALL_IDS.map((id) => { const H = HEROES[id], on = sel.includes(id);
+        return `<button class="btn opt pk${on ? ' on' : ''}" data-id="${id}"><b style="color:${H.color}">${on ? sel.indexOf(id) + 1 + '. ' : ''}${H.name}</b>（${H.faith}族・${H.role}）<br><span class="muted">${H.skills.map((k) => k.name).join('、')}・天賦 ${H.talent.n}</span></button>`; }).join('')}
+      <button class="btn primary wide pgo" style="margin-top:10px" ${sel.length === 3 ? '' : 'disabled'}>出發</button>`);
+    document.querySelectorAll('.box .pk').forEach((b) => {
+      const c = artImg(b.dataset.id, 44); c.className = 'pk-art'; b.prepend(c);
+      b.onclick = () => { const id = b.dataset.id; if (sel.includes(id)) sel = sel.filter((x) => x !== id); else if (sel.length < 3) sel.push(id); draw(); };
+    });
+    $('.box .pgo').onclick = () => {
+      ORDER = sel;
+      try { localStorage.setItem(PARTY_KEY, JSON.stringify(sel)); } catch (e) { /* 存不了就只在這次有效 */ }
+      hideBox(); done();
+    };
+  };
+  draw();
+}
+
+function nextFloor() { run.floor++; fight(); }
+function fight() {
+  const f = run.floor;
+  const keys = f % 3 === 0 ? [f % 6 === 0 ? 'hunter' : 'warden', 'zombie', ...(f >= 6 ? ['wisp'] : [])] : f === 1 ? ['zombie', 'wisp'] : [pick(['zombie', 'husk', 'mirror']), 'shade', 'wisp', ...(f >= 4 ? ['printer'] : [])];
+  Redline.start({
+    floor: f, title: `第 ${f} 層${f % 3 === 0 ? '・精英' : ''}`, foes: keys, scale: 1 + 0.15 * (f - 1), up: run.up,
+    party: ORDER.map((id) => ({ id, hp: run.hp[id], maxHp: run.maxHp[id], gear: gearOf(id) })),
+    gearButton: () => Redline.gearBox(store, fight, '開始'),
+    onEnd: (r) => (r.win ? winFloor(r) : lose()),
+  });
+}
+
+const REWARDS = [
+  { name: '多一點墨水', desc: '所有招式都可以畫得更長（+20%）。', fn: () => { run.up.ink *= 1.2; } },
+  { name: '朱砂', desc: '所有招式的傷害 +2。', fn: () => { run.up.dmg += 2; } },
+  { name: '休息', desc: '全隊回復 50% 生命，倒下的隊友也回來。', fn: () => { for (const id of ORDER) run.hp[id] = Math.min(run.maxHp[id], Math.max(0, run.hp[id]) + Math.round(run.maxHp[id] * 0.5)); } },
+  { name: '強身', desc: '全隊生命上限 +6，也回復 6。', fn: () => { for (const id of ORDER) { run.maxHp[id] += 6; run.hp[id] += 6; } } },
+];
+function winFloor(r) {
+  Object.assign(run.hp, r.hp);
+  const opts = [...REWARDS].sort(() => Math.random() - 0.5).slice(0, 3);
+  showBox(`<h2>第 ${run.floor} 層通過</h2><p>用了 ${r.turns} 手。選一項：</p>
+    ${opts.map((o, i) => `<button class="btn opt" data-i="${i}"><b>${o.name}</b><br>${o.desc}</button>`).join('')}`);
+  document.querySelectorAll('.box .opt').forEach((b) => b.onclick = () => { opts[+b.dataset.i].fn(); hideBox(); gearDrop(nextFloor); });
+}
+// 掉落：精英層三選一；每 6 層四成機率有專屬兵器；試玩版第 1 層也掉
+function gearDrop(next) {
+  const f = run.floor;
+  if (!(f === 1 || f % 3 === 0)) return next();
+  const pool = Object.keys(GEAR).filter((id) => !gs.bag.includes(id) && !GEAR[id].own && ORDER.some((hid) => Redline.canUse(hid, id))).sort(() => Math.random() - 0.5);
+  const ex = ORDER.map((hid) => 'ex_' + hid).filter((id) => GEAR[id] && !gs.bag.includes(id));
+  const opts = pool.slice(0, 3);
+  if (f % 6 === 0 && ex.length && Math.random() < 0.4) opts[0] = pick(ex);
+  Redline.gearOffer(store, opts, f % 3 === 0 ? '精英掉落' : '試玩：送你一件', () => { hideBox(); next(); }, '下一層');
+}
+function lose() {
+  showBox(`<h2>全隊倒下</h2><p>爬到第 ${run.floor} 層。</p><button class="btn primary wide again">再爬一次</button>`);
+  $('.box .again').onclick = () => { hideBox(); newRun(); };
+}
+
+newRun();
+})();
+</script>
+</body>
+</html>

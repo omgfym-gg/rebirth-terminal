@@ -139,3 +139,45 @@ canvas.art { image-rendering: pixelated; width: auto; align-self: center; }
   93% { transform: translate(2px, -1px); opacity: 0.8; }
   96% { transform: translate(-1px, 0) scaleY(0.6); opacity: 0.3; }
 }
+
+/* 一筆紅線戰鬥（js/redline.js，主遊戲和 redline.html 共用） */
+.stage { width: 100%; height: auto; border: 2px solid var(--line); background: #0b0a12; touch-action: none; image-rendering: auto; }
+.top { display: flex; align-items: center; gap: 8px; font-size: 14px; margin-bottom: 4px; }
+.top .floor { flex: 1; color: var(--gold); font-weight: bold; }
+.ink { height: 8px; background: #000; border: 1px solid var(--line); margin: 4px 0; }
+.ink div { height: 100%; width: 100%; }
+.who { display: flex; align-items: center; gap: 8px; margin: 6px 0 4px; font-size: 15px; }
+.who canvas { height: 40px; }
+.who b { font-size: 17px; }
+.skills { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
+.sk { padding: 5px 4px; font-size: 11px; line-height: 1.35; text-align: left; }
+.sk b { display: block; font-size: 14px; }
+.sk .shape { color: var(--gold); }
+.sk.on { border-color: var(--gold); background: #3a3420; }
+.traits { font-size: 12px; line-height: 1.45; margin-top: 5px; color: var(--muted); }
+.traits div { margin-top: 2px; }
+.tip { min-height: 40px; font-size: 13px; line-height: 1.5; color: var(--muted); margin-top: 6px; }
+.tip b { color: #ff8aa0; }
+.acts { display: grid; grid-template-columns: 0.8fr 1fr 1fr; gap: 6px; margin-top: 4px; }
+.acts .how { color: var(--gold); }
+.tut { font-size: 15px; line-height: 1.6; }
+.tut .step { color: var(--muted); font-size: 13px; }
+.acts .btn { padding: 10px 4px; font-size: 16px; }
+.overlay { position: fixed; inset: 0; background: rgba(5,4,10,0.86); display: none; align-items: center; justify-content: center; padding: 16px; z-index: 5; }
+.overlay.show { display: flex; }
+.box { background: var(--panel); border: 2px solid var(--line); max-width: 440px; width: 100%; padding: 14px; max-height: 92vh; overflow-y: auto; }
+.box h2 { margin-top: 0; }
+.box p { font-size: 14px; line-height: 1.55; margin: 6px 0; }
+.opt { display: block; width: 100%; text-align: left; margin-top: 8px; padding: 10px; font-size: 14px; line-height: 1.45; }
+.opt b { color: var(--gold); }
+.pk { display: flow-root; }
+.pk.on { border-color: var(--gold); background: #3a3420; }
+.pk-art { float: left; height: 44px; margin-right: 8px; }
+.who { flex-wrap: wrap; }
+.gear-row { display: flex; gap: 5px; flex-basis: 100%; flex-wrap: wrap; }
+.gear-chip { padding: 3px 7px; font-size: 12px; border-width: 2px; }
+.gear-hero { margin-top: 10px; }
+.gear-hero .opt { margin-top: 5px; }
+details { margin-top: 10px; font-size: 13px; line-height: 1.55; }
+details summary { color: var(--accent); }
+details p { margin: 4px 0; }
