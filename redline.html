@@ -636,7 +636,7 @@ async function go() {
       fxPush({ type: 'burst', x: c.x, y: c.y, color: h.color, dur: 600, seed: 1 });
       await wait(150);
     }
-    for (const st of others) { apply(st); await wait(70); }
+    for (const st of others) { if (st.u.dead) continue; apply(st); await wait(70); }
   } else {
     // 近身招：神魔沿著線跑過去，經過誰就對誰出招，停在線的終點（衝刺停在敵人面前）
     // 遠程招：神魔站著出手，招式化成光球沿著線飛過去
@@ -652,6 +652,8 @@ async function go() {
     const speed = !sk.melee ? 0.6 : lineShape(sk) ? 1.5 : 0.85;
     let pos = 0;
     for (const { st, s: sAt } of plan) {
+      // 敵人已經倒下，剩下對他的那幾下就不打了，直接往下一個目標
+      if (st.u.side === 'enemy' && st.u.dead) continue;
       await travel(mover, foot, cum, pos, sAt, speed); pos = Math.max(pos, sAt);
       if (st.u.side === 'enemy' && sk.melee) { await skillAnim(h, sk, 0.55); apply(st); await wait(120); }
       else { if (st.u.side === 'enemy') fxPush({ type: 'ring', x: st.u.x, y: st.u.y - 46, color: '#fff', dur: 300 }); apply(st); await wait(st.u.side === 'enemy' && !sk.melee ? 160 : 60); }
@@ -1465,7 +1467,7 @@ function render(now) {
     }
     // 這一輪隊友留下的線，畫線跟它交叉就是紅線交會
     for (const t of trails) {
-      g.strokeStyle = t.owner.color; g.lineWidth = 4; g.globalAlpha = busy ? 0.12 : 0.35; g.setLineDash([14, 10]); g.lineCap = 'round';
+      g.strokeStyle = t.owner.color; g.lineWidth = 3; g.globalAlpha = busy ? 0.05 : 0.16; g.setLineDash([14, 10]); g.lineCap = 'round';
       g.beginPath(); t.pts.forEach((p, i) => i ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y)); if (t.loop) g.closePath(); g.stroke();
       g.setLineDash([]); g.globalAlpha = 1;
     }
