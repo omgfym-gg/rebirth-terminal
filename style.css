@@ -165,7 +165,8 @@ body:has(#battle.active) #app { padding: 6px 8px; }
 .traits { display: none; }
 .tip { flex: none; height: 4.5em; overflow-y: auto; font-size: 12px; line-height: 1.5; color: var(--muted); }
 .tip b { color: #ff8aa0; }
-.acts { flex: none; display: grid; grid-template-columns: 0.8fr 1fr 1fr; gap: 6px; }
+.acts { flex: none; display: grid; grid-template-columns: 0.8fr 0.8fr 1fr 1fr; gap: 6px; }
+.acts .move { color: #9fe0ff; }
 .acts .how { color: var(--gold); }
 .tut { font-size: 15px; line-height: 1.6; }
 .tut .step { color: var(--muted); font-size: 13px; }

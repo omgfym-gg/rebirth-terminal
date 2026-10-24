@@ -339,6 +339,7 @@ async function nextHero() {
   who = n; turn++;
   const h = heroes[who];
   h.cds = h.cds.map((c) => Math.max(0, c - 1));
+  h.moved = false; moving = false;
   skillIdx = 0;
   if (fresh) { for (const e of foes) if (!e.dead) setIntent(e); makeChains(); }
   clearPath(); renderSkills();
@@ -460,6 +461,7 @@ cv.addEventListener('pointerdown', (ev) => {
   if (flying && !$('.overlay').classList.contains('show')) { flying(toCanvas(ev)); return; }
   demo = null;
   if (busy || !heroes || $('.overlay').classList.contains('show')) return;
+  if (moving) { walkTo(toCanvas(ev)); return; }
   const p = toCanvas(ev), sk = skill(), h = hero();
   pressStart(p, sk.shape === 'tap');
   if (sk.shape === 'tap') return;
@@ -1001,6 +1003,9 @@ const hitR = () => HIT_R * (wears(hero(), 'ruyi') ? 1.5 : 1) * (skill().wide ? 1
 const lineShape = (sk) => sk.shape === 'line' || sk.shape === 'dash';
 const freeShape = (sk) => sk.shape === 'free' || sk.shape === 'zigzag';
 let zones = [], flying = null;
+// 移動：每位神魔每次輪到可以先走一段（最遠 MOVE_R），再畫招
+let moving = false;
+const MOVE_R = 230;
 window.__g = () => ({ gs, zones, flying: !!flying });
 
 // 直線的路徑：碰到戰場邊就停；帶八咫鏡會反射一次；extra 是青龍偃月刀斬殺後多出來的長度
@@ -1566,6 +1571,8 @@ function render(now) {
   drawBg(now);
   if (heroes && who >= 0) {
     gearDrawZones(now);
+    // 移動範圍
+    if (moving && hero()) { const h = hero(); g.strokeStyle = 'rgba(255,224,112,0.8)'; g.fillStyle = 'rgba(255,224,112,0.08)'; g.lineWidth = 3; g.setLineDash([12, 8]); g.beginPath(); g.ellipse(h.x, h.y, MOVE_R, MOVE_R, 0, 0, Math.PI * 2); g.fill(); g.stroke(); g.setLineDash([]); }
     for (const c of chains) {
       const [name, c1, c2] = CUT[c.kind || 'chain'];
       const L = Math.hypot(c.x2 - c.x1, c.y2 - c.y1), ux = (c.x2 - c.x1) / L, uy = (c.y2 - c.y1) / L, mx = (c.x1 + c.x2) / 2, my = (c.y1 + c.y2) / 2;
@@ -1726,6 +1733,15 @@ function renderSkills() {
   updateUi();
 }
 
+async function walkTo(p) {
+  const h = hero(), d = dist(p, h);
+  if (d > MOVE_R) p = { x: h.x + (p.x - h.x) * MOVE_R / d, y: h.y + (p.y - h.y) * MOVE_R / d };
+  moving = false; busy = true; h.moved = true; updateUi();
+  await moveTo(h, clampPos(p), 1.2);
+  await settle();
+  busy = false; updateUi();
+}
+
 function updateUi() {
   if (!run || !heroes || who < 0) return;
   $('.floor').textContent = `第 ${run.floor} 層`;
@@ -1735,7 +1751,10 @@ function updateUi() {
   $('.ink div').style.background = hero().color;
   $('.go').disabled = !flying && (busy || !hits.length || drawing);
   $('.redo').disabled = busy || !path.length;
+  const mv = $('.move');
+  if (mv) { mv.disabled = !!flying || busy || hero().moved; mv.textContent = moving ? '取消' : hero().moved ? '已移動' : '移動'; }
   if (flying) return;
+  if (moving) return tip(`點戰場上要讓<b>${hero().name}</b>走去的地方（金色圈內，最遠 ${MOVE_R}）。走完還是可以出招，每次輪到只能移動一次。`);
   if (busy) tip(`${hero().name}出招中……`);
   else if (drawing) tip(HOW[sk.shape]);
   else if (!path.length) demo || tip(`<b>${sk.name}</b>（${SHAPES[sk.shape]}）${sk.desc}`);
@@ -1747,6 +1766,7 @@ function updateUi() {
 }
 
 $('.redo').onclick = () => { if (!busy) clearPath(); };
+if ($('.move')) $('.move').onclick = () => { if (busy || !heroes || flying || hero().moved) return; clearPath(); moving = !moving; updateUi(); };
 $('.how').onclick = () => { if (busy || !heroes) return; clearPath(); startDemo(skill().shape); };
 $('.go').onclick = () => (flying ? flying(null) : go());
 // 玩法說明：按上面的「玩法」打開
@@ -1759,6 +1779,7 @@ function renderHelp() {
   <p><b>看說明</b>：點一下戰場上的角色或敵人，會跳出生命、狀態（勢、冰霜、紅線、凍住…）、招式和裝備的說明。用連點招式時，點一下是選目標，要<b>長按</b>才看說明。</p>
   <p>三位神魔輪流上場，<b>每次只動一位</b>，輪到的神魔腳下有金色光圈。選他的一招，照那招的畫法在戰場上畫，畫完會預覽每個目標受到的效果，按出招才算數。</p>
   ${Object.keys(SHAPES).map((k) => `<p><b>${SHAPES[k]}</b>：${HOW[k]}</p>`).join('')}
+  <p><b>移動</b>：射程不夠打不到？出招前先按「移動」，再點戰場上要去的地方，神魔會走過去（每次輪到只能移動一次），走完再畫招。</p>
   <p>墨水條用完就不能再畫。標「近身」的招式神魔會自己跑過去打，其他招式站在原地放出去。</p>
   <p><b>天賦</b>：線穿過隊友，會發動那位隊友的天賦。<b>紅線交會</b>：同一回合隊友畫過的線會留在地上（淡淡的虛線，換回合就清掉），你的線跟它交叉，交叉點會炸開，附近敵人各受 6 傷害，也會發動那條線主人的天賦。有些招式還有<b>交會加成</b>（寫在招式說明裡），每交會一處效果再加一份，一招最多算 3 處。</p>
   <p>神魔出招時會沿著你畫的線跑過去，最後停在線的終點，所以畫線也是在決定下一輪站哪裡。三位神魔各出一招之後，敵人才一起行動，會走到目標面前打。敵人頭上寫著這一輪要打誰、打多少，可以先凍住、先打死，或用護盾擋。</p>
