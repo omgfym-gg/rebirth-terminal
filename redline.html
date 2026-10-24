@@ -417,7 +417,7 @@ async function go() {
   if (sk.spendMom) h.mom = 0;
   h.wine = 0;
   float(h, sk.name, h.color, 26);
-  run.glow = { t0: performance.now(), ms: 99999 };
+  run.glow = { t0: performance.now(), ms: 350 };
   fireTalents(tal);
   const self = steps.filter((x) => x.u === h && !x.cross), others = steps.filter((x) => x.u !== h && !x.cross);
   if (sk.shape === 'circle') {
@@ -1046,7 +1046,7 @@ function render(now) {
     }
     // 這一輪隊友留下的線，畫線跟它交叉就是紅線交會
     for (const t of trails) {
-      g.strokeStyle = t.owner.color; g.lineWidth = 4; g.globalAlpha = 0.35; g.setLineDash([14, 10]); g.lineCap = 'round';
+      g.strokeStyle = t.owner.color; g.lineWidth = 4; g.globalAlpha = busy ? 0.12 : 0.35; g.setLineDash([14, 10]); g.lineCap = 'round';
       g.beginPath(); t.pts.forEach((p, i) => i ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y)); if (t.loop) g.closePath(); g.stroke();
       g.setLineDash([]); g.globalAlpha = 1;
     }
@@ -1057,7 +1057,8 @@ function render(now) {
       g.lineCap = 'round'; g.lineJoin = 'round';
       const ls = gearLine(hero());
       g.strokeStyle = glow ? col : ls.color; g.lineWidth = (glow ? 10 : 6) * ls.w;
-      g.globalAlpha = glow ? Math.max(0, 1 - (now - glow.t0) / glow.ms * 0.7) : 0.9;
+      // 按下出招後，線閃一下就淡掉，才看得清楚攻擊
+      g.globalAlpha = glow ? Math.max(0, 1 - (now - glow.t0) / glow.ms) : 0.9;
       if (glow) { g.shadowColor = col; g.shadowBlur = 18; }
       g.beginPath(); path.forEach((p, i) => i ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y));
       if (sk.shape === 'circle' && closed) { g.closePath(); const a0 = g.globalAlpha; g.fillStyle = col; g.globalAlpha = a0 * 0.15; g.fill(); g.globalAlpha = a0; }
