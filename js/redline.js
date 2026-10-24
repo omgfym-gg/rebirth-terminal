@@ -3,8 +3,16 @@
 const Redline = (() => {
 // 一筆紅線：神魔輪流上場。輪到誰，就選他的一招，再照那招的畫法在戰場上畫：
 // 直線（從自己身上拉出一刀）、自由線（一筆穿過好幾個目標）、圈（圈住的目標都中）。
-const W = 600, H = 700, FLOOR = 230;
+// 戰場座標 600×700；畫面只顯示 VIEW_Y 以下（上面那段牆沒有人站，裁掉讓手機一個畫面放得下）
+const W = 600, H = 700, FLOOR = 230, VIEW_Y = 160;
 const cv = document.querySelector('.stage'), g = cv.getContext('2d');
+// 戰場跟著剩下的空間縮放，整個戰鬥畫面不用捲動
+function fitStage() {
+  const r = cv.parentElement.getBoundingClientRect(); if (!r.width || !r.height) return;
+  const k = Math.min(r.width / 600, r.height / 540);
+  cv.style.width = Math.floor(600 * k) + 'px'; cv.style.height = Math.floor(540 * k) + 'px';
+}
+if (window.ResizeObserver) new ResizeObserver(fitStage).observe(cv.parentElement);
 const $ = (s) => document.querySelector(s);
 const rnd = (a, b) => a + Math.random() * (b - a);
 const pick = (a) => a[Math.floor(Math.random() * a.length)];
@@ -346,7 +354,7 @@ function clearPath() { path = []; hits = []; hitAt = []; inside = new Set(); zz 
 // ───── 畫線 ─────
 const center = (u) => ({ x: u.x, y: u.y - 46 });
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
-function toCanvas(ev) { const r = cv.getBoundingClientRect(); return { x: (ev.clientX - r.left) * W / r.width, y: (ev.clientY - r.top) * H / r.height }; }
+function toCanvas(ev) { const r = cv.getBoundingClientRect(); return { x: (ev.clientX - r.left) * W / r.width, y: (ev.clientY - r.top) * (H - VIEW_Y) / r.height + VIEW_Y }; }
 function segHitsCircle(a, b, c, r) {
   const dx = b.x - a.x, dy = b.y - a.y, L = dx * dx + dy * dy || 1;
   const t = Math.max(0, Math.min(1, ((c.x - a.x) * dx + (c.y - a.y) * dy) / L));
@@ -1166,14 +1174,12 @@ function gearIcons(u, top) {
 // 下方「輪到誰」旁邊列出裝備，點一下看效果
 function gearWho(h) {
   const ids = gearOf(h); if (!ids.length) return;
-  const row = document.createElement('div'); row.className = 'gear-row';
   ids.forEach((id) => {
     const it = GEAR[id], b = document.createElement('button');
-    b.className = 'btn gear-chip'; b.style.borderColor = it.color; b.innerHTML = `<span style="color:${it.color}">${it.icon}</span> ${it.n}`;
+    b.className = 'btn gear-chip'; b.style.borderColor = it.color; b.innerHTML = `<span style="color:${it.color}">${it.icon}</span>`;
     b.onclick = () => tip(`<b>${it.n}</b>：${it.d}`);
-    row.appendChild(b);
+    $('.who').appendChild(b);
   });
-  $('.who').appendChild(row);
 }
 
 // 整理裝備的畫面。store：{ bag 背包, eq {神魔: {兵器, 法寶}}, heroes 可以換裝的神魔, anyKind(神魔) 這位能不能神器邪物都用, save() }
@@ -1301,7 +1307,7 @@ const tut = (() => { try { return JSON.parse(localStorage.getItem(TUT_KEY)) || {
 const saveTut = () => { try { localStorage.setItem(TUT_KEY, JSON.stringify(tut)); } catch (e) { /* 存不了就每次都教 */ } };
 const TUT_STEPS = [
   ['輪到誰', '三位神魔輪流上場，每次只動一位。<b>腳下有金色光圈</b>的就是現在要出手的人，下方也會寫「輪到 誰」。'],
-  ['選一招', '下方三個按鈕是他的三招，每招寫著<b>畫法</b>（直線、衝刺、自由線、折線、畫圈、連點）和效果。點一下就選好了。'],
+  ['選一招', '下方三個按鈕是他的三招，按鈕上寫著<b>畫法</b>（直線、衝刺、自由線、折線、畫圈、連點），選好後效果寫在按鈕下面。被動、天賦要按名字旁邊的<b>「說明」</b>。'],
   ['照畫法畫', '在戰場上用手指畫。第一次遇到某種畫法，戰場上會有<b>白色虛線的示範</b>，跟著畫就好；忘了就按左下的<b>「怎麼畫」</b>再看一次。畫完會預覽每個敵人受到多少傷害。'],
   ['出招、看敵人', '滿意就按<b>出招</b>，不滿意按<b>重畫</b>。三位都出手後敵人才行動，敵人頭上寫著要打誰、打多少。<b>點一下角色或敵人</b>可以看詳細說明。'],
 ];
@@ -1474,6 +1480,7 @@ function drawUnit(u, now) {
 function render(now) {
   // 戰場不在畫面上（主遊戲的其他畫面）就不畫，省電
   if (!cv.offsetParent) { requestAnimationFrame(render); return; }
+  g.setTransform(1, 0, 0, 1, 0, -VIEW_Y);
   drawBg(now);
   if (heroes && who >= 0) {
     gearDrawZones(now);
@@ -1586,21 +1593,22 @@ function drawBolt(b, now) {
 function renderSkills() {
   const h = hero();
   const w = $('.who'); w.innerHTML = '';
-  w.appendChild(artImg(h.id, 40));
-  w.insertAdjacentHTML('beforeend', `<div>輪到 <b style="color:${h.color}">${h.name}</b>・${h.role}${h.tag ? `<span class="muted">（${h.tag}）</span>` : ''}</div>`);
+  w.appendChild(artImg(h.id, 30));
+  w.insertAdjacentHTML('beforeend', `<div class="who-name">輪到 <b style="color:${h.color}">${h.name}</b>${h.tag ? `<span class="muted">・${h.tag}</span>` : ''}</div>`);
   const box = $('.skills'); box.innerHTML = '';
   h.skills.forEach((sk, i) => {
     const b = document.createElement('button'), cd = h.cds[i];
     b.className = 'btn sk' + (i === skillIdx ? ' on' : '');
     b.disabled = cd > 0 || busy;
-    b.innerHTML = `<b>${sk.name}${i === 2 ? '★' : ''}</b><span class="shape">${SHAPES[sk.shape]}${sk.melee ? '・近身' : ''}</span>${cd > 0 ? `・還要 ${cd} 輪` : sk.cd ? `・冷卻 ${sk.cd}` : ''}<br>${sk.desc}`;
+    b.innerHTML = `<b>${sk.name}${i === 2 ? '★' : ''}</b><span class="shape">${SHAPES[sk.shape]}${sk.melee ? '・近身' : ''}</span>${cd > 0 ? `・還要 ${cd} 輪` : sk.cd ? `・冷卻 ${sk.cd}` : ''}`;
     b.onclick = () => { if (busy) return; skillIdx = i; clearPath(); renderSkills(); };
     box.appendChild(b);
   });
-  $('.traits').innerHTML = [['被動', h.passive, h.res !== undefined && HEROES[h.id].res ? `（${HEROES[h.id].res[0]} ${h.res}/${HEROES[h.id].res[1]}）` : ''], ['天賦', h.talent, '']]
-    .map(([k, t, x]) => `<div><b style="color:${h.color}">${k}・${t.n}</b>${x}：${t.d}</div>`).join('')
-    + `<div>點戰場上的角色或敵人可以看說明${h.skills.some((x) => x.shape === 'tap') ? '（用連點招式時要長按）' : ''}。</div>`;
   gearWho(h);
+  // 被動、天賦、完整招式說明收在「說明」裡，戰鬥畫面不用捲動
+  const info = Object.assign(document.createElement('button'), { className: 'btn gear-chip who-info', textContent: '說明' });
+  info.onclick = () => { if (!busy) showInfo(h); };
+  w.appendChild(info);
   autoDemo();
   updateUi();
 }
@@ -1617,7 +1625,7 @@ function updateUi() {
   if (flying) return;
   if (busy) tip(`${hero().name}出招中……`);
   else if (drawing) tip(HOW[sk.shape]);
-  else if (!path.length) demo || tip(`「${sk.name}」：${HOW[sk.shape]}`);
+  else if (!path.length) demo || tip(`<b>${sk.name}</b>（${SHAPES[sk.shape]}）${sk.desc}`);
   else if (hits.length) {
     const tal = talentsHit(), cx = crossings();
     tip(`「${sk.name}」會打 ${results().filter((x) => x.u.side === 'enemy' && x.dmg && !x.cross).length} 下（${new Set(hits.filter((u) => u.side === 'enemy')).size} 個敵人）${tal.length ? `，觸發天賦 <b>${tal.map((t) => t.name + '・' + t.talent.n).join('、')}</b>` : ''}${cx.length ? `，<b>紅線交會 ${cx.length} 處</b>${sk.xc ? `（交會加成 ×${cx.length}：${sk.xc.d}）` : ''}` : ''}。${sk.shape === 'tap' && hits.length < sk.max ? '可以繼續點，' : ''}滿意就按出招，不滿意按重畫。`);
@@ -1628,9 +1636,12 @@ function updateUi() {
 $('.redo').onclick = () => { if (!busy) clearPath(); };
 $('.how').onclick = () => { if (busy || !heroes) return; clearPath(); startDemo(skill().shape); };
 $('.go').onclick = () => (flying ? flying(null) : go());
+// 玩法說明：按上面的「玩法」打開
+let helpHtml = '';
+const helpBtn = $('.helpbtn');
+if (helpBtn) helpBtn.onclick = () => { if (busy) return; showBox(`<h2>玩法說明</h2>${helpHtml}<button class="btn primary wide info-ok">知道了</button>`); $('.box .info-ok').onclick = hideBox; };
 function renderHelp() {
-  const el = $('.help'); if (!el) return;
-  el.innerHTML = `
+  helpHtml = `
   <p><b>不會畫？</b>按左下的「怎麼畫」，戰場上會用白色虛線示範這一招的畫法。</p>
   <p><b>看說明</b>：點一下戰場上的角色或敵人，會跳出生命、狀態（勢、冰霜、紅線、凍住…）、招式和裝備的說明。用連點招式時，點一下是選目標，要<b>長按</b>才看說明。</p>
   <p>三位神魔輪流上場，<b>每次只動一位</b>，輪到的神魔腳下有金色光圈。選他的一招，照那招的畫法在戰場上畫，畫完會預覽每個目標受到的效果，按出招才算數。</p>
@@ -1639,7 +1650,7 @@ function renderHelp() {
   <p><b>天賦</b>：線穿過隊友，會發動那位隊友的天賦。<b>紅線交會</b>：同一回合隊友畫過的線會留在地上（淡淡的虛線，換回合就清掉），你的線跟它交叉，交叉點會炸開，附近敵人各受 6 傷害，也會發動那條線主人的天賦。有些招式還有<b>交會加成</b>（寫在招式說明裡），每交會一處效果再加一份，一招最多算 3 處。</p>
   <p>神魔出招時會沿著你畫的線跑過去，最後停在線的終點，所以畫線也是在決定下一輪站哪裡。三位神魔各出一招之後，敵人才一起行動，會走到目標面前打。敵人頭上寫著這一輪要打誰、打多少，可以先凍住、先打死，或用護盾擋。</p>
   ${heroes.map((u) => { const H = HEROES[u.id]; return H.skills.map((s) => `<p><b>${H.name}・${s.name}</b>（${SHAPES[s.shape]}${s.melee ? '・近身' : ''}${s.cd ? `，冷卻 ${s.cd} 輪` : ''}）：${s.desc}</p>`).join('') + `<p><b>${H.name}・被動・${H.passive.n}</b>：${H.passive.d}</p><p><b>${H.name}・天賦・${H.talent.n}</b>：${H.talent.d}</p>`; }).join('')}
-  <p>每 3 層有精英無臉典獄長，他的鎖鏈會剪斷直線和自由線，畫圈不受影響。</p>
+  <p><b>精英、魔王</b>的特性寫在每層開場，也可以點他們看。典獄長的鎖鏈（灰色粗線）會剪斷直線和自由線，畫圈不受影響。</p>
   <p><b>裝備</b>：每位神魔有兵器、法寶兩格。神族只能用神器，魔族只能用邪物，專屬兵器只有本人能用。精英層打完可以從三件裡選一件，魔王層有機會掉專屬兵器（試玩版第 1 層也會掉一件）。裝備會改變線的畫法，名字上面的小方塊就是身上的裝備。</p>
   ${Object.values(GEAR).map((it) => `<p><b>${it.n}</b>（${it.kind}・${SLOT[it.slot]}${it.own ? `・${HEROES[it.own].name}專屬` : ''}）：${it.d}</p>`).join('')}`;
 }

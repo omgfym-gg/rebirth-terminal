@@ -4,31 +4,26 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>一筆紅線試玩</title>
-<link rel="stylesheet" href="style.css?v=20261024a">
+<link rel="stylesheet" href="style.css?v=20261024b">
 <style>
-  #app { padding: 8px 10px 28px; }
+  #app { padding: 6px 8px; }
 </style>
 </head>
 <body>
-<div id="app">
-  <div class="top"><span class="floor"></span><span class="turn muted"></span></div>
-  <canvas class="stage" width="600" height="700"></canvas>
+<div id="app" class="rl">
+  <div class="top"><span class="floor"></span><span class="turn muted"></span><button class="btn helpbtn">玩法</button></div>
+  <div class="stage-wrap"><canvas class="stage" width="600" height="540"></canvas></div>
   <div class="ink"><div></div></div>
   <div class="who"></div>
   <div class="skills"></div>
-  <div class="traits"></div>
   <div class="tip"></div>
   <div class="acts"><button class="btn how">怎麼畫</button><button class="btn redo">重畫</button><button class="btn primary go">出招</button></div>
-  <details>
-    <summary>玩法說明</summary>
-    <div class="help"></div>
-  </details>
 </div>
 <div class="overlay"><div class="box"></div></div>
-<script src="js/data.js?v=20261024a"></script>
-<script src="js/jobs.js?v=20261024a"></script>
-<script src="js/sprites.js?v=20261024a"></script>
-<script src="js/redline.js?v=20261024a"></script>
+<script src="js/data.js?v=20261024b"></script>
+<script src="js/jobs.js?v=20261024b"></script>
+<script src="js/sprites.js?v=20261024b"></script>
+<script src="js/redline.js?v=20261024b"></script>
 <script>
 'use strict';
 // 試玩：自選三位、無限爬樓，每層打完選一項強化。戰鬥本身在 js/redline.js（跟主遊戲共用）。

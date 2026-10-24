@@ -111,6 +111,7 @@ const Game = {
 
   start() {
     this.load();
+    // 離開：自動存檔，回來時這一層重打
     $('#battle .leave').onclick = () => { Redline.stop(); this.showTitle(); };
     this.showTitle();
   },

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <meta name="theme-color" content="#0b0a12">
   <title>轉生終端</title>
-  <link rel="stylesheet" href="style.css?v=20261024a">
+  <link rel="stylesheet" href="style.css?v=20261024b">
 </head>
 <body>
   <main id="app">
@@ -36,29 +36,23 @@
     </section>
 
     <!-- 一筆紅線戰鬥（js/redline.js） -->
-    <section id="battle" class="screen">
-      <div class="top"><span class="floor"></span><span class="turn muted"></span></div>
-      <canvas class="stage" width="600" height="700"></canvas>
+    <section id="battle" class="screen rl">
+      <div class="top"><span class="floor"></span><span class="turn muted"></span><button class="btn helpbtn">玩法</button><button class="btn leave">離開</button></div>
+      <div class="stage-wrap"><canvas class="stage" width="600" height="540"></canvas></div>
       <div class="ink"><div></div></div>
       <div class="who"></div>
       <div class="skills"></div>
-      <div class="traits"></div>
       <div class="tip"></div>
       <div class="acts"><button class="btn how">怎麼畫</button><button class="btn redo">重畫</button><button class="btn primary go">出招</button></div>
-      <details>
-        <summary>玩法說明</summary>
-        <div class="help"></div>
-      </details>
-      <button class="btn wide leave">回標題（自動存檔，回來這一層重打）</button>
     </section>
   </main>
   <div class="overlay"><div class="box"></div></div>
 
-  <script src="js/data.js?v=20261024a"></script>
-  <script src="js/jobs.js?v=20261024a"></script>
-  <script src="js/sprites.js?v=20261024a"></script>
-  <script src="js/redline.js?v=20261024a"></script>
-  <script src="js/tutorial.js?v=20261024a"></script>
-  <script src="js/main.js?v=20261024a"></script>
+  <script src="js/data.js?v=20261024b"></script>
+  <script src="js/jobs.js?v=20261024b"></script>
+  <script src="js/sprites.js?v=20261024b"></script>
+  <script src="js/redline.js?v=20261024b"></script>
+  <script src="js/tutorial.js?v=20261024b"></script>
+  <script src="js/main.js?v=20261024b"></script>
 </body>
 </html>
