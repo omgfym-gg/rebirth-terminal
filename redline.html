@@ -80,7 +80,7 @@ const HOW = {
   line: '從<b>自己身上</b>往想打的方向拉一條直線，線上的敵人都會中。',
   dash: '從<b>自己身上</b>往敵人拉直線，會<b>衝到第一個敵人面前</b>砍下去。距離很短，要站得夠近。',
   free: '從<b>自己身上</b>開始，<b>一筆</b>畫過想打的目標，經過的順序有編號。同一個敵人穿過兩次就打兩下。',
-  zigzag: '從<b>自己身上</b>開始一筆畫，在<b>敵人身上轉彎</b>（或停在敵人身上）就算過一關，關數越多越痛。',
+  zigzag: '從<b>自己身上</b>開始一筆畫，每<b>穿過</b>敵人一次算過一關，<b>在敵人身上轉彎</b>再多一關，關數越多越痛。',
   circle: '在戰場上<b>畫一個圈</b>，頭尾接起來，圈住的目標都會中。',
   tap: '依序<b>點</b>想串起來的目標，紅線會在他們之間彈過去。',
 };
@@ -96,7 +96,7 @@ const HEROES = {
     skills: [
       { name: '刺顏良', shape: 'dash', len: 300, melee: true, anim: 's1', desc: '衝到第一個敵人面前刺 9 傷害，目標生命不到一半改成 14。',
         run: (en) => en.slice(0, 1).map((u) => ({ u, dmg: u.hp < u.maxHp / 2 ? 14 : 9 })) },
-      { name: '過五關斬六將', shape: 'zigzag', len: 900, cd: 1, melee: true, anim: 's2', desc: '在敵人身上每轉一個彎就過一關，最多 5 關，傷害 5、8、11、14、17。同一個敵人可以來回過關。',
+      { name: '過五關斬六將', shape: 'zigzag', len: 900, cd: 1, melee: true, anim: 's2', desc: '每穿過敵人一次過一關，在敵人身上轉彎再多一關，最多 5 關，傷害 5、8、11、14、17。',
         run: (en) => en.slice(0, 5).map((u, i) => ({ u, dmg: 5 + i * 3 })) },
       { name: '青龍斬', shape: 'line', len: 560, cd: 3, anim: 'ult', spendMom: true, desc: '揮出一道刀氣，直線上的敵人各受 12 傷害，每點氣勢多 4，用掉全部氣勢。',
         run: (en, al, h) => en.map((u) => ({ u, dmg: 12 + 4 * h.mom })) },
@@ -326,16 +326,21 @@ cv.addEventListener('pointermove', (ev) => {
   if (pathLen() >= max - 0.5) endDraw();
   updateUi();
 });
-// 折線：線在敵人身上轉彎超過 60 度就算過一關；隊友經過算一次
+// 折線：線每穿進敵人一次算過一關，在敵人身上轉彎（超過 60 度）再多一關；隊友經過算一次
 function zigzagStep(a, b) {
   const L = dist(a, b) || 1, d = { x: (b.x - a.x) / L, y: (b.y - a.y) / L }, cap = 5;
   for (const u of living()) {
     if (u === hero()) continue;
     if (u.side === 'ally') { if (!hits.includes(u) && segHitsCircle(a, b, center(u), hitR())) hits.push(u), hitAt.push(path.length - 1); continue; }
     const inNow = dist(b, center(u)) < hitR(), v = zz.get(u);
+    // 一下子劃過去（這一段經過、但終點已經在外面）也算穿進一次
+    if (!inNow && !v && segHitsCircle(a, b, center(u), hitR())) { if (hits.filter((x) => x.side === 'enemy').length < cap) { hits.push(u); hitAt.push(path.length - 1); } continue; }
     if (!inNow) { zz.delete(u); continue; }
-    if (!v) { zz.set(u, { d, done: false }); continue; }
-    if (!v.done && v.d.x * d.x + v.d.y * d.y < 0.5 && hits.filter((x) => x.side === 'enemy').length < cap) {
+    const full = hits.filter((x) => x.side === 'enemy').length >= cap;
+    // 穿進敵人就算過一關
+    if (!v) { zz.set(u, { d, done: false }); if (!full) { hits.push(u); hitAt.push(path.length - 1); } continue; }
+    // 在敵人身上轉彎再多過一關
+    if (!v.done && v.d.x * d.x + v.d.y * d.y < 0.5 && !full) {
       v.done = true; hits.push(u); hitAt.push(path.length - 1);
       fxPush({ type: 'ring', x: b.x, y: b.y, color: '#ffe070', dur: 400 });
     }
@@ -344,8 +349,6 @@ function zigzagStep(a, b) {
 function endDraw() {
   if (!drawing) return;
   drawing = false;
-  // 折線停在敵人身上也算一關
-  if (skill().shape === 'zigzag') for (const [u, v] of zz) if (!v.done && hits.filter((x) => x.side === 'enemy').length < 5) { v.done = true; hits.push(u); hitAt.push(path.length - 1); }
   crossMemo = null;
   if (skill().shape === 'circle') {
     // 頭尾要夠近才算圈起來
