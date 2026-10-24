@@ -16,6 +16,8 @@ if (window.ResizeObserver) new ResizeObserver(fitStage).observe(cv.parentElement
 const $ = (s) => document.querySelector(s);
 const rnd = (a, b) => a + Math.random() * (b - a);
 const pick = (a) => a[Math.floor(Math.random() * a.length)];
+// 音效（js/audio.js）；試玩頁沒載入聲音就不出聲
+const sfx = (n) => { if (typeof Snd !== 'undefined') Snd.sfx(n); };
 // gen：第幾場。換場（重新 start）之後，上一場還在等的動作就永遠不會繼續，不會跑進新的一場
 let gen = 0;
 const wait = (ms) => { const my = gen; return new Promise((r) => setTimeout(() => { if (my === gen) r(); }, ms)); };
@@ -463,7 +465,7 @@ cv.addEventListener('pointerdown', (ev) => {
   if (sk.shape === 'tap') return;
   clearPath();
   if (sk.shape !== 'circle' && dist(center(h), p) > HIT_R + 16) { tip(`這招要從<b>${h.name}身上</b>開始畫（腳下有金色光圈的那位）。`); return; }
-  drawing = true;
+  drawing = true; sfx('draw');
   if (lineShape(sk)) straight(p);
   else if (freeShape(sk)) path = [center(h)];
   else path = [p];
@@ -481,7 +483,7 @@ cv.addEventListener('pointermove', (ev) => {
   const used = pathLen(), max = inkMax();
   if (used + d > max) { const k = (max - used) / d; p.x = last.x + (p.x - last.x) * k; p.y = last.y + (p.y - last.y) * k; }
   if (freeShape(sk)) {
-    for (const c of cutters()) if (segCross(last, p, { x: c.x1, y: c.y1 }, { x: c.x2, y: c.y2 })) { path.push(cutAt(last, p, c)); fxPush({ type: 'snap', x: p.x, y: p.y, dur: 600 }); drawing = false; updateUi(); tip(`紅線被<b>${CUT[c.kind][0]}</b>剪斷了。`); return; }
+    for (const c of cutters()) if (segCross(last, p, { x: c.x1, y: c.y1 }, { x: c.x2, y: c.y2 })) { path.push(cutAt(last, p, c)); fxPush({ type: 'snap', x: p.x, y: p.y, dur: 600 }); sfx('snap'); drawing = false; updateUi(); tip(`紅線被<b>${CUT[c.kind][0]}</b>剪斷了。`); return; }
     path.push(p);
     if (sk.shape === 'zigzag') zigzagStep(last, p);
     // 線每「穿進」敵人一次就多打一下；隊友只算一次
@@ -666,7 +668,7 @@ async function go() {
   for (const c of cx) {
     fxPush({ type: 'burst', x: c.x, y: c.y, color: '#ffe070', dur: 600, seed: 0 });
     fxPush({ type: 'ring', x: c.x, y: c.y, color: '#ff3048', dur: 600 });
-    float({ x: c.x, y: c.y + 70 }, '紅線交會', '#ffe070', 20);
+    float({ x: c.x, y: c.y + 70 }, '紅線交會', '#ffe070', 20); sfx('cross');
     for (const st of steps.filter((x) => x.cross === c)) apply(st);
     await wait(250);
   }
@@ -730,8 +732,9 @@ function moveTo(u, to, speed = 0.9, hop = false) {
 // 遠程招的飛行物：關公青色刀氣、月老紅心拖著紅線、雪女冰刺拖著霜
 function newBolt(h) { return { x: h.x, y: h.y, color: h.color, kind: h.id, trail: [] }; }
 async function windUp(h, sk) {
-  fxPush({ type: 'charge', u: h, color: h.color, dur: 450 });
+  fxPush({ type: 'charge', u: h, color: h.color, dur: 450 }); sfx('charge');
   await skillAnim(h, sk, 0.5);
+  sfx('shoot');
 }
 
 // 播技能動作，等到出手那一格
@@ -769,11 +772,11 @@ function apply(s) {
   }
   if (s.dmg) {
     u.hp -= s.dmg; u.flash = performance.now() + 200;
-    float(u, String(s.dmg), s.dmg >= 15 ? '#ffe070' : '#fff');
+    float(u, String(s.dmg), s.dmg >= 15 ? '#ffe070' : '#fff'); sfx(s.dmg >= 15 ? 'crit' : 'hit');
     fxPush({ type: 'burst', x: u.x, y: u.y - 46, color: hero().color, dur: 450, seed: Math.random() * 6 });
-    if (u.hp <= 0) { u.hp = 0; u.dead = true; u.deadAt = performance.now(); }
+    if (u.hp <= 0) { u.hp = 0; u.dead = true; u.deadAt = performance.now(); sfx(u.side === 'enemy' ? 'kill' : 'fall'); }
   }
-  if (s.execute && !u.dead) { u.hp = 0; u.dead = true; u.deadAt = performance.now(); float(u, s.execute + '！', '#ffe070'); fxPush({ type: 'burst', x: u.x, y: u.y - 46, color: '#ffe070', dur: 600, seed: 3 }); return; }
+  if (s.execute && !u.dead) { u.hp = 0; u.dead = true; u.deadAt = performance.now(); sfx('kill'); float(u, s.execute + '！', '#ffe070'); fxPush({ type: 'burst', x: u.x, y: u.y - 46, color: '#ffe070', dur: 600, seed: 3 }); return; }
   if (s.killHeal && u.dead) for (const a of heroes) if (!a.dead) apply({ u: a, heal: s.killHeal });
   if (s.burn && !u.dead) addBurn(u, s.burn);
   if (s.fear && !u.dead && !u.fear) { u.fear = true; setTimeout(() => float(u, '恐懼', '#d0b0ff', 18), 200); }
@@ -786,8 +789,8 @@ function apply(s) {
   if (s.freeze && !u.dead) { u.frozen = true; u.frost = 0; fxPush({ type: 'ice', x: u.x, y: u.y, dur: 700 }); float(u, '凍住', '#a0e0ff'); }
   if (s.confuse && !u.dead) { u.confused = true; setTimeout(() => float(u, '亂點鴛鴦', '#ff5c8d'), 200); }
   if (s.heal && u.id === 'dagda' && s.heal > u.maxHp - u.hp) addRes(u, s.heal - (u.maxHp - u.hp));
-  if (s.heal) { const v = Math.min(s.heal, u.maxHp - u.hp); if (v > 0) { u.hp += v; float(u, '+' + v, '#7fe07f'); fxPush({ type: 'ring', x: u.x, y: u.y - 46, color: '#7fe07f', dur: 500 }); } }
-  if (s.shield) { u.shield += s.shield; setTimeout(() => float(u, '盾 +' + s.shield, '#ffe070'), 150); fxPush({ type: 'ring', x: u.x, y: u.y - 46, color: '#ffe070', dur: 500 }); }
+  if (s.heal) { const v = Math.min(s.heal, u.maxHp - u.hp); if (v > 0) { u.hp += v; float(u, '+' + v, '#7fe07f'); sfx('heal'); fxPush({ type: 'ring', x: u.x, y: u.y - 46, color: '#7fe07f', dur: 500 }); } }
+  if (s.shield) { u.shield += s.shield; sfx('shield'); setTimeout(() => float(u, '盾 +' + s.shield, '#ffe070'), 150); fxPush({ type: 'ring', x: u.x, y: u.y - 46, color: '#ffe070', dur: 500 }); }
   if (s.taunt) { u.taunt = true; for (const e of foes) if (!e.dead && !e.elite) e.intent = { target: u, dmg: e.atk }; float(u, '嘲諷', '#40d070'); }
   gearOnApply(s);
 }
@@ -796,7 +799,7 @@ function apply(s) {
 function tickDmg(u, n, color) {
   if (u.dead) return;
   u.hp -= n; u.flash = performance.now() + 200; float(u, String(n), color);
-  if (u.hp <= 0) { u.hp = 0; u.dead = true; u.deadAt = performance.now(); }
+  if (u.hp <= 0) { u.hp = 0; u.dead = true; u.deadAt = performance.now(); sfx('kill'); }
 }
 function addBurn(u, n) { if (u.dead) return; u.burn = Math.max(u.burn, n); setTimeout(() => float(u, '燃燒', '#ff8a30', 18), 220); }
 // 石化疊到 3 層變石像（下次不能行動）
@@ -860,7 +863,7 @@ async function enemyTurn() {
         const o = pick(mates);
         if (!await approach(e, o)) { await wait(380); continue; }
         e.lunge = performance.now(); await wait(180);
-        o.hp -= hit(e.atk); o.flash = performance.now() + 200; float(o, String(hit(e.atk)), '#ff5c8d');
+        o.hp -= hit(e.atk); o.flash = performance.now() + 200; sfx('hit'); float(o, String(hit(e.atk)), '#ff5c8d');
         if (o.hp <= 0) { o.hp = 0; o.dead = true; o.deadAt = performance.now(); }
       } else float(e, '發呆', '#ff5c8d');
     } else if (e.intent.all) {
@@ -913,10 +916,10 @@ function hurt(h, d) {
   const blocked = Math.min(h.shield, d); h.shield -= blocked; d -= blocked;
   if (blocked) float(h, '擋 ' + blocked, '#ffe070');
   if (d <= 0) return;
-  h.hp -= d; h.flash = performance.now() + 200;
+  h.hp -= d; h.flash = performance.now() + 200; sfx('hurt');
   const a = artAnim(h.art, 'hurt'); if (a) h.anim = { a, t0: performance.now() };
   setTimeout(() => float(h, String(d), '#ff7070'), blocked ? 250 : 0);
-  if (h.hp <= 0) { h.hp = 0; h.dead = true; }
+  if (h.hp <= 0) { h.hp = 0; h.dead = true; sfx('fall'); }
 }
 
 // ───── 打完一層 ─────
@@ -928,11 +931,11 @@ function endResult(win) {
   return { win, hp, res, kills: dead.length, exp: dead.reduce((a, e) => a + (e.exp || 0), 0), turns: turn };
 }
 function winFloor() {
-  busy = true;
+  busy = true; sfx('win');
   const c = cfg; wait(600).then(() => c.onEnd(endResult(true)));
 }
 function lose() {
-  busy = true;
+  busy = true; sfx('lose');
   const c = cfg; wait(900).then(() => c.onEnd(endResult(false)));
 }
 // 離開戰鬥畫面：還在跑的動作全部停掉

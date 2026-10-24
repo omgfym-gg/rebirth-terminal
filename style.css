@@ -185,3 +185,7 @@ body:has(#battle.active) #app { padding: 6px 8px; }
 details { margin-top: 10px; font-size: 13px; line-height: 1.55; }
 details summary { color: var(--accent); }
 details p { margin: 4px 0; }
+
+/* 聲音開關：戰鬥畫面放在上方列，其他畫面放右上角 */
+.sound.corner { position: fixed; top: 8px; right: 8px; z-index: 4; padding: 4px 8px; font-size: 16px; border-bottom-width: 2px; opacity: 0.8; }
+body:has(#battle.active) .sound.corner { display: none; }

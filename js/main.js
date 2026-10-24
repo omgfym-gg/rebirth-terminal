@@ -107,6 +107,8 @@ const Game = {
   show(id) {
     for (const s of document.querySelectorAll('.screen')) s.classList.toggle('active', s.id === id);
     window.scrollTo(0, 0);
+    // 背景音樂：戰鬥時一般關卡／魔王關各一首，其他畫面放首頁那首
+    if (typeof Snd !== 'undefined') Snd.bgm(id === 'battle' ? this.battleMusic || 'floor' : 'title');
   },
 
   start() {
@@ -295,6 +297,7 @@ const Game = {
   },
 
   beginLife(form, party) {
+    if (typeof Snd !== 'undefined') Snd.sfx('rebirth');
     const s = this.save;
     s.vault = []; s.eq = {}; // 每一世的裝備從零開始
     const hero = party[0].id;
@@ -351,6 +354,7 @@ const Game = {
     const f = L.floor + 1, kind = floorKind(f);
     // 中途離開再回來：同一層重打，敵人重抽
     const foes = this.floorFoes(f);
+    this.battleMusic = kind === 'boss' ? 'boss' : 'floor';
     this.show('battle');
     Redline.start({
       floor: f,
