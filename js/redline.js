@@ -271,14 +271,14 @@ let trails = [], bolts = [], zz = new Map();
 
 // 開打一層。c：
 //   floor 第幾層、title 標題、note 開場的說明（可省略）
-//   party 出戰的三位 [{ id, hp, maxHp, gear: [裝備], tag: '今世' 之類的標籤（可省略） }]，順序就是出手順序
+//   party 出戰的三位 [{ id, hp, maxHp, gear: [裝備], tag: '今世' 之類的標籤（可省略）, res: 帶進來的元寶之類（可省略） }]，順序就是出手順序
 //   foes 敵人 [key]、scale 敵人強度倍率、up { dmg 每一下多幾傷害, ink 墨水倍率 }
-//   gearButton 開場框裡「整理裝備」按下去要做什麼（可省略，換完裝備由呼叫的人重新 start 這一層）、onEnd({ win, hp: {id: 生命}, kills, exp }) 打完
+//   gearButton 開場框裡「整理裝備」按下去要做什麼（可省略，換完裝備由呼叫的人重新 start 這一層）、onEnd({ win, hp: {id: 生命}, res: {id: 元寶之類}, kills, exp }) 打完
 function start(c) {
   gen++;
   cfg = c;
   run = { floor: c.floor, up: { dmg: 0, ink: 1, ...(c.up || {}) } };
-  heroes = c.party.map((p) => ({ ...HEROES[p.id], id: p.id, tag: p.tag || '', side: 'ally', art: p.id, gear: p.gear || [], maxHp: p.maxHp, hp: Math.max(0, Math.min(p.maxHp, p.hp)), dead: p.hp <= 0, x: 0, y: 0, shield: 0, flash: 0, cds: [0, 0, 0], anim: null, taunt: false, res: 0, wine: 0 }));
+  heroes = c.party.map((p) => ({ ...HEROES[p.id], id: p.id, tag: p.tag || '', side: 'ally', art: p.id, gear: p.gear || [], maxHp: p.maxHp, hp: Math.max(0, Math.min(p.maxHp, p.hp)), dead: p.hp <= 0, x: 0, y: 0, shield: 0, flash: 0, cds: [0, 0, 0], anim: null, taunt: false, res: p.res || 0, wine: 0 }));
   const k = c.scale || 1;
   foes = c.foes.map((key) => ({ key, ...FOES[key], side: 'enemy', maxHp: Math.round(FOES[key].hp * k), hp: Math.round(FOES[key].hp * k), atk: Math.round(FOES[key].atk * k), dead: false, frozen: false, confused: false, frost: 0, red: false, burn: 0, fear: false, mark: false, stone: 0, stun: false, lost: 0, flash: 0, x: 0, y: 0, acts: 0, dodged: false, headAt: null }));
   place(true);
@@ -923,10 +923,10 @@ function hurt(h, d) {
 // ───── 打完一層 ─────
 // 倒下的神魔過層後回三成生命，站著的回 6
 function endResult(win) {
-  const hp = {};
-  for (const h of heroes) hp[h.id] = !win ? 0 : h.dead ? Math.round(h.maxHp * 0.3) : Math.min(h.maxHp, h.hp + 6);
+  const hp = {}, res = {};
+  for (const h of heroes) { hp[h.id] = !win ? 0 : h.dead ? Math.round(h.maxHp * 0.3) : Math.min(h.maxHp, h.hp + 6); res[h.id] = h.res; }
   const dead = foes.filter((e) => e.dead);
-  return { win, hp, kills: dead.length, exp: dead.reduce((a, e) => a + (e.exp || 0), 0), turns: turn };
+  return { win, hp, res, kills: dead.length, exp: dead.reduce((a, e) => a + (e.exp || 0), 0), turns: turn };
 }
 function winFloor() {
   busy = true;

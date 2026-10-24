@@ -332,7 +332,7 @@ const Game = {
   // 出戰的三位：都穿這一世拿到的裝備（前世之影也是空手來的）
   battleParty() {
     const L = this.save.life;
-    return L.party.map((m) => ({ id: m.id, tag: m.tag, hp: L.hp[m.id], maxHp: L.maxHp[m.id], gear: this.eqOf(m.id) }));
+    return L.party.map((m) => ({ id: m.id, tag: m.tag, hp: L.hp[m.id], maxHp: L.maxHp[m.id], gear: this.eqOf(m.id), res: (L.res || {})[m.id] || 0 }));
   },
 
   floorFoes(f) {
@@ -376,6 +376,8 @@ const Game = {
       return this.die('faded', `第 ${f} 層`);
     }
     Object.assign(L.hp, r.hp);
+    // 元寶、飽足這類資源一整世累積，到下一層還在
+    L.res = Object.assign(L.res || {}, r.res);
     L.floor = f;
     const lines = [`第 ${f} 層　突破！（擊倒 ${r.kills}、經驗 ${r.exp}）`];
     // 經驗給今世和派遣同事；前世之影停在死前的等級
