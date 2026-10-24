@@ -95,7 +95,7 @@ const HOW = {
 // 角色欄位：faith 神／魔、hp 生命、res 自己的資源 [名字, 上限]、onHit 每打中一下、mod 改這一招的效果（只算不改狀態）、
 // talent 天賦發動（ctx.h 畫線的人、ctx.en 那條線打到的敵人、ctx.later 出招跑完後再做）、round 每輪開始
 const firstEnemy = (en) => en.slice(0, 1);
-const addRes = (h, n) => { const R = h.res && HEROES[h.id].res; if (!R || !n) return; const v = Math.max(0, Math.min(R[1], h.res + n)); if (v !== h.res) { h.res = v; float(h, `${R[0]} ${v}`, h.color, 18); } };
+const addRes = (h, n) => { const R = HEROES[h.id] && HEROES[h.id].res; if (!R || !n) return; const v = Math.max(0, Math.min(R[1], h.res + n)); if (v !== h.res) { h.res = v; float(h, `${R[0]} ${v}`, h.color, 18); } };
 const HEROES = {
   guangong: {
     name: '關公', faith: '神', hp: 52, color: '#40d070', role: '近戰重擊', res: ['氣勢', 5],
@@ -1609,6 +1609,8 @@ function render(now) {
         const p = 0.6 + 0.4 * Math.sin(now / 150);
         g.strokeStyle = `rgba(255,224,112,${p})`; g.lineWidth = 3; g.beginPath(); g.arc(c.x, c.y, 16, 0, Math.PI * 2); g.stroke();
         g.fillStyle = '#ffe070'; g.font = 'bold 14px sans-serif'; g.textAlign = 'center'; g.fillText('交', c.x, c.y + 5);
+        // 交會點旁邊寫出會發動誰的天賦，旁邊沒敵人時也看得出有算到
+        if (!c.owner.dead) { const lab = c.owner.talent.n; g.font = 'bold 13px sans-serif'; g.fillStyle = '#000'; g.fillText(lab, c.x + 1, c.y + 33); g.fillStyle = c.owner.color; g.fillText(lab, c.x, c.y + 32); }
       }
       for (const [u, b] of byU) {
         const c = center(u), t = b.t.join('  ');
