@@ -198,10 +198,11 @@ const Game = {
   // ───────── 轉生櫃台 ─────────
 
   // 前世之影：死過的每一世都能帶上場，停在死前的等級、空手上場（同一位神魔只算最近那一世）
-  shadowOptions(except) {
+  // side：這一世走的路限定的陣營（入魔只帶魔族、升仙只帶神族，為人不限）
+  shadowOptions(except, side) {
     const seen = new Set(), out = [];
     for (const h of [...this.save.history].reverse()) {
-      if (!HEROES[h.hero] || h.hero === except || seen.has(h.hero)) continue;
+      if (!HEROES[h.hero] || h.hero === except || seen.has(h.hero) || (side && HEROES[h.hero].faith !== side)) continue;
       seen.add(h.hero);
       out.push({ id: h.hero, level: h.level, gear: [], life: h.life });
     }
@@ -223,10 +224,12 @@ const Game = {
     // 這一世的隊伍：今世＋兩位前世之影；前世不夠就由終端派遣同事補上
     const party = () => {
       if (!pick.hero) return [];
-      const opts = this.shadowOptions(pick.hero);
+      const opts = this.shadowOptions(pick.hero, FORMS[pick.form].side);
       const shadows = opts.length <= 2 ? opts : pick.shadows.map((i) => opts[i]).filter(Boolean);
       const out = [{ id: pick.hero, tag: TAGS.now }, ...shadows.map((o) => ({ id: o.id, tag: TAGS.shadow, level: o.level, gear: [], life: o.life }))];
-      if (opts.length <= 2) for (const id of s.offer.crew) { if (out.length >= 3) break; if (!out.some((p) => p.id === id)) out.push({ id, tag: TAGS.crew }); }
+      // 派遣同事也照這一世走的路派：入魔只派魔族、升仙只派神族
+      const side = FORMS[pick.form].side;
+      if (opts.length <= 2) for (const id of s.offer.crew) { if (out.length >= 3) break; if ((!side || HEROES[id].faith === side) && !out.some((p) => p.id === id)) out.push({ id, tag: TAGS.crew }); }
       return out;
     };
 
@@ -245,6 +248,7 @@ const Game = {
           if (!ok) return;
           // 換路的時候，原本選的神魔如果不在這條路上就清掉
           if (pick.hero && !s.offer.paths[id].includes(pick.hero)) { pick.hero = null; pick.shadows = []; }
+          if (pick.form !== id) pick.shadows = []; // 能帶的前世之影跟著路變
           pick.form = id; render();
         } },
           spriteImg(f.sprite),
@@ -269,7 +273,7 @@ const Game = {
       const p = party();
       if (pick.hero) {
         root.append(el('h3', {}, '③ 隊友'));
-        const opts = this.shadowOptions(pick.hero);
+        const opts = this.shadowOptions(pick.hero, FORMS[pick.form].side);
         if (opts.length > 2) {
           root.append(el('p', { class: 'muted' }, `從前世裡挑兩位，當「前世之影」陪你上場（已選 ${pick.shadows.length}/2）。他們停在死前的等級、穿著死前的裝備。`));
           const box = el('div', { class: 'cards two' });
