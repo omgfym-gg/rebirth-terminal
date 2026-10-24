@@ -70,7 +70,7 @@ const HIT_R = 42;
 const SHAPES = { line: '直線', free: '自由線', circle: '畫圈' };
 const HOW = {
   line: '從<b>自己身上</b>往想打的方向拉一條直線，線上的敵人都會中。',
-  free: '從<b>自己身上</b>開始，<b>一筆</b>畫過想打的目標，經過的順序有編號。',
+  free: '從<b>自己身上</b>開始，<b>一筆</b>畫過想打的目標，經過的順序有編號。同一個敵人穿過兩次就打兩下。',
   circle: '在戰場上<b>畫一個圈</b>，頭尾接起來，圈住的目標都會中。',
 };
 const BASE_HP = { guangong: 52, yuelao: 40, yukionna: 36 };
@@ -82,7 +82,7 @@ const HEROES = {
     skills: [
       { name: '青龍斬', shape: 'line', len: 430, anim: 's1', desc: '直線上的敵人各受 11 傷害。',
         run: (en) => en.map((u) => ({ u, dmg: 11 })) },
-      { name: '過五關', shape: 'free', len: 700, cd: 1, anim: 's2', desc: '一筆最多斬 5 個敵人，每多過一關傷害 +5（7、12、17…）。',
+      { name: '過五關', shape: 'free', len: 700, cd: 1, anim: 's2', desc: '一筆最多斬 5 下，同一個敵人來回穿過也算，每多過一關傷害 +5（7、12、17…）。',
         run: (en) => en.slice(0, 5).map((u, i) => ({ u, dmg: 7 + i * 5 })) },
       { name: '單刀赴會', shape: 'line', len: 340, cd: 3, anim: 'ult', dash: true, desc: '衝去砍直線上第一個敵人 30 傷害。這一輪敵人全部改打關公，關公得 12 護盾。',
         run: (en, al, h) => [...en.slice(0, 1).map((u) => ({ u, dmg: 30 })), { u: h, shield: 12, taunt: true }] },
@@ -118,7 +118,7 @@ const FOES = {
   warden: { name: '無臉典獄長', sprite: 'boss', hp: 110, atk: 17, elite: true },
 };
 
-let run, heroes, foes, chains = [], path = [], closed, hits = [], drawing, busy, effects, turn, who = -1, skillIdx = 0;
+let run, heroes, foes, chains = [], path = [], closed, hits = [], hitAt = [], inside = new Set(), drawing, busy, effects, turn, who = -1, skillIdx = 0;
 
 function newRun() {
   run = { floor: 0, up: { dmg: 0, ink: 1 }, maxHp: { ...BASE_HP }, hp: { ...BASE_HP } };
@@ -193,7 +193,7 @@ function makeChains() {
 const hero = () => heroes && heroes[who];
 const skill = () => hero().skills[skillIdx];
 const inkMax = () => Math.round(skill().len * run.up.ink);
-function clearPath() { path = []; hits = []; closed = false; drawing = false; updateUi(); }
+function clearPath() { path = []; hits = []; hitAt = []; inside = new Set(); closed = false; drawing = false; updateUi(); }
 
 // ───── 畫線 ─────
 const center = (u) => ({ x: u.x, y: u.y - 46 });
@@ -258,7 +258,13 @@ cv.addEventListener('pointermove', (ev) => {
   if (sk.shape === 'free') {
     for (const c of chains) if (segCross(last, p, { x: c.x1, y: c.y1 }, { x: c.x2, y: c.y2 })) { path.push(cutAt(last, p, c)); fxPush({ type: 'snap', x: p.x, y: p.y, dur: 600 }); drawing = false; updateUi(); tip('紅線被<b>鎖鏈</b>剪斷了。'); return; }
     path.push(p);
-    for (const u of living()) if (u !== hero() && !hits.includes(u) && segHitsCircle(last, p, center(u), HIT_R)) hits.push(u);
+    // 線每「穿進」敵人一次就多打一下；隊友只算一次
+    for (const u of living()) {
+      if (u === hero()) continue;
+      const touch = segHitsCircle(last, p, center(u), HIT_R);
+      if (touch && !inside.has(u) && (u.side === 'enemy' || !hits.includes(u))) { hits.push(u); hitAt.push(path.length - 1); }
+      if (dist(p, center(u)) < HIT_R) inside.add(u); else inside.delete(u);
+    }
   } else path.push(p);
   if (pathLen() >= max - 0.5) endDraw();
   updateUi();
@@ -302,7 +308,10 @@ async function go() {
     const foot = path.map((p) => ({ x: p.x, y: p.y + 46 }));
     const cum = [0]; for (let i = 1; i < foot.length; i++) cum.push(cum[i - 1] + dist(foot[i], foot[i - 1]));
     const at = (u) => { const c = { x: u.x, y: u.y }; let bi = 0, bd = 1e9; foot.forEach((p, i) => { const d = dist(p, c); if (d < bd) { bd = d; bi = i; } }); return Math.max(0, cum[bi] - 55); };
-    const plan = others.map((st) => ({ st, s: at(st.u) })).sort((a, b) => a.s - b.s);
+    // 自由線：照穿過的那一刻排；直線：照離起點的距離排
+    const queue = new Map();
+    if (sk.shape === 'free') hits.forEach((u, k) => { if (!queue.has(u)) queue.set(u, []); queue.get(u).push(Math.max(0, cum[hitAt[k]] - 55)); });
+    const plan = others.map((st) => ({ st, s: queue.has(st.u) && queue.get(st.u).length ? queue.get(st.u).shift() : at(st.u) })).sort((a, b) => a.s - b.s);
     const speed = sk.shape === 'line' ? 1.5 : 0.85;
     let pos = 0;
     for (const { st, s: sAt } of plan) {
@@ -562,16 +571,22 @@ function render(now) {
     }
     // 預覽：每個目標會受到什麼
     if (!busy && hits.length && !drawing) {
-      const en = hits.filter((u) => u.side === 'enemy');
-      results().forEach((s) => {
-        const c = center(s.u);
+      // 同一個目標被打好幾下時合在一起顯示，編號是第幾擊
+      const res = results(), byU = new Map(), enemyHits = res.filter((x) => x.u.side === 'enemy');
+      res.forEach((s) => {
         const t = [s.dmg ? '-' + s.dmg : '', s.freeze ? '凍' : '', s.confuse ? '亂' : '', s.heal ? '+' + s.heal : '', s.shield ? '盾' + s.shield : ''].filter(Boolean).join(' ');
         if (!t) return;
+        if (!byU.has(s.u)) byU.set(s.u, { t: [], n: [], dmg: false });
+        const b = byU.get(s.u); b.t.push(t); b.dmg = b.dmg || !!s.dmg;
+        if (s.u.side === 'enemy') b.n.push(enemyHits.indexOf(s) + 1);
+      });
+      for (const [u, b] of byU) {
+        const c = center(u), t = b.t.join('  ');
         g.font = 'bold 18px sans-serif'; g.textAlign = 'center';
         g.fillStyle = '#000'; g.fillText(t, c.x + 1, c.y + 23);
-        g.fillStyle = s.dmg ? '#ffe070' : '#7fe07f'; g.fillText(t, c.x, c.y + 22);
-        if (skill().shape === 'free' && s.u.side === 'enemy') { g.fillStyle = '#000'; g.beginPath(); g.arc(c.x - 36, c.y - 30, 13, 0, Math.PI * 2); g.fill(); g.fillStyle = '#ffe070'; g.font = 'bold 15px sans-serif'; g.fillText(String(en.indexOf(s.u) + 1), c.x - 36, c.y - 25); }
-      });
+        g.fillStyle = b.dmg ? '#ffe070' : '#7fe07f'; g.fillText(t, c.x, c.y + 22);
+        if (skill().shape === 'free' && b.n.length) { const lab = b.n.join(','), w = Math.max(26, lab.length * 9 + 10); g.fillStyle = '#000'; g.fillRect(c.x - 36 - w / 2, c.y - 43, w, 26); g.fillStyle = '#ffe070'; g.font = 'bold 15px sans-serif'; g.fillText(lab, c.x - 36, c.y - 25); }
+      }
     }
   }
   effects = (effects || []).filter((e) => now < e.t0 + e.dur);
@@ -617,7 +632,7 @@ function updateUi() {
   if (busy) tip(`${hero().name}出招中……`);
   else if (drawing) tip(HOW[sk.shape]);
   else if (!path.length) tip(`「${sk.name}」：${HOW[sk.shape]}`);
-  else if (hits.length) tip(`「${sk.name}」會打中 ${hits.filter((u) => u.side === 'enemy').length} 個敵人${hits.some((u) => u.side === 'ally') ? `、碰到 ${hits.filter((u) => u.side === 'ally').length} 位隊友` : ''}。滿意就按出招，不滿意按重畫。`);
+  else if (hits.length) tip(`「${sk.name}」會打 ${results().filter((x) => x.u.side === 'enemy' && x.dmg).length} 下（${new Set(hits.filter((u) => u.side === 'enemy')).size} 個敵人）${hits.some((u) => u.side === 'ally') ? `、碰到 ${hits.filter((u) => u.side === 'ally').length} 位隊友` : ''}。滿意就按出招，不滿意按重畫。`);
   else tip(`這條線沒有碰到目標，按重畫再來。`);
 }
 
