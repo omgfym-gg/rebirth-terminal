@@ -615,7 +615,7 @@ function fireTalents(list, h) {
 async function go() {
   if (busy || !hits.length) return;
   const h = hero(), sk = skill(), steps = results(), tal = talentsHit(), cx = crossings();
-  busy = true; updateUi(); renderSkills();
+  busy = true; casting = true; updateUi(); renderSkills();
   gearLink(h);
   h.cds[skillIdx] = (sk.cd || 0) + 1;
   if (sk.spendRes) h.res = 0;
@@ -673,6 +673,7 @@ async function go() {
     await wait(250);
   }
   for (const st of self) apply(st);
+  casting = false;
   h.moving = false;
   // 同一回合畫過的線都留著，換回合才清掉
   trails.push({ owner: h, pts: path.slice(), loop: sk.shape === 'circle' });
@@ -774,6 +775,7 @@ function apply(s) {
     u.hp -= s.dmg; u.flash = performance.now() + 200;
     float(u, String(s.dmg), s.dmg >= 15 ? '#ffe070' : '#fff'); sfx(s.dmg >= 15 ? 'crit' : 'hit');
     fxPush({ type: 'burst', x: u.x, y: u.y - 46, color: hero().color, dur: 450, seed: Math.random() * 6 });
+    skillFx(u);
     if (u.hp <= 0) { u.hp = 0; u.dead = true; u.deadAt = performance.now(); sfx(u.side === 'enemy' ? 'kill' : 'fall'); }
   }
   if (s.execute && !u.dead) { u.hp = 0; u.dead = true; u.deadAt = performance.now(); sfx('kill'); float(u, s.execute + '！', '#ffe070'); fxPush({ type: 'burst', x: u.x, y: u.y - 46, color: '#ffe070', dur: 600, seed: 3 }); return; }
@@ -789,8 +791,8 @@ function apply(s) {
   if (s.freeze && !u.dead) { u.frozen = true; u.frost = 0; fxPush({ type: 'ice', x: u.x, y: u.y, dur: 700 }); float(u, '凍住', '#a0e0ff'); }
   if (s.confuse && !u.dead) { u.confused = true; setTimeout(() => float(u, '亂點鴛鴦', '#ff5c8d'), 200); }
   if (s.heal && u.id === 'dagda' && s.heal > u.maxHp - u.hp) addRes(u, s.heal - (u.maxHp - u.hp));
-  if (s.heal) { const v = Math.min(s.heal, u.maxHp - u.hp); if (v > 0) { u.hp += v; float(u, '+' + v, '#7fe07f'); sfx('heal'); fxPush({ type: 'ring', x: u.x, y: u.y - 46, color: '#7fe07f', dur: 500 }); } }
-  if (s.shield) { u.shield += s.shield; sfx('shield'); setTimeout(() => float(u, '盾 +' + s.shield, '#ffe070'), 150); fxPush({ type: 'ring', x: u.x, y: u.y - 46, color: '#ffe070', dur: 500 }); }
+  if (s.heal) { const v = Math.min(s.heal, u.maxHp - u.hp); if (v > 0) { u.hp += v; float(u, '+' + v, '#7fe07f'); sfx('heal'); skillFx(u); fxPush({ type: 'ring', x: u.x, y: u.y - 46, color: '#7fe07f', dur: 500 }); } }
+  if (s.shield) { u.shield += s.shield; sfx('shield'); skillFx(u); setTimeout(() => float(u, '盾 +' + s.shield, '#ffe070'), 150); fxPush({ type: 'ring', x: u.x, y: u.y - 46, color: '#ffe070', dur: 500 }); }
   if (s.taunt) { u.taunt = true; for (const e of foes) if (!e.dead && !e.elite) e.intent = { target: u, dmg: e.atk }; float(u, '嘲諷', '#40d070'); }
   gearOnApply(s);
 }
@@ -1469,6 +1471,18 @@ function drawDemo(now) {
 
 // ───── 畫面 ─────
 function fxPush(e) { effects.push({ t0: performance.now(), ...e }); }
+// 技能打擊特效：assets/skills/<角色>.png，3 排（一招一排）× 5 格，每格 96，黑底用加亮疊上去
+const SKILL_FX = {};
+let casting = false; // 只有神魔出招這段時間的命中才播技能特效
+function skillFx(u) {
+  const h = hero();
+  if (!casting || !h) return;
+  const img = SKILL_FX[h.id] || (SKILL_FX[h.id] = Object.assign(new Image(), { src: `assets/skills/${h.id}.png` }));
+  const now = performance.now();
+  if (u.fxAt && now - u.fxAt < 120) return; // 同一下連發只播一次
+  u.fxAt = now;
+  fxPush({ type: 'skill', img, row: skillIdx, x: u.x, y: u.y - 46, dur: 520 });
+}
 function float(u, text, color, size = 22) { fxPush({ type: 'text', x: u.x, y: u.y - 112, text, color, size, dur: 1000 }); }
 
 function drawBg(now) {
@@ -1651,6 +1665,7 @@ function render(now) {
     if (e.type === 'gaze') { g.globalAlpha = 0.5 * (1 - k); g.fillStyle = '#ff3048'; g.fillRect(0, FLOOR, W, H - FLOOR); g.globalAlpha = 1; }
     if (e.type === 'charge' && !e.u.dead) { g.globalAlpha = 1 - k; g.strokeStyle = e.color; g.lineWidth = 6; g.shadowColor = e.color; g.shadowBlur = 20; g.beginPath(); g.arc(e.u.x, e.u.y - 46, 60 - k * 40, 0, Math.PI * 2); g.stroke(); g.shadowBlur = 0; g.globalAlpha = 1; }
     if (e.type === 'area') { g.globalAlpha = 0.5 * (1 - k); g.fillStyle = e.color; g.beginPath(); e.poly.forEach((q, i) => i ? g.lineTo(q.x, q.y) : g.moveTo(q.x, q.y)); g.closePath(); g.fill(); g.globalAlpha = 1; }
+    if (e.type === 'skill' && e.img.complete && e.img.naturalWidth) { const f = Math.min(4, Math.floor(k * 5)); g.save(); g.globalCompositeOperation = 'lighter'; g.imageSmoothingEnabled = false; g.drawImage(e.img, f * 96, e.row * 96, 96, 96, e.x - 72, e.y - 72, 144, 144); g.restore(); }
     if (e.type === 'snap') { g.globalAlpha = 1 - k; g.fillStyle = '#fff'; for (let s = 0; s < 6; s++) g.fillRect(e.x + Math.cos(s) * k * 30 - 3, e.y + Math.sin(s) * k * 30 - 3, 6, 6); g.globalAlpha = 1; }
   }
   requestAnimationFrame(render);
