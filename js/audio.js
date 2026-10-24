@@ -5,15 +5,17 @@
 const Snd = (() => {
 // 背景音樂檔：放進 assets/audio/ 之後在這裡登記，沒登記的用晶片曲
 const FILES = {
-  // title: 'assets/audio/title.mp3',
-  // floor: 'assets/audio/floor.mp3',
-  // boss: 'assets/audio/boss.mp3',
+  // Stable Audio Open 生成，原檔留在小黑電腦的下載資料夾（git 歷史裡也有）；已去尾端靜音、頭尾交叉淡化成可無縫循環
+  title: 'assets/audio/title.mp3?v=1',
+  floor: 'assets/audio/floor.mp3?v=1',
+  boss: 'assets/audio/boss.mp3?v=1',
 };
 const KEY = 'rebirth-terminal-sound-v1';
 let pref = { mute: false };
 try { pref = { ...pref, ...JSON.parse(localStorage.getItem(KEY) || '{}') }; } catch (e) { /* 私密模式 */ }
 let ctx = null, master = null, sfxBus = null, musicBus = null, noiseBuf = null, unlocked = false;
-let want = null, playing = null, el = null, seq = null;
+let want = null, playing = null, src = null, seq = null, fileBus = null;
+const buffers = {};
 
 function init() {
   if (ctx) return;
@@ -22,6 +24,7 @@ function init() {
   master = ctx.createGain(); master.gain.value = pref.mute ? 0 : 1; master.connect(ctx.destination);
   sfxBus = ctx.createGain(); sfxBus.gain.value = 0.5; sfxBus.connect(master);
   musicBus = ctx.createGain(); musicBus.gain.value = 0.22; musicBus.connect(master);
+  fileBus = ctx.createGain(); fileBus.gain.value = 0.55; fileBus.connect(master);
   noiseBuf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
   const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
 }
@@ -33,8 +36,8 @@ function unlock() {
 for (const ev of ['pointerdown', 'touchend', 'keydown']) window.addEventListener(ev, unlock, { capture: true, passive: true });
 document.addEventListener('visibilitychange', () => {
   if (!ctx) return;
-  if (document.hidden) { ctx.suspend(); if (el) el.pause(); }
-  else if (unlocked) { ctx.resume(); if (el && !pref.mute) el.play().catch(() => {}); }
+  if (document.hidden) ctx.suspend();
+  else if (unlocked) ctx.resume();
 });
 
 const midi = (n) => 440 * Math.pow(2, (n - 69) / 12);
@@ -124,7 +127,7 @@ function startSeq(name) {
 
 function stopMusic() {
   if (seq) { seq(); seq = null; }
-  if (el) { el.pause(); el = null; }
+  if (src) { const s = src, t = ctx.currentTime; src = null; s.gn.gain.setTargetAtTime(0, t, 0.15); s.stop(t + 0.8); }
   playing = null;
 }
 // 換背景音樂：'title' 首頁／'floor' 一般關卡／'boss' 魔王關；同一首不會重頭播
@@ -135,10 +138,16 @@ function bgm(name) {
   playing = name;
   if (!name) return;
   if (FILES[name]) {
-    el = new Audio(FILES[name]); el.loop = true; el.volume = pref.mute ? 0 : 0.5;
-    el.play().catch(() => {});
-    // 檔案壞掉或抓不到：改用晶片曲
-    el.onerror = () => { if (playing === name && el) { el = null; seq = startSeq(name); } };
+    // 用 WebAudio 解碼後循環播放，接縫不會有空白；檔案抓不到就改用晶片曲
+    if (!buffers[name]) buffers[name] = fetch(FILES[name]).then((r) => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
+      .then((a) => new Promise((ok, no) => ctx.decodeAudioData(a, ok, no)));
+    buffers[name].then((buf) => {
+      if (playing !== name || src) return;
+      const s = ctx.createBufferSource(), gn = ctx.createGain(), t = ctx.currentTime;
+      s.buffer = buf; s.loop = true; s.gn = gn;
+      gn.gain.setValueAtTime(0, t); gn.gain.linearRampToValueAtTime(1, t + 0.8);
+      s.connect(gn); gn.connect(fileBus); s.start(t); src = s;
+    }).catch(() => { delete buffers[name]; if (playing === name && !seq) seq = startSeq(name); });
   } else seq = startSeq(name);
 }
 
@@ -146,7 +155,6 @@ function setMute(m) {
   pref.mute = m;
   try { localStorage.setItem(KEY, JSON.stringify(pref)); } catch (e) { /* 私密模式 */ }
   if (master) master.gain.value = m ? 0 : 1;
-  if (el) el.volume = m ? 0 : 0.5;
   for (const b of document.querySelectorAll('.sound')) b.textContent = m ? '🔇' : '🔊';
 }
 // 有 class="sound" 的按鈕都是靜音開關
