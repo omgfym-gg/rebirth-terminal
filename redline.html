@@ -423,28 +423,37 @@ async function go() {
   if (sk.shape === 'circle') {
     // 畫圈：近身招跳到圈的中間施法，遠程招站在原地施法；圈裡的目標一起中
     const c = path.reduce((a, p) => ({ x: a.x + p.x / path.length, y: a.y + p.y / path.length }), { x: 0, y: 0 });
-    if (sk.melee) await moveTo(h, { x: c.x, y: c.y + 46 }, 1.1, true);
-    else h.face = c.x < h.x ? -1 : 1;
-    await skillAnim(h, sk);
+    if (sk.melee) { await moveTo(h, { x: c.x, y: c.y + 46 }, 1.1, true); await skillAnim(h, sk); }
+    else {
+      // 遠程畫圈：先蓄力，射一發到圈中間，再在整個圈炸開
+      h.face = c.x < h.x ? -1 : 1;
+      await windUp(h, sk);
+      const b = newBolt(h); bolts.push(b);
+      await moveTo(b, { x: c.x, y: c.y + 46 }, 0.6); b.moving = false;
+      bolts = bolts.filter((x) => x !== b);
+      fxPush({ type: 'area', poly: path.slice(), color: h.color, dur: 600 });
+      fxPush({ type: 'burst', x: c.x, y: c.y, color: h.color, dur: 600, seed: 1 });
+      await wait(150);
+    }
     for (const st of others) { apply(st); await wait(70); }
   } else {
     // 近身招：神魔沿著線跑過去，經過誰就對誰出招，停在線的終點（衝刺停在敵人面前）
     // 遠程招：神魔站著出手，招式化成光球沿著線飛過去
     const foot = densify(path).map((p) => ({ x: p.x, y: p.y + 46 }));
-    const mover = sk.melee ? h : { x: h.x, y: h.y, color: h.color };
-    if (!sk.melee) { h.face = path[1].x < path[0].x ? -1 : 1; await skillAnim(h, sk, 0.5); bolts.push(mover); }
+    const mover = sk.melee ? h : newBolt(h);
+    if (!sk.melee) { h.face = path[1].x < path[0].x ? -1 : 1; await windUp(h, sk); bolts.push(mover); }
     const cum = [0]; for (let i = 1; i < foot.length; i++) cum.push(cum[i - 1] + dist(foot[i], foot[i - 1]));
     const at = (u) => { const c = { x: u.x, y: u.y }; let bi = 0, bd = 1e9; foot.forEach((p, i) => { const d = dist(p, c); if (d < bd) { bd = d; bi = i; } }); return Math.max(0, cum[bi] - 55); };
     // 自由線：照穿過的那一刻排；直線：照離起點的距離排
     const queue = new Map();
     if (freeShape(sk) || sk.shape === 'tap') hits.forEach((u, k) => { if (!queue.has(u)) queue.set(u, []); let L = 0; for (let i = 1; i <= Math.min(hitAt[k], path.length - 1); i++) L += dist(path[i], path[i - 1]); queue.get(u).push(Math.max(0, L - (sk.melee ? 55 : 0))); });
     const plan = others.map((st) => ({ st, s: queue.has(st.u) && queue.get(st.u).length ? queue.get(st.u).shift() : at(st.u) })).sort((a, b) => a.s - b.s);
-    const speed = !sk.melee ? 1.6 : lineShape(sk) ? 1.5 : 0.85;
+    const speed = !sk.melee ? 0.6 : lineShape(sk) ? 1.5 : 0.85;
     let pos = 0;
     for (const { st, s: sAt } of plan) {
       await travel(mover, foot, cum, pos, sAt, speed); pos = Math.max(pos, sAt);
       if (st.u.side === 'enemy' && sk.melee) { await skillAnim(h, sk, 0.55); apply(st); await wait(120); }
-      else { apply(st); await wait(60); }
+      else { if (st.u.side === 'enemy') fxPush({ type: 'ring', x: st.u.x, y: st.u.y - 46, color: '#fff', dur: 300 }); apply(st); await wait(st.u.side === 'enemy' && !sk.melee ? 160 : 60); }
     }
     if (sk.shape !== 'dash') await travel(mover, foot, cum, pos, cum[cum.length - 1], speed);
     bolts = bolts.filter((b) => b !== mover);
@@ -509,6 +518,13 @@ function moveTo(u, to, speed = 0.9, hop = false) {
     };
     requestAnimationFrame(f);
   });
+}
+
+// 遠程招的飛行物：關公青色刀氣、月老紅心拖著紅線、雪女冰刺拖著霜
+function newBolt(h) { return { x: h.x, y: h.y, color: h.color, kind: h.id, trail: [] }; }
+async function windUp(h, sk) {
+  fxPush({ type: 'charge', u: h, color: h.color, dur: 450 });
+  await skillAnim(h, sk, 0.5);
 }
 
 // 播技能動作，等到出手那一格
@@ -1035,11 +1051,7 @@ function render(now) {
       g.setLineDash([]); g.globalAlpha = 1;
     }
     for (const u of [...heroes, ...foes].sort((a, b) => a.y - b.y)) drawUnit(u, now);
-    for (const b of bolts) {
-      const y = b.y - 46;
-      g.shadowColor = b.color; g.shadowBlur = 20; g.fillStyle = b.color; g.beginPath(); g.arc(b.x, y, 11, 0, Math.PI * 2); g.fill();
-      g.fillStyle = '#fff'; g.beginPath(); g.arc(b.x, y, 5, 0, Math.PI * 2); g.fill(); g.shadowBlur = 0;
-    }
+    for (const b of bolts) drawBolt(b, now);
     if (path.length > 1) {
       const sk = skill(), col = hero().color, glow = run.glow;
       g.lineCap = 'round'; g.lineJoin = 'round';
@@ -1084,9 +1096,42 @@ function render(now) {
     if (e.type === 'ring') { g.globalAlpha = 1 - k; g.strokeStyle = e.color; g.lineWidth = 4; g.beginPath(); g.arc(e.x, e.y, 20 + k * 40, 0, Math.PI * 2); g.stroke(); g.globalAlpha = 1; }
     if (e.type === 'ice') { g.globalAlpha = 0.7 * (1 - k); for (let s = 0; s < 6; s++) { g.fillStyle = s % 2 ? '#c0ecff' : '#fff'; g.fillRect(e.x - 30 + s * 11, e.y - 20 - (s % 3) * 14, 7, 20 + (s % 3) * 14); } g.globalAlpha = 1; }
     if (e.type === 'gaze') { g.globalAlpha = 0.5 * (1 - k); g.fillStyle = '#ff3048'; g.fillRect(0, FLOOR, W, H - FLOOR); g.globalAlpha = 1; }
+    if (e.type === 'charge' && !e.u.dead) { g.globalAlpha = 1 - k; g.strokeStyle = e.color; g.lineWidth = 6; g.shadowColor = e.color; g.shadowBlur = 20; g.beginPath(); g.arc(e.u.x, e.u.y - 46, 60 - k * 40, 0, Math.PI * 2); g.stroke(); g.shadowBlur = 0; g.globalAlpha = 1; }
+    if (e.type === 'area') { g.globalAlpha = 0.5 * (1 - k); g.fillStyle = e.color; g.beginPath(); e.poly.forEach((q, i) => i ? g.lineTo(q.x, q.y) : g.moveTo(q.x, q.y)); g.closePath(); g.fill(); g.globalAlpha = 1; }
     if (e.type === 'snap') { g.globalAlpha = 1 - k; g.fillStyle = '#fff'; for (let s = 0; s < 6; s++) g.fillRect(e.x + Math.cos(s) * k * 30 - 3, e.y + Math.sin(s) * k * 30 - 3, 6, 6); g.globalAlpha = 1; }
   }
   requestAnimationFrame(render);
+}
+
+function drawBolt(b, now) {
+  const p = { x: b.x, y: b.y - 46 }, tr = b.trail;
+  if (!tr.length || dist(tr[tr.length - 1], p) > 3) { tr.push(p); if (tr.length > 18) tr.shift(); }
+  const prev = tr.length > 2 ? tr[tr.length - 3] : { x: p.x - 1, y: p.y }, ang = Math.atan2(p.y - prev.y, p.x - prev.x);
+  // 尾巴
+  g.lineCap = 'round';
+  for (let i = 1; i < tr.length; i++) {
+    const k = i / tr.length;
+    g.globalAlpha = k * 0.8; g.strokeStyle = b.kind === 'yukionna' ? '#e0f6ff' : b.color; g.lineWidth = (b.kind === 'yuelao' ? 5 : 14) * k;
+    g.beginPath(); g.moveTo(tr[i - 1].x, tr[i - 1].y); g.lineTo(tr[i].x, tr[i].y); g.stroke();
+  }
+  g.globalAlpha = 1;
+  if (b.kind === 'yukionna') { g.fillStyle = '#fff'; tr.forEach((q, i) => { if (i % 3 === 0) g.fillRect(q.x - 2 + Math.sin(i + now / 80) * 6, q.y - 2 + Math.cos(i) * 6, 4, 4); }); }
+  g.save(); g.translate(p.x, p.y); g.rotate(ang); g.shadowColor = b.color; g.shadowBlur = 24;
+  if (b.kind === 'guangong') {
+    // 月牙形刀氣
+    g.fillStyle = '#80ffb0'; g.beginPath(); g.arc(0, 0, 28, -1.3, 1.3); g.arc(-12, 0, 24, 1.1, -1.1, true); g.closePath(); g.fill();
+    g.fillStyle = '#fff'; g.beginPath(); g.arc(2, 0, 22, -0.9, 0.9); g.arc(-8, 0, 20, 0.8, -0.8, true); g.closePath(); g.fill();
+  } else if (b.kind === 'yuelao') {
+    // 愛心
+    g.rotate(-ang); g.fillStyle = b.color; g.beginPath(); g.moveTo(0, 12);
+    g.bezierCurveTo(-26, -6, -12, -26, 0, -12); g.bezierCurveTo(12, -26, 26, -6, 0, 12); g.fill();
+    g.fillStyle = '#ffd0e0'; g.fillRect(-9, -14, 5, 5);
+  } else if (b.kind === 'yukionna') {
+    // 冰刺
+    g.fillStyle = '#c0ecff'; g.beginPath(); g.moveTo(28, 0); g.lineTo(-10, -11); g.lineTo(-4, 0); g.lineTo(-10, 11); g.closePath(); g.fill();
+    g.fillStyle = '#fff'; g.beginPath(); g.moveTo(24, 0); g.lineTo(-2, -5); g.lineTo(-2, 5); g.closePath(); g.fill();
+  } else { g.fillStyle = b.color; g.beginPath(); g.arc(0, 0, 13, 0, Math.PI * 2); g.fill(); }
+  g.restore(); g.shadowBlur = 0;
 }
 
 // ───── 介面 ─────
