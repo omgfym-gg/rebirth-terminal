@@ -33,6 +33,9 @@
   .box p { font-size: 14px; line-height: 1.55; margin: 6px 0; }
   .opt { display: block; width: 100%; text-align: left; margin-top: 8px; padding: 10px; font-size: 14px; line-height: 1.45; }
   .opt b { color: var(--gold); }
+  .pk { display: flow-root; }
+  .pk.on { border-color: var(--gold); background: #3a3420; }
+  .pk-art { float: left; height: 44px; margin-right: 8px; }
   .who { flex-wrap: wrap; }
   .gear-row { display: flex; gap: 5px; flex-basis: 100%; flex-wrap: wrap; }
   .gear-chip { padding: 3px 7px; font-size: 12px; border-width: 2px; }
@@ -84,28 +87,34 @@ const HOW = {
   circle: '在戰場上<b>畫一個圈</b>，頭尾接起來，圈住的目標都會中。',
   tap: '依序<b>點</b>想串起來的目標，紅線會在他們之間彈過去。',
 };
-const BASE_HP = { guangong: 52, yuelao: 40, yukionna: 36 };
-
 // 每位神魔固定：3 個主動招（普通、冷卻 1、大招冷卻 3）＋ 1 個被動（核心玩法）＋ 1 個天賦（隊友的線穿過他時發動）
 // 每招：shape 畫法、len 墨水長度、cd 冷卻、melee 近身（神魔自己跑過去打；沒有的話站著放，招式飛過去）、run 算出每個目標的效果
+// 角色欄位：faith 神／魔、hp 生命、res 自己的資源 [名字, 上限]、onHit 每打中一下、mod 改這一招的效果（只算不改狀態）、
+// talent 天賦發動（ctx.h 畫線的人、ctx.en 那條線打到的敵人、ctx.later 出招跑完後再做）、round 每輪開始
+const firstEnemy = (en) => en.slice(0, 1);
+const addRes = (h, n) => { const R = h.res && HEROES[h.id].res; if (!R || !n) return; const v = Math.max(0, Math.min(R[1], h.res + n)); if (v !== h.res) { h.res = v; float(h, `${R[0]} ${v}`, h.color, 18); } };
 const HEROES = {
   guangong: {
-    name: '關公', color: '#40d070', role: '近戰重擊',
-    passive: { n: '氣勢', d: '關公每打中敵人一下，氣勢 +1（最多 5，頭上顯示「勢」），每過一輪少 1。放青龍斬時用掉全部氣勢，每 1 點氣勢讓每一下多 4 傷害。' },
+    name: '關公', faith: '神', hp: 52, color: '#40d070', role: '近戰重擊', res: ['氣勢', 5],
+    passive: { n: '氣勢', d: '關公每打中敵人一下，氣勢 +1（最多 5，頭上顯示「氣」），每過一輪少 1。放青龍斬時用掉全部氣勢，每 1 點氣勢讓每一下多 4 傷害。' },
     talent: { n: '溫酒斬華雄', d: '隊友的線穿過關公（或穿過關公留下的線），關公下一招每一下傷害 +5、氣勢 +1。' },
+    onHit: (h) => addRes(h, 1),
+    round: (h) => { h.res = Math.max(0, h.res - 1); },
+    talentFx: (t) => { t.wine = 5; addRes(t, 1); },
     skills: [
       { name: '刺顏良', shape: 'dash', len: 300, melee: true, anim: 's1', desc: '衝到第一個敵人面前刺 9 傷害，目標生命不到一半改成 14。',
-        run: (en) => en.slice(0, 1).map((u) => ({ u, dmg: u.hp < u.maxHp / 2 ? 14 : 9 })) },
+        run: (en) => firstEnemy(en).map((u) => ({ u, dmg: u.hp < u.maxHp / 2 ? 14 : 9 })) },
       { name: '過五關斬六將', shape: 'zigzag', len: 900, cd: 1, melee: true, anim: 's2', desc: '每穿過敵人一次過一關，在敵人身上轉彎再多一關，最多 5 關，傷害 5、8、11、14、17。',
         run: (en) => en.slice(0, 5).map((u, i) => ({ u, dmg: 5 + i * 3 })) },
-      { name: '青龍斬', shape: 'line', len: 560, cd: 3, anim: 'ult', spendMom: true, desc: '揮出一道刀氣，直線上的敵人各受 12 傷害，每點氣勢多 4，用掉全部氣勢。',
-        run: (en, al, h) => en.map((u) => ({ u, dmg: 12 + 4 * h.mom })) },
+      { name: '青龍斬', shape: 'line', len: 560, cd: 3, anim: 'ult', spendRes: true, desc: '揮出一道刀氣，直線上的敵人各受 12 傷害，每點氣勢多 4，用掉全部氣勢。',
+        run: (en, al, h) => en.map((u) => ({ u, dmg: 12 + 4 * h.res })) },
     ],
   },
   yuelao: {
-    name: '月老', color: '#ff5c8d', role: '牽線支援',
+    name: '月老', faith: '神', hp: 40, color: '#ff5c8d', role: '牽線支援',
     passive: { n: '紅線', d: '月老打到的敵人綁上紅線（到下一輪）。綁紅線的敵人受傷，其他綁紅線的敵人也受一半。' },
     talent: { n: '向月檢書', d: '隊友的線穿過月老（或穿過月老留下的線），月老回 6 生命，那條線打到的敵人全部綁紅線。' },
+    talentFx: (t, c) => { apply({ u: t, heal: 6 }); for (const e of c.en) e.red = true; },
     skills: [
       { name: '赤繩繫足', shape: 'free', len: 820, anim: 'cast', desc: '紅繩飛過去：經過的敵人各受 5 傷害並綁紅線，經過的隊友各回 6 生命。',
         run: (en, al) => [...en.map((u) => ({ u, dmg: 5, red: true })), ...al.map((u) => ({ u, heal: 6 }))] },
@@ -116,9 +125,10 @@ const HEROES = {
     ],
   },
   yukionna: {
-    name: '雪女', color: '#a0e0ff', role: '冰凍控制',
+    name: '雪女', faith: '魔', hp: 36, color: '#a0e0ff', role: '冰凍控制',
     passive: { n: '冰霜', d: '打中疊冰霜，疊到 3 層就凍住（下次不能行動）。每輪少 1 層。打凍住的敵人叫碎冰。' },
     talent: { n: '雪地足跡', d: '隊友的線穿過雪女（或穿過雪女留下的線），那條線結成雪地，敵人走過去打人時疊 2 層冰霜。' },
+    talentFx: (t, c) => c.later(() => { if (path.length > 1) zones.push({ type: 'snow', pts: densify(path, 10).map((p) => ({ x: p.x, y: p.y + 46 })), done: new Set() }); }),
     skills: [
       { name: '冰柱', shape: 'line', len: 540, anim: 's1', desc: '射出冰柱：直線上的敵人各受 8 傷害、冰霜 1 層。凍住的敵人改成碎冰 16 傷害，但會解凍。',
         run: (en) => en.map((u) => (u.frozen ? { u, dmg: 16, thaw: true } : { u, dmg: 8, frost: 1 })) },
@@ -128,8 +138,161 @@ const HEROES = {
         run: (en) => en.map((u) => ({ u, dmg: 10, freeze: true })) },
     ],
   },
+  brigid: {
+    name: '布麗姬', faith: '神', hp: 44, color: '#ff8a30', role: '聖火與療癒',
+    passive: { n: '永恆之火', d: '布麗姬打中燃燒中的敵人，那一下傷害 +4。燃燒的敵人每輪開始受 3 傷害，燒完就熄。' },
+    talent: { n: '布麗姬十字', d: '隊友的線穿過布麗姬（或穿過她留下的線），那條線打到的敵人全部燃燒 2 輪。' },
+    mod: (h, s) => (s.dmg && s.u.burn ? { ...s, dmg: s.dmg + 4 } : s),
+    talentFx: (t, c) => { for (const e of c.en) addBurn(e, 2); },
+    skills: [
+      { name: '基爾代爾聖火', shape: 'free', len: 800, anim: 's2', desc: '聖火沿著線燒過去：經過的敵人各受 5 傷害、燃燒 2 輪。',
+        run: (en) => en.map((u) => ({ u, dmg: 5, burn: 2 })) },
+      { name: '鐵砧鍛造', shape: 'circle', len: 700, cd: 1, anim: 's1', desc: '圈住的隊友各得 8 護盾，圈住的敵人各受 4 傷害。',
+        run: (en, al) => [...al.map((u) => ({ u, shield: 8 })), ...en.map((u) => ({ u, dmg: 4 }))] },
+      { name: '詩歌療癒', shape: 'tap', max: 3, any: true, len: 1, cd: 3, anim: 'ult', desc: '點最多 3 個目標唱詩：隊友回 12 生命，敵人受 8 傷害、燃燒 3 輪。',
+        run: (en, al) => [...al.map((u) => ({ u, heal: 12 })), ...en.map((u) => ({ u, dmg: 8, burn: 3 }))] },
+    ],
+  },
+  tudigong: {
+    name: '土地公', faith: '神', hp: 54, color: '#ffc830', role: '守護與元寶', res: ['元寶', 5],
+    passive: { n: '元寶', d: '土地公每打中敵人一下，元寶 +1（最多 5，頭上顯示「元」）。張福德顯靈會用掉全部元寶，每個多 3 傷害。' },
+    talent: { n: '虎爺', d: '隊友的線穿過土地公（或穿過他留下的線），虎爺跳出來咬那條線打到的第一個敵人 8 傷害。' },
+    onHit: (h) => addRes(h, 1),
+    talentFx: (t, c) => { const e = c.en[0]; if (e) setTimeout(() => { float(e, '虎爺！', '#ffc830', 18); apply({ u: e, dmg: 8, shared: true }); }, 200); },
+    skills: [
+      { name: '巡境', shape: 'free', len: 760, anim: 's2', desc: '拐杖指路，金光沿線巡過去：經過的敵人各受 5 傷害。',
+        run: (en) => en.map((u) => ({ u, dmg: 5 })) },
+      { name: '護境安民', shape: 'circle', len: 700, cd: 1, anim: 's1', desc: '圈住的隊友各得 9 護盾；圈到幾位隊友，元寶就加幾個。',
+        run: (en, al, h) => [...al.map((u) => ({ u, shield: 9 })), ...(al.length ? [{ u: h, res: al.filter((u) => u !== h).length || 1 }] : [])] },
+      { name: '張福德顯靈', shape: 'line', len: 600, cd: 3, anim: 'ult', spendRes: true, desc: '土地公生前的真身現身：直線上的敵人各受 12 傷害，每個元寶多 3，用掉全部元寶。',
+        run: (en, al, h) => en.map((u) => ({ u, dmg: 12 + 3 * h.res })) },
+    ],
+  },
+  hermes: {
+    name: '赫爾墨斯', faith: '神', hp: 40, color: '#f0d070', role: '神速遊走', ink: 1.4, noCut: true,
+    passive: { n: '有翼涼鞋', d: '赫爾墨斯的墨水多 40%，畫的線不會被典獄長的鎖鏈剪斷。' },
+    talent: { n: '引魂者', d: '隊友的線穿過赫爾墨斯（或穿過他留下的線），那條線打到、生命不到兩成的敵人直接被帶走（精英除外）。' },
+    talentFx: (t, c) => { for (const e of c.en) if (!e.elite && e.hp <= e.maxHp * 0.2) apply({ u: e, execute: '引魂' }); },
+    skills: [
+      { name: '神使傳令', shape: 'free', len: 900, melee: true, anim: 's2', desc: '飛奔穿過去：經過的敵人各受 4 傷害，同一個敵人每多穿一次再 +2。',
+        run: (en) => { const n = new Map(); return en.map((u) => { const k = n.get(u) || 0; n.set(u, k + 1); return { u, dmg: 4 + 2 * k }; }); } },
+      { name: '偷牛小賊', shape: 'dash', len: 340, cd: 1, melee: true, anim: 's1', desc: '衝到第一個敵人面前偷襲 7 傷害，順手偷走他的力氣：他下次攻擊減半（恐懼）。',
+        run: (en) => firstEnemy(en).map((u) => ({ u, dmg: 7, fear: true })) },
+      { name: '斬百眼巨人', shape: 'zigzag', len: 1000, cd: 3, melee: true, anim: 'ult', desc: '吹笛讓阿耳戈斯睡著再斬：每過一關 9 傷害，最多 5 關。',
+        run: (en) => en.slice(0, 5).map((u) => ({ u, dmg: 9 })) },
+    ],
+  },
+  dagda: {
+    name: '達格達', faith: '神', hp: 60, color: '#d8a060', role: '巨棒與大鍋', res: ['飽足', 20],
+    passive: { n: '飽足', d: '達格達回血超過生命上限的部分存成飽足（最多 20，頭上顯示「飽」）。巨棒決斷會用掉全部飽足，每點多 1 傷害。' },
+    talent: { n: '豐饒之鍋', d: '隊友的線穿過達格達（或穿過他留下的線），畫線的那位隊友回 8 生命。' },
+    talentFx: (t, c) => apply({ u: c.h, heal: 8 }),
+    skills: [
+      { name: '巨棒決斷', shape: 'line', len: 380, melee: true, wide: true, anim: 's2', spendRes: true, desc: '扛著巨棒衝過去橫掃（判定特別寬）：直線上的敵人各受 9 傷害，用掉全部飽足，每點多 1。',
+        run: (en, al, h) => en.map((u) => ({ u, dmg: 9 + h.res })) },
+      { name: '豐收之歌', shape: 'circle', len: 700, cd: 1, anim: 's1', desc: '彈奏豐收之歌：圈住的隊友各回 10 生命（達格達自己回滿的部分變飽足）。',
+        run: (en, al) => al.map((u) => ({ u, heal: 10 })) },
+      { name: '生死巨棒', shape: 'dash', len: 320, cd: 3, melee: true, anim: 'ult', desc: '巨棒一端殺人一端救人：衝去砸第一個敵人 26 傷害；打倒的話全隊回 8 生命。',
+        run: (en) => firstEnemy(en).map((u) => ({ u, dmg: 26, killHeal: 8 })) },
+    ],
+  },
+  hanako: {
+    name: '花子', faith: '魔', hp: 42, color: '#b060e0', role: '恐懼與敲門', res: ['敲門', 3],
+    passive: { n: '敲門', d: '花子每打中敵人一下就敲一次門（頭上顯示「敲」）。敲滿 3 次，那一下把敵人拉進隔間，多 12 傷害，然後重新數。' },
+    talent: { n: '沖水', d: '隊友的線穿過花子（或穿過她留下的線），那條線打到的敵人全部恐懼（下次攻擊減半）。' },
+    // 照順序數敲門，數到 3 的那一下多 12（預覽和出招用同一套算法）
+    post: (h, res) => { let r = h.res; return res.map((s) => { if (!s.dmg || s.u.side !== 'enemy' || s.cross) return s; r++; if (r < 3) return s; r = 0; return { ...s, dmg: s.dmg + 12, pull: true }; }); },
+    onHit: (h, s) => { if (s.pull) { h.res = 0; float(s.u, '拉進隔間！', '#b060e0'); } else addRes(h, 1); },
+    talentFx: (t, c) => { for (const e of c.en) e.fear = true; },
+    skills: [
+      { name: '敲門三聲', shape: 'tap', max: 3, len: 1, anim: 's1', desc: '點最多 3 個敵人，各敲一下門：各受 4 傷害。',
+        run: (en) => en.map((u) => ({ u, dmg: 4 })) },
+      { name: '花子在嗎？', shape: 'circle', len: 700, cd: 1, anim: 's2', desc: '圈住的敵人各受 3 傷害並恐懼（下次攻擊減半）。',
+        run: (en) => en.map((u) => ({ u, dmg: 3, fear: true })) },
+      { name: '紅色披風', shape: 'free', len: 900, cd: 3, anim: 'ult', desc: '紅色披風捲過去：經過的敵人各受 8 傷害，恐懼中的改受 16。',
+        run: (en) => en.map((u) => ({ u, dmg: u.fear ? 16 : 8 })) },
+    ],
+  },
+  anubis: {
+    name: '阿努比斯', faith: '魔', hp: 48, color: '#f0c040', role: '冥界審判',
+    passive: { n: '天秤', d: '阿努比斯打生命比例比自己低的敵人，傷害加五成。' },
+    talent: { n: '木乃伊包紮', d: '隊友的線穿過阿努比斯（或穿過他留下的線），畫線的那位隊友得 8 護盾。' },
+    mod: (h, s) => (s.dmg && s.u.side === 'enemy' && !s.cross && s.u.hp / s.u.maxHp < h.hp / h.maxHp ? { ...s, dmg: Math.round(s.dmg * 1.5) } : s),
+    talentFx: (t, c) => apply({ u: c.h, shield: 8 }),
+    skills: [
+      { name: '靈魂審判', shape: 'dash', len: 320, melee: true, anim: 's1', desc: '衝去用權杖重擊第一個敵人 9 傷害。',
+        run: (en) => firstEnemy(en).map((u) => ({ u, dmg: 9 })) },
+      { name: '法老的詛咒', shape: 'line', len: 560, cd: 1, anim: 's2', desc: '直線上的敵人各受 5 傷害並恐懼（下次攻擊減半）。',
+        run: (en) => en.map((u) => ({ u, dmg: 5, fear: true })) },
+      { name: '吞噬者阿米特', shape: 'dash', len: 360, cd: 3, melee: true, anim: 'ult', desc: '衝向第一個敵人：生命不到三成的一般敵人直接被吞掉、阿努比斯回 10；其他的受 20 傷害。',
+        run: (en, al, h) => firstEnemy(en).flatMap((u) => (!u.elite && u.hp < u.maxHp * 0.3 ? [{ u, execute: '吞掉' }, { u: h, heal: 10 }] : [{ u, dmg: 20 }])) },
+    ],
+  },
+  hachi: {
+    name: '八尺大人', faith: '魔', hp: 46, color: '#e8e8ff', role: '恐懼與標記',
+    passive: { n: '七日之期', d: '八尺大人打到的敵人被標記（頭上顯示「標」），整層都在。被標記的敵人受到每一下攻擊都 +2，誰打都算。' },
+    talent: { n: '帽簷下的視線', d: '隊友的線穿過八尺大人（或穿過她留下的線），那條線打到的敵人全部被標記。' },
+    onHit: (h, s) => { s.u.mark = true; },
+    talentFx: (t, c) => { for (const e of c.en) e.mark = true; },
+    skills: [
+      { name: '波波波', shape: 'line', len: 560, anim: 's1', desc: '低沉的「波、波、波」：直線上的敵人各受 6 傷害並恐懼。',
+        run: (en) => en.map((u) => ({ u, dmg: 6, fear: true })) },
+      { name: '八尺身影', shape: 'circle', len: 700, cd: 1, anim: 's2', desc: '圈住的隊友各得 7 護盾，圈住的敵人各受 2 傷害並恐懼。',
+        run: (en, al) => [...al.map((u) => ({ u, shield: 7 })), ...en.map((u) => ({ u, dmg: 2, fear: true }))] },
+      { name: '凝視', shape: 'tap', max: 2, len: 1, cd: 3, anim: 'ult', desc: '盯上最多 2 個敵人：各受 18 傷害，恐懼中的改成 28。',
+        run: (en) => en.map((u) => ({ u, dmg: u.fear ? 28 : 18 })) },
+    ],
+  },
+  medusa: {
+    name: '美杜莎', faith: '魔', hp: 44, color: '#70d060', role: '石化',
+    passive: { n: '石化', d: '美杜莎每打中敵人一下疊 1 層石化（頭上顯示「石」），疊到 3 層變成石像，下次不能行動。' },
+    talent: { n: '蛇毒', d: '隊友的線穿過美杜莎（或穿過她留下的線），那條線打到的敵人各疊 1 層石化。' },
+    onHit: (h, s) => addStone(s.u, 1),
+    talentFx: (t, c) => { for (const e of c.en) addStone(e, 1); },
+    skills: [
+      { name: '蛇髮', shape: 'free', len: 760, melee: true, anim: 's2', desc: '蛇髮一路咬過去：經過的敵人各受 5 傷害。',
+        run: (en) => en.map((u) => ({ u, dmg: 5 })) },
+      { name: '石化凝視', shape: 'line', len: 600, cd: 1, anim: 's1', desc: '直線上的敵人各受 4 傷害、多疊 1 層石化。',
+        run: (en) => en.map((u) => ({ u, dmg: 4, stone: 1 })) },
+      { name: '雅典娜的詛咒', shape: 'circle', len: 700, cd: 3, anim: 'ult', desc: '圈住的敵人各受 6 傷害、多疊 2 層石化；已經是石像的直接碎掉，改受 20。',
+        run: (en) => en.map((u) => (u.stun ? { u, dmg: 20, unstun: true } : { u, dmg: 6, stone: 2 })) },
+    ],
+  },
+  horusshadow: {
+    name: '荷魯斯之影', faith: '魔', hp: 46, color: '#e0b850', role: '暗影與碎片', res: ['眼之碎片', 6],
+    passive: { n: '眼之碎片', d: '戰場上會掉出眼之碎片（金色小眼睛），任何人畫的線經過就撿起來給荷魯斯之影（最多 6，頭上顯示「眼」）。天空之神的審判會用掉全部碎片，集滿 6 片傷害加倍。' },
+    talent: { n: '真知之眼', d: '隊友的線穿過荷魯斯之影（或穿過他留下的線），眼之碎片 +2。' },
+    talentFx: (t) => addRes(t, 2),
+    skills: [
+      { name: '權杖金光', shape: 'line', len: 600, anim: 'punch', desc: '權杖射出金光：直線上的敵人各受 7 傷害。',
+        run: (en) => en.map((u) => ({ u, dmg: 7 })) },
+      { name: '暗影之眼', shape: 'tap', max: 3, len: 1, cd: 1, anim: 'cast', desc: '點最多 3 個敵人，面具上的眼睛放出暗影：各受 5 傷害。',
+        run: (en) => en.map((u) => ({ u, dmg: 5 })) },
+      { name: '天空之神的審判', shape: 'circle', len: 700, cd: 3, anim: 'cast', spendRes: true, desc: '圈住的敵人各受 10 傷害，每片碎片多 2；集滿 6 片再加倍。用掉全部碎片。',
+        run: (en, al, h) => en.map((u) => ({ u, dmg: (10 + 2 * h.res) * (h.res >= 6 ? 2 : 1) })) },
+    ],
+  },
+  redgirl: {
+    name: '紅衣小女孩', faith: '魔', hp: 44, color: '#ff4050', role: '迷途',
+    passive: { n: '迷途', d: '紅衣小女孩每打中敵人一下疊 1 層迷途（頭上顯示「迷」），疊到 5 層敵人就迷路：下次行動改打自己的同伴。' },
+    talent: { n: '跟我走', d: '隊友的線穿過紅衣小女孩（或穿過她留下的線），那條線打到的敵人各疊 1 層迷途。' },
+    onHit: (h, s) => addLost(s.u, 1),
+    talentFx: (t, c) => { for (const e of c.en) addLost(e, 1); },
+    skills: [
+      { name: '牽手', shape: 'dash', len: 320, melee: true, anim: 'punch', desc: '撲到第一個敵人面前抓住他：6 傷害、多疊 2 層迷途。',
+        run: (en) => firstEnemy(en).map((u) => ({ u, dmg: 6, lost: 2 })) },
+      { name: '紅霧', shape: 'circle', len: 700, cd: 1, anim: 'cast', desc: '召出紅色山霧：圈住的敵人各受 3 傷害、多疊 1 層迷途。',
+        run: (en) => en.map((u) => ({ u, dmg: 3, lost: 1 })) },
+      { name: '深山迷途', shape: 'free', len: 1000, cd: 3, anim: 'cast', desc: '把敵人帶進深山：經過的敵人各受 5 傷害、多疊 2 層迷途；已經迷路的再多受 10。',
+        run: (en) => en.map((u) => ({ u, dmg: u.confused ? 15 : 5, lost: 2 })) },
+    ],
+  },
 };
-const ORDER = ['guangong', 'yuelao', 'yukionna'];
+const ALL_IDS = Object.keys(HEROES);
+const PARTY_KEY = 'rebirth-redline-party-v1';
+// 這次出戰的三位（存在手機裡，下次預設同一隊）
+let ORDER = (() => { try { const p = JSON.parse(localStorage.getItem(PARTY_KEY)); if (Array.isArray(p) && p.length === 3 && p.every((id) => HEROES[id])) return p; } catch (e) { /* 沒存過 */ } return ['guangong', 'yuelao', 'yukionna']; })();
+const BASE_HP = Object.fromEntries(ALL_IDS.map((id) => [id, HEROES[id].hp]));
 const FOES = {
   zombie: { name: '夜行殭屍', sprite: 'zombie', hp: 30, atk: 11, d: '半夜還抱著公文在走廊遊蕩的殭屍。會走到目標面前咬一口。' },
   wisp:   { name: '鬼火', sprite: 'wisp', hp: 16, atk: 8, d: '飄忽不定的藍色火焰，生命不多，會飄到目標身邊燒一下。' },
@@ -141,18 +304,41 @@ let run, heroes, foes, chains = [], path = [], closed, hits = [], hitAt = [], in
 let trails = [], bolts = [], zz = new Map();
 
 function newRun() {
-  run = { floor: 0, up: { dmg: 0, ink: 1 }, maxHp: { ...BASE_HP }, hp: { ...BASE_HP } };
-  nextFloor();
+  pickParty(() => {
+    run = { floor: 0, up: { dmg: 0, ink: 1 }, maxHp: { ...BASE_HP }, hp: { ...BASE_HP } };
+    nextFloor();
+  });
+}
+
+// 出發前選三位神魔（順序就是出手順序）
+function pickParty(done) {
+  let sel = ORDER.slice();
+  const draw = () => {
+    showBox(`<h2>選三位出戰</h2><p class="muted">已選 ${sel.length}/3，點一下加入或拿掉。號碼是出手順序。</p>
+      ${ALL_IDS.map((id) => { const H = HEROES[id], on = sel.includes(id);
+        return `<button class="btn opt pk${on ? ' on' : ''}" data-id="${id}"><b style="color:${H.color}">${on ? sel.indexOf(id) + 1 + '. ' : ''}${H.name}</b>（${H.faith}族・${H.role}）<br><span class="muted">${H.skills.map((k) => k.name).join('、')}・天賦 ${H.talent.n}</span></button>`; }).join('')}
+      <button class="btn primary wide pgo" style="margin-top:10px" ${sel.length === 3 ? '' : 'disabled'}>出發</button>`);
+    document.querySelectorAll('.box .pk').forEach((b) => {
+      const c = artImg(b.dataset.id, 44); c.className = 'pk-art'; b.prepend(c);
+      b.onclick = () => { const id = b.dataset.id; if (sel.includes(id)) sel = sel.filter((x) => x !== id); else if (sel.length < 3) sel.push(id); draw(); };
+    });
+    $('.box .pgo').onclick = () => {
+      ORDER = sel;
+      try { localStorage.setItem(PARTY_KEY, JSON.stringify(sel)); } catch (e) { /* 存不了就只在這次有效 */ }
+      hideBox(); done();
+    };
+  };
+  draw();
 }
 
 function nextFloor() {
   run.floor++;
   const f = run.floor, k = 1 + 0.15 * (f - 1);
-  heroes = ORDER.map((id) => ({ id, ...HEROES[id], side: 'ally', art: id, maxHp: run.maxHp[id], hp: run.hp[id], dead: run.hp[id] <= 0, x: 0, y: 0, shield: 0, flash: 0, cds: [0, 0, 0], anim: null, taunt: false, mom: 0, wine: 0 }));
+  heroes = ORDER.map((id) => ({ id, ...HEROES[id], side: 'ally', art: id, maxHp: run.maxHp[id], hp: run.hp[id], dead: run.hp[id] <= 0, x: 0, y: 0, shield: 0, flash: 0, cds: [0, 0, 0], anim: null, taunt: false, res: 0, wine: 0 }));
   const keys = f % 3 === 0 ? ['warden', 'zombie', ...(f >= 6 ? ['wisp'] : [])] : f === 1 ? ['zombie', 'wisp'] : ['zombie', 'zombie', 'wisp', ...(f >= 4 ? ['wisp'] : [])];
-  foes = keys.map((key) => ({ key, ...FOES[key], side: 'enemy', maxHp: Math.round(FOES[key].hp * k), hp: Math.round(FOES[key].hp * k), atk: Math.round(FOES[key].atk * k), dead: false, frozen: false, confused: false, frost: 0, red: false, flash: 0, x: 0, y: 0 }));
+  foes = keys.map((key) => ({ key, ...FOES[key], side: 'enemy', maxHp: Math.round(FOES[key].hp * k), hp: Math.round(FOES[key].hp * k), atk: Math.round(FOES[key].atk * k), dead: false, frozen: false, confused: false, frost: 0, red: false, burn: 0, fear: false, mark: false, stone: 0, stun: false, lost: 0, flash: 0, x: 0, y: 0 }));
   place(true);
-  effects = []; trails = []; bolts = []; turn = 0; who = -1; busy = false; gearNewRound(true);
+  effects = []; trails = []; bolts = []; shards = []; turn = 0; who = -1; busy = false; gearNewRound(true);
   nextHero();
   showBox(`<h2>第 ${f} 層${keys.includes('warden') ? '・精英' : ''}</h2>
     <p>敵人：${keys.map((x) => FOES[x].name).join('、')}</p>
@@ -194,8 +380,11 @@ async function nextHero() {
 async function newRound() {
   gearNewRound();
   trails = [];
-  for (const h of heroes) { h.taunt = false; h.mom = Math.max(0, h.mom - 1); }
+  for (const h of heroes) { h.taunt = false; if (h.round) h.round(h); }
   for (const e of foes) { e.frost = Math.max(0, e.frost - 1); e.red = false; }
+  // 燃燒：每輪開始燒 3
+  for (const e of foes) if (!e.dead && e.burn) { e.burn--; tickDmg(e, 3, '#ff8a30'); fxPush({ type: 'burst', x: e.x, y: e.y - 46, color: '#ff8a30', dur: 450, seed: 2 }); }
+  spawnShards();
   // 新的一輪：敵人退回右邊重整隊形，神魔留在上一手停下的位置
   await Promise.all(foes.filter((e) => !e.dead).map((e) => e.x < 330 ? moveTo(e, { x: rnd(340, 545), y: e.y }, 0.8).then(() => { e.face = -1; }) : null));
   await settle();
@@ -216,7 +405,7 @@ function makeChains() {
 
 const hero = () => heroes && heroes[who];
 const skill = () => hero().skills[skillIdx];
-const inkMax = () => Math.round(skill().len * run.up.ink);
+const inkMax = () => Math.round(skill().len * run.up.ink * (hero().ink || 1));
 function clearPath() { path = []; hits = []; hitAt = []; inside = new Set(); zz = new Map(); closed = false; drawing = false; crossMemo = null; updateUi(); }
 
 // ───── 畫線 ─────
@@ -314,7 +503,7 @@ cv.addEventListener('pointermove', (ev) => {
   const used = pathLen(), max = inkMax();
   if (used + d > max) { const k = (max - used) / d; p.x = last.x + (p.x - last.x) * k; p.y = last.y + (p.y - last.y) * k; }
   if (freeShape(sk)) {
-    for (const c of chains) if (segCross(last, p, { x: c.x1, y: c.y1 }, { x: c.x2, y: c.y2 })) { path.push(cutAt(last, p, c)); fxPush({ type: 'snap', x: p.x, y: p.y, dur: 600 }); drawing = false; updateUi(); tip('紅線被<b>鎖鏈</b>剪斷了。'); return; }
+    for (const c of hero().noCut ? [] : chains) if (segCross(last, p, { x: c.x1, y: c.y1 }, { x: c.x2, y: c.y2 })) { path.push(cutAt(last, p, c)); fxPush({ type: 'snap', x: p.x, y: p.y, dur: 600 }); drawing = false; updateUi(); tip('紅線被<b>鎖鏈</b>剪斷了。'); return; }
     path.push(p);
     if (sk.shape === 'zigzag') zigzagStep(last, p);
     // 線每「穿進」敵人一次就多打一下；隊友只算一次
@@ -373,7 +562,12 @@ cv.addEventListener('pointercancel', () => { endDraw(); pressEnd(); });
 function results() {
   const h = hero(), en = hits.filter((u) => u.side === 'enemy'), al = hits.filter((u) => u.side === 'ally');
   const bonus = run.up.dmg + (h.wine || 0);
-  const res = gearResults(h, skill().run(en, al, h).map((s) => (s.dmg ? { ...s, dmg: s.dmg + bonus } : s)));
+  let res = skill().run(en, al, h).map((s) => (s.dmg ? { ...s, dmg: s.dmg + bonus } : s));
+  if (h.mod) res = res.map((s) => h.mod(h, s));
+  // 七日之期：被標記的敵人每一下 +2
+  res = res.map((s) => (s.dmg && s.u.mark ? { ...s, dmg: s.dmg + 2 } : s));
+  if (h.post) res = h.post(h, res);
+  res = gearResults(h, res);
   // 紅線交會：交叉點附近的敵人各受 6 傷害
   for (const c of crossings()) for (const e of foes) if (!e.dead && dist(center(e), c) < 90) res.push({ u: e, dmg: 6, cross: c });
   return res;
@@ -404,16 +598,14 @@ function talentsHit() {
   for (const c of crossings()) if (!c.owner.dead) s.add(c.owner);
   return [...s];
 }
-function fireTalents(list) {
+function fireTalents(list, h) {
+  const later = [], en = [...new Set(hits.filter((u) => u.side === 'enemy' && !u.dead))];
   for (const t of list) {
     float(t, t.talent.n, t.color, 20);
     fxPush({ type: 'ring', x: t.x, y: t.y - 46, color: t.color, dur: 600 });
-    if (t.id === 'guangong') { t.wine = 5; t.mom = Math.min(5, t.mom + 1); }
-    if (t.id === 'yuelao') {
-      apply({ u: t, heal: 6 });
-      for (const e of new Set(hits.filter((u) => u.side === 'enemy' && !u.dead))) e.red = true;
-    }
+    if (t.talentFx) t.talentFx(t, { h, en, later: (f) => later.push(f) });
   }
+  return later;
 }
 
 // ───── 出招 ─────
@@ -423,11 +615,11 @@ async function go() {
   busy = true; updateUi(); renderSkills();
   gearLink(h);
   h.cds[skillIdx] = (sk.cd || 0) + 1;
-  if (sk.spendMom) h.mom = 0;
+  if (sk.spendRes) h.res = 0;
   h.wine = 0;
   float(h, sk.name, h.color, 26);
   run.glow = { t0: performance.now(), ms: 350 };
-  fireTalents(tal);
+  const later = fireTalents(tal, h);
   const self = steps.filter((x) => x.u === h && !x.cross), others = steps.filter((x) => x.u !== h && !x.cross);
   if (sk.shape === 'circle') {
     // 畫圈：近身招跳到圈的中間施法，遠程招站在原地施法；圈裡的目標一起中
@@ -478,8 +670,8 @@ async function go() {
   for (const st of self) apply(st);
   h.moving = false;
   trails.push({ owner: h, pts: path.slice(), loop: sk.shape === 'circle' });
-  // 雪地足跡：這條線結成雪地
-  if (tal.some((t) => t.id === 'yukionna') && path.length > 1) zones.push({ type: 'snow', pts: densify(path, 10).map((p) => ({ x: p.x, y: p.y + 46 })), done: new Set() });
+  later.forEach((f) => f());
+  pickShards();
   await gearAfterMove(h, sk);
   await settle();
   await wait(350);
@@ -562,7 +754,7 @@ function apply(s) {
   if (s.red && !u.red) { u.red = true; setTimeout(() => float(u, '紅線', '#ff5c8d', 18), 120); }
   if (s.dmg && u.side === 'enemy' && !s.shared && !s.linked && !s.cross) {
     const h = hero();
-    if (h.id === 'guangong') h.mom = Math.min(5, h.mom + 1);
+    if (h.onHit) h.onHit(h, s);
     // 紅線：一個受傷，其他綁紅線的也受一半
     const v = Math.floor(s.dmg / 2);
     if (u.red && v > 0) for (const o of foes) if (o !== u && o.red && !o.dead) setTimeout(() => { fxPush({ type: 'thread', a: center(u), b: center(o), dur: 500 }); apply({ u: o, dmg: v, shared: true, linked: true }); }, 200);
@@ -573,14 +765,58 @@ function apply(s) {
     fxPush({ type: 'burst', x: u.x, y: u.y - 46, color: hero().color, dur: 450, seed: Math.random() * 6 });
     if (u.hp <= 0) { u.hp = 0; u.dead = true; u.deadAt = performance.now(); }
   }
+  if (s.execute && !u.dead) { u.hp = 0; u.dead = true; u.deadAt = performance.now(); float(u, s.execute + '！', '#ffe070'); fxPush({ type: 'burst', x: u.x, y: u.y - 46, color: '#ffe070', dur: 600, seed: 3 }); return; }
+  if (s.killHeal && u.dead) for (const a of heroes) if (!a.dead) apply({ u: a, heal: s.killHeal });
+  if (s.burn && !u.dead) addBurn(u, s.burn);
+  if (s.fear && !u.dead && !u.fear) { u.fear = true; setTimeout(() => float(u, '恐懼', '#d0b0ff', 18), 200); }
+  if (s.stone && !u.dead) addStone(u, s.stone);
+  if (s.unstun && !u.dead) { u.stun = false; float(u, '石像碎裂', '#c0c0c0'); }
+  if (s.lost && !u.dead) addLost(u, s.lost);
+  if (s.res) addRes(u, s.res);
   if (s.thaw && !u.dead) { u.frozen = false; setTimeout(() => float(u, '碎冰', '#c0ecff'), 150); fxPush({ type: 'ice', x: u.x, y: u.y, dur: 500 }); }
   if (s.frost && !u.dead) addFrost(u, s.frost);
   if (s.freeze && !u.dead) { u.frozen = true; u.frost = 0; fxPush({ type: 'ice', x: u.x, y: u.y, dur: 700 }); float(u, '凍住', '#a0e0ff'); }
   if (s.confuse && !u.dead) { u.confused = true; setTimeout(() => float(u, '亂點鴛鴦', '#ff5c8d'), 200); }
+  if (s.heal && u.id === 'dagda' && s.heal > u.maxHp - u.hp) addRes(u, s.heal - (u.maxHp - u.hp));
   if (s.heal) { const v = Math.min(s.heal, u.maxHp - u.hp); if (v > 0) { u.hp += v; float(u, '+' + v, '#7fe07f'); fxPush({ type: 'ring', x: u.x, y: u.y - 46, color: '#7fe07f', dur: 500 }); } }
   if (s.shield) { u.shield += s.shield; setTimeout(() => float(u, '盾 +' + s.shield, '#ffe070'), 150); fxPush({ type: 'ring', x: u.x, y: u.y - 46, color: '#ffe070', dur: 500 }); }
   if (s.taunt) { u.taunt = true; for (const e of foes) if (!e.dead && !e.elite) e.intent = { target: u, dmg: e.atk }; float(u, '嘲諷', '#40d070'); }
   gearOnApply(s);
+}
+
+// 不經過出招的傷害（燃燒）
+function tickDmg(u, n, color) {
+  if (u.dead) return;
+  u.hp -= n; u.flash = performance.now() + 200; float(u, String(n), color);
+  if (u.hp <= 0) { u.hp = 0; u.dead = true; u.deadAt = performance.now(); }
+}
+function addBurn(u, n) { if (u.dead) return; u.burn = Math.max(u.burn, n); setTimeout(() => float(u, '燃燒', '#ff8a30', 18), 220); }
+// 石化疊到 3 層變石像（下次不能行動）
+function addStone(u, n) {
+  if (u.dead || u.stun) return;
+  u.stone += n;
+  if (u.stone < 3) return;
+  u.stone = 0; u.stun = true; setTimeout(() => float(u, '變成石像', '#c0c0c0'), 240);
+}
+// 迷途疊到 5 層就迷路（下次打自己人）
+function addLost(u, n) {
+  if (u.dead) return;
+  u.lost += n;
+  if (u.lost < 5) return;
+  u.lost = 0; u.confused = true; setTimeout(() => float(u, '迷路了', '#ff4050'), 240);
+}
+// 眼之碎片：隊伍裡有荷魯斯之影才會掉，場上最多 4 片
+let shards = [];
+function spawnShards() {
+  const ho = heroes.find((h) => h.id === 'horusshadow' && !h.dead);
+  if (!ho) return;
+  for (let i = 0; i < 2 && shards.length < 4; i++) shards.push({ x: rnd(80, 540), y: rnd(290, 640) });
+}
+function pickShards() {
+  const ho = heroes.find((h) => h.id === 'horusshadow' && !h.dead);
+  if (!ho || path.length < 2) return;
+  const pts = densify(path, 10);
+  shards = shards.filter((c) => { if (!pts.some((p) => dist(p, c) < 34)) return true; addRes(ho, 1); fxPush({ type: 'ring', x: c.x, y: c.y, color: '#e0b850', dur: 500 }); return false; });
 }
 
 // 冰霜疊到 3 層就凍住；回傳這次有沒有凍住
@@ -597,6 +833,10 @@ async function enemyTurn() {
   for (const e of foes) {
     if (e.dead) continue;
     if (e.frozen) { e.frozen = false; float(e, '凍住，跳過', '#a0e0ff'); await wait(380); continue; }
+    if (e.stun) { e.stun = false; float(e, '石像，跳過', '#c0c0c0'); await wait(380); continue; }
+    // 恐懼：這次攻擊減半
+    const scare = e.fear; e.fear = false;
+    const hit = (n) => (scare ? Math.ceil(n / 2) : n);
     const alive = heroes.filter((h) => !h.dead);
     if (e.confused) {
       e.confused = false;
@@ -605,16 +845,16 @@ async function enemyTurn() {
         const o = pick(mates);
         if (!await approach(e, o)) { await wait(380); continue; }
         e.lunge = performance.now(); await wait(180);
-        o.hp -= e.atk; o.flash = performance.now() + 200; float(o, String(e.atk), '#ff5c8d');
+        o.hp -= hit(e.atk); o.flash = performance.now() + 200; float(o, String(hit(e.atk)), '#ff5c8d');
         if (o.hp <= 0) { o.hp = 0; o.dead = true; o.deadAt = performance.now(); }
       } else float(e, '發呆', '#ff5c8d');
     } else if (e.intent.all) {
       // 典獄長全隊攻擊：原地放出凝視
       e.lunge = performance.now(); fxPush({ type: 'gaze', x: e.x, y: e.y - 60, dur: 600 }); await wait(250);
-      for (const h of alive) hurt(h, e.intent.dmg);
+      for (const h of alive) hurt(h, hit(e.intent.dmg));
     } else {
       const t = e.intent.target.dead ? pick(alive) : e.intent.target;
-      if (t && await approach(e, t)) { e.lunge = performance.now(); await wait(180); hurt(t, e.intent.dmg); }
+      if (t && await approach(e, t)) { e.lunge = performance.now(); await wait(180); hurt(t, hit(e.intent.dmg)); }
     }
     await wait(380);
     if (heroes.every((h) => h.dead)) return lose();
@@ -682,7 +922,7 @@ function tip(html) { $('.tip').innerHTML = html; }
 // ───── 裝備：神器和邪物，效果都是改變線的畫法 ─────
 // 每位神魔兩格（兵器、法寶）。神族只能用神器、魔族只能用邪物，專屬兵器只有本人能用。背包跟著靈魂走，存在手機裡。
 const SLOT = { weapon: '兵器', charm: '法寶' };
-const SIDE = { guangong: '神', yuelao: '神', yukionna: '魔' };
+const SIDE = Object.fromEntries(ALL_IDS.map((id) => [id, HEROES[id].faith]));
 const GEAR = {
   ex_guangong: { n: '青龍偃月刀', kind: '神器', slot: 'weapon', own: 'guangong', icon: '青', color: '#40d070', from: '三國演義',
     d: '過關斬將：直線每砍死一個敵人，線就再往前多斬一段。直線招式傷害 +3。' },
@@ -711,7 +951,7 @@ const saveGear = () => { try { localStorage.setItem(GEAR_KEY, JSON.stringify(gs)
 const gearOf = (h) => Object.values(gs.eq[h.id] || {}).filter((id) => GEAR[id]);
 const wears = (h, id) => !!h && gearOf(h).includes(id);
 const canUse = (heroId, id) => { const it = GEAR[id]; return it.own ? it.own === heroId : it.kind === (SIDE[heroId] === '神' ? '神器' : '邪物'); };
-const hitR = () => HIT_R * (wears(hero(), 'ruyi') ? 1.5 : 1);
+const hitR = () => HIT_R * (wears(hero(), 'ruyi') ? 1.5 : 1) * (skill().wide ? 1.5 : 1);
 const lineShape = (sk) => sk.shape === 'line' || sk.shape === 'dash';
 const freeShape = (sk) => sk.shape === 'free' || sk.shape === 'zigzag';
 let zones = [], flying = null;
@@ -738,7 +978,7 @@ function rayPath(s, dir, L, extra = 0) {
     break;
   }
   // 鎖鏈把線剪斷
-  for (let i = 1; i < pts.length; i++) for (const c of chains) {
+  for (let i = 1; i < pts.length; i++) for (const c of hero().noCut ? [] : chains) {
     const a = pts[i - 1], b = pts[i];
     if (segCross(a, b, { x: c.x1, y: c.y1 }, { x: c.x2, y: c.y2 })) { pts[i] = cutAt(a, b, c); pts.length = i + 1; }
   }
@@ -998,7 +1238,8 @@ function statusRows(u) {
   if (u.side === 'ally') {
     if (u.dead) r.push(['倒下', '這一層不能行動，過關後回復三成生命。']);
     if (u.shield) r.push([`護盾 ${u.shield}`, '先替他擋掉這麼多傷害。']);
-    if (u.id === 'guangong') r.push([`氣勢 ${u.mom}/5`, HEROES.guangong.passive.d]);
+    const R = HEROES[u.id].res;
+    if (R) r.push([`${R[0]} ${u.res}/${R[1]}`, u.passive.d]);
     if (u.wine) r.push(['溫酒', `天賦「${u.talent.n}」發動中：下一招每一下傷害 +${u.wine}。`]);
     if (u.taunt) r.push(['嘲諷', '這一輪一般敵人都改打他（精英不受影響）。']);
     const aim = foes.filter((e) => !e.dead && !e.frozen && !e.confused && e.intent && (e.intent.all || e.intent.target === u));
@@ -1008,7 +1249,13 @@ function statusRows(u) {
     if (u.frost) r.push([`冰霜 ${u.frost}/${FROST_MAX}`, `疊到 ${FROST_MAX} 層就凍住，每過一輪少 1 層。雪女的冰柱打凍住的敵人會碎冰重擊。`]);
     if (u.red) r.push(['紅線（緣）', '月老綁上的紅線，到下一輪為止：他受傷時，其他綁紅線的敵人也受一半。']);
     if (u.link && !u.link.dead) r.push(['姻緣簿', `和${u.link.name}綁在一起：其中一個受傷，另一個也受一半。`]);
-    if (u.confused) r.push(['亂點鴛鴦', '下一次行動改打自己的同伴。']);
+    if (u.confused) r.push(['錯亂', '被亂點鴛鴦或迷路了：下一次行動改打自己的同伴。']);
+    if (u.stun) r.push(['石像', '被美杜莎石化：下一次輪到他時不能行動。雅典娜的詛咒打石像會碎掉重擊。']);
+    if (u.stone) r.push([`石化 ${u.stone}/3`, '疊到 3 層變成石像，下次不能行動。']);
+    if (u.burn) r.push([`燃燒 ${u.burn} 輪`, '每輪開始受 3 傷害。布麗姬打燃燒中的敵人每一下多 4。']);
+    if (u.fear) r.push(['恐懼', '下一次攻擊傷害減半。']);
+    if (u.mark) r.push(['七日之期', '被八尺大人標記，整層都在：受到每一下攻擊都 +2。']);
+    if (u.lost) r.push([`迷途 ${u.lost}/5`, '疊到 5 層就迷路，下次行動改打自己的同伴。']);
   }
   return r;
 }
@@ -1095,17 +1342,21 @@ function drawUnit(u, now) {
     g.fillStyle = u === hero() ? '#ffe070' : '#fff'; g.fillText(`${u.name} ${u.hp}`, u.x, top - 8);
     gearIcons(u, top);
     if (u.shield) { g.fillStyle = '#ffe070'; g.fillText('盾 ' + u.shield, u.x + 52, top + 6); }
-    if (u.mom) { g.fillStyle = '#40d070'; g.fillText('勢' + u.mom, u.x - 52, top + 22); }
+    if (u.res) { g.fillStyle = u.color; g.fillText(HEROES[u.id].res[0][0] + u.res, u.x - 52, top + 22); }
     if (u.wine) { g.fillStyle = '#ffb040'; g.fillText('酒', u.x + 52, top + 22); }
     const aimed = foes.some((e) => !e.dead && !e.frozen && !e.confused && e.intent && (e.intent.all || e.intent.target === u));
     if (aimed) { g.fillStyle = Math.floor(now / 250) % 2 ? '#ff4050' : '#ffb0b0'; g.fillRect(u.x - 52, top - 26, 6, 16); g.fillRect(u.x - 52, top - 7, 6, 5); }
   } else if (u.intent) {
-    const t = u.frozen ? '凍住，跳過' : u.confused ? '會打同伴' : u.intent.all ? `全隊 ${u.intent.dmg}` : `${u.intent.target.name} ${u.intent.dmg}`;
+    const t = u.frozen ? '凍住，跳過' : u.stun ? '石像，跳過' : u.confused ? '會打同伴' : u.intent.all ? `全隊 ${u.intent.dmg}` : `${u.intent.target.name} ${u.intent.dmg}`;
     g.fillStyle = u.frozen ? '#a0e0ff' : u.confused ? '#ff8ac0' : '#ff8a8a'; g.fillText('⚔ ' + t, u.x, top - 8);
   }
   if (u.side === 'enemy') {
-    if (u.frost) { g.fillStyle = '#a0e0ff'; g.fillText('霜' + u.frost, u.x + 50, top + 7); }
-    if (u.red) { g.fillStyle = '#ff5c8d'; g.fillText('緣', u.x - 46, top + 7); }
+    // 身上的狀態排成一列小字
+    const tags = [[u.frost, '霜' + u.frost, '#a0e0ff'], [u.red, '緣', '#ff5c8d'], [u.burn, '燒' + u.burn, '#ff8a30'], [u.fear, '懼', '#d0b0ff'], [u.mark, '標', '#e8e8ff'], [u.stone, '石' + u.stone, '#c0c0c0'], [u.lost, '迷' + u.lost, '#ff4050']].filter((t) => t[0]);
+    g.font = 'bold 13px sans-serif'; g.textAlign = 'left';
+    let tx = u.x - tags.reduce((a, t) => a + t[1].length * 14 + 4, 0) / 2;
+    for (const [, t, c] of tags) { g.fillStyle = '#000'; g.fillRect(tx - 1, top + 9, t.length * 14 + 2, 16); g.fillStyle = c; g.fillText(t, tx, top + 22); tx += t.length * 14 + 4; }
+    g.textAlign = 'center';
   }
 }
 
@@ -1116,6 +1367,13 @@ function render(now) {
     for (const c of chains) {
       g.strokeStyle = '#555060'; g.lineWidth = 9; g.beginPath(); g.moveTo(c.x1, c.y1); g.lineTo(c.x2, c.y2); g.stroke();
       g.strokeStyle = '#9a96a8'; g.lineWidth = 3; g.setLineDash([10, 6]); g.beginPath(); g.moveTo(c.x1, c.y1); g.lineTo(c.x2, c.y2); g.stroke(); g.setLineDash([]);
+    }
+    // 眼之碎片：金色小眼睛
+    for (const c of shards) {
+      const b = Math.sin(now / 250 + c.x) * 3;
+      g.fillStyle = '#e0b850'; g.beginPath(); g.ellipse(c.x, c.y + b, 13, 7, 0, 0, Math.PI * 2); g.fill();
+      g.fillStyle = '#201000'; g.beginPath(); g.arc(c.x, c.y + b, 4, 0, Math.PI * 2); g.fill();
+      g.strokeStyle = '#e0b850'; g.lineWidth = 2; g.beginPath(); g.moveTo(c.x - 4, c.y + b + 7); g.lineTo(c.x - 7, c.y + b + 15); g.stroke();
     }
     // 這一輪隊友留下的線，畫線跟它交叉就是紅線交會
     for (const t of trails) {
@@ -1223,7 +1481,7 @@ function renderSkills() {
     b.onclick = () => { if (busy) return; skillIdx = i; clearPath(); renderSkills(); };
     box.appendChild(b);
   });
-  $('.traits').innerHTML = [['被動', h.passive, h.id === 'guangong' ? `（現在 ${h.mom}/5）` : ''], ['天賦', h.talent, '']]
+  $('.traits').innerHTML = [['被動', h.passive, h.res !== undefined && HEROES[h.id].res ? `（${HEROES[h.id].res[0]} ${h.res}/${HEROES[h.id].res[1]}）` : ''], ['天賦', h.talent, '']]
     .map(([k, t, x]) => `<div><b style="color:${h.color}">${k}・${t.n}</b>${x}：${t.d}</div>`).join('')
     + `<div>點戰場上的角色或敵人可以看說明${h.skills.some((x) => x.shape === 'tap') ? '（用連點招式時要長按）' : ''}。</div>`;
   gearWho(h);
