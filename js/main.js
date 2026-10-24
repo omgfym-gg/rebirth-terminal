@@ -341,10 +341,12 @@ const Game = {
 
   floorFoes(f) {
     const kind = floorKind(f);
-    const pool = ['zombie', 'wisp', 'shade', ...(f >= 4 ? ['husk', 'printer'] : []), ...(f >= 7 ? ['mirror'] : [])];
-    const some = (n) => Array.from({ length: n }, () => pool[randInt(0, pool.length - 1)]);
-    if (kind === 'boss') return f >= 10 ? ['wardenX', ...some(2)] : ['judge', 'wisp'];
-    if (kind === 'elite') return f === 3 ? ['warden', ...some(1)] : f === 6 ? ['hunter', ...some(2)] : [Math.random() < 0.5 ? 'warden' : 'hunter', ...some(2)];
+    // 越深層，一般敵人的種類越多
+    const pool = ['zombie', 'wisp', 'shade', 'jinmenken', ...(f >= 2 ? ['mizuki', 'gaki'] : []), ...(f >= 4 ? ['husk', 'printer', 'diaoxigui', 'amanojaku'] : []), ...(f >= 7 ? ['mirror', 'jerseydevil'] : [])];
+    const one = (a) => a[randInt(0, a.length - 1)];
+    const some = (n) => Array.from({ length: n }, () => one(pool));
+    if (kind === 'boss') return f >= 10 ? [one(['wardenX', 'dullahan', 'wendigo']), ...some(2)] : [one(['judge', 'guhuoniao']), 'wisp'];
+    if (kind === 'elite') return [one(f === 3 ? ['warden', 'lintoujie', 'tengu'] : ['warden', 'hunter', 'lintoujie', 'tengu', 'mothman']), ...some(f === 3 ? 1 : 2)];
     return f === 1 ? ['zombie', 'wisp'] : some(f >= 7 ? 4 : 3);
   },
 

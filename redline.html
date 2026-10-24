@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>一筆紅線試玩</title>
-<link rel="stylesheet" href="style.css?v=20261024b">
+<link rel="stylesheet" href="style.css?v=20261024c">
 <style>
   #app { padding: 6px 8px; }
 </style>
@@ -20,10 +20,10 @@
   <div class="acts"><button class="btn how">怎麼畫</button><button class="btn redo">重畫</button><button class="btn primary go">出招</button></div>
 </div>
 <div class="overlay"><div class="box"></div></div>
-<script src="js/data.js?v=20261024b"></script>
-<script src="js/jobs.js?v=20261024b"></script>
-<script src="js/sprites.js?v=20261024b"></script>
-<script src="js/redline.js?v=20261024b"></script>
+<script src="js/data.js?v=20261024c"></script>
+<script src="js/jobs.js?v=20261024c"></script>
+<script src="js/sprites.js?v=20261024c"></script>
+<script src="js/redline.js?v=20261024c"></script>
 <script>
 'use strict';
 // 試玩：自選三位、無限爬樓，每層打完選一項強化。戰鬥本身在 js/redline.js（跟主遊戲共用）。
@@ -78,9 +78,10 @@ function pickParty(done) {
 function nextFloor() { run.floor++; fight(); }
 function fight() {
   const f = run.floor;
-  const keys = f % 3 === 0 ? [f % 6 === 0 ? 'hunter' : 'warden', 'zombie', ...(f >= 6 ? ['wisp'] : [])] : f === 1 ? ['zombie', 'wisp'] : [pick(['zombie', 'husk', 'mirror']), 'shade', 'wisp', ...(f >= 4 ? ['printer'] : [])];
+  const norm = ['zombie', 'wisp', 'shade', 'husk', 'printer', 'mirror', 'jinmenken', 'mizuki', 'gaki', 'diaoxigui', 'jerseydevil', 'amanojaku'];
+  const keys = f % 5 === 0 ? [pick(['judge', 'guhuoniao', 'dullahan', 'wendigo', 'wardenX']), pick(norm)] : f % 3 === 0 ? [pick(['warden', 'hunter', 'lintoujie', 'tengu', 'mothman']), pick(norm), ...(f >= 6 ? [pick(norm)] : [])] : f === 1 ? ['zombie', 'wisp'] : [pick(norm), pick(norm), pick(norm), ...(f >= 4 ? [pick(norm)] : [])];
   Redline.start({
-    floor: f, title: `第 ${f} 層${f % 3 === 0 ? '・精英' : ''}`, foes: keys, scale: 1 + 0.15 * (f - 1), up: run.up,
+    floor: f, title: `第 ${f} 層${f % 5 === 0 ? '・魔王' : f % 3 === 0 ? '・精英' : ''}`, foes: keys, scale: 1 + 0.15 * (f - 1), up: run.up,
     party: ORDER.map((id) => ({ id, hp: run.hp[id], maxHp: run.maxHp[id], gear: gearOf(id) })),
     gearButton: () => Redline.gearBox(store, fight, '開始'),
     onEnd: (r) => (r.win ? winFloor(r) : lose()),

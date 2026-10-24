@@ -247,7 +247,23 @@ const FOES = {
   warden:  { name: '無臉典獄長', sprite: 'boss', hp: 110, atk: 17, exp: 25, elite: true, chains: 2, gaze: 0.4, d: '精英。會拉出鎖鏈（灰色粗線），直線和自由線碰到就被剪斷，畫圈不受影響。有四成機率改用凝視打全隊（傷害六成）。不會被嘲諷。' },
   judge:   { name: '考績審判官', sprite: 'judge', hp: 170, atk: 16, exp: 50, elite: true, boss: true, armor: 3, judge: true, d: '魔王。穿著硬殼，每一下傷害少 3。每行動 3 次就審判一次全隊（傷害八成）。不會被嘲諷。' },
   wardenX: { name: '典獄長本尊', sprite: 'boss', hp: 230, atk: 18, exp: 60, elite: true, boss: true, chains: 3, gaze: 0.4, d: '魔王。拉出三條鎖鏈，直線和自由線碰到就被剪斷，畫圈不受影響。有四成機率改用凝視打全隊（傷害六成）。不會被嘲諷。' },
+  // 下面這批的圖臉朝左（faceL）。sp：一般敵人的特性，開場框會寫出來
+  jinmenken:   { name: '人面犬', sprite: 'jinmenken', faceL: true, hp: 18, atk: 8, exp: 5, dodge: true, sp: '第一下一定會閃開。', d: '長著大叔臉的狗，半夜在路邊跟你說「別管我」。第一下一定會閃開。' },
+  mizuki:      { name: '水鬼', sprite: 'mizuki', faceL: true, hp: 30, atk: 10, exp: 7, chains: 1, chainKind: 'water', d: '在水邊等人替死的鬼。會留下水窪（藍色），近身招式的線碰到就被剪斷。' },
+  gaki:        { name: '餓鬼', sprite: 'gaki', faceL: true, hp: 34, atk: 9, exp: 7, noStatus: true, sp: '綁不上紅線、凍不住，也吸不到他的血。', d: '肚子永遠填不飽的鬼。綁不上紅線、不會疊冰霜也凍不住，吸血也吸不到他。' },
+  diaoxigui:   { name: '吊死鬼', sprite: 'diaoxigui', faceL: true, hp: 24, atk: 11, exp: 7, high: true, sp: '吊在半空，近身招式打不到，要用遠程。', d: '吊在半空晃來晃去的鬼。近身招式打不到他，要用遠程的招。' },
+  jerseydevil: { name: '澤西惡魔', sprite: 'jerseydevil', faceL: true, hp: 26, atk: 11, exp: 8, blink: true, sp: '每輪瞬間移動，冰地、雪地、火路都踩不到他。', d: '新澤西松林裡的飛天怪物。每輪會瞬間移動，冰地、雪地、火路都困不住他。' },
+  amanojaku:   { name: '天邪鬼', sprite: 'amanojaku', faceL: true, hp: 26, atk: 10, exp: 7, rtl: true, sp: '專唱反調：線要從右往左穿過他才是全傷害，不然只有一半。', d: '專門唱反調的小鬼。線要從右往左穿過他才打得全，其他方向只有一半傷害。' },
+  lintoujie:   { name: '林投姐', sprite: 'lintoujie', faceL: true, hp: 95, atk: 14, exp: 25, elite: true, chains: 2, chainKind: 'tree', d: '精英。林投樹下的女鬼。長出兩條林投樹根（綠色），直線和自由線碰到就被剪斷，畫圈不受影響。不會被嘲諷。' },
+  tengu:       { name: '天狗', sprite: 'tengu', faceL: true, hp: 90, atk: 13, exp: 25, elite: true, gust: true, d: '精英。山裡的天狗。每隔一次行動就搧起狂風打全隊（傷害六成），把大家吹得到處都是。不會被嘲諷。' },
+  mothman:     { name: '莫斯曼', sprite: 'mothman', faceL: true, hp: 85, atk: 15, exp: 25, elite: true, curse: true, d: '精英。紅眼的蛾人。每隔一次行動就瞪紅眼打全隊（傷害五成），下一輪大家的墨水都只剩一半。不會被嘲諷。' },
+  guhuoniao:   { name: '姑獲鳥', sprite: 'guhuoniao', faceL: true, hp: 160, atk: 15, exp: 50, elite: true, boss: true, circleOnly: true, carry: true, d: '魔王。披著羽毛的鳥女。只有畫圈打得全，其他招式傷害減半。每行動 3 次就抓走一位神魔，那位下一輪不能出招。不會被嘲諷。' },
+  dullahan:    { name: '杜拉漢', sprite: 'dullahan', faceL: true, hp: 230, atk: 18, exp: 60, elite: true, boss: true, head: true, d: '魔王。無頭騎士，頭顱飄在別的地方（白色骷髏）。線要同時經過頭顱才是全傷害，不然只有一半。不會被嘲諷。' },
+  wendigo:     { name: '溫迪戈', sprite: 'wendigo', faceL: true, hp: 200, atk: 14, exp: 60, elite: true, boss: true, devour: true, d: '魔王。永遠飢餓的雪原巨怪。輪到牠時會吃掉這輪大家畫過的線，每條讓牠攻擊 +2（一直累積）。不會被嘲諷。' },
 };
+// 會剪斷線的東西：名字、外框色、內線色
+const CUT = { chain: ['鎖鏈', '#555060', '#9a96a8'], tree: ['樹根', '#2e1e0e', '#7fbf5a'], water: ['水窪', '#1f4a70', '#6ab0e8'] };
+let curse = 1;
 
 let run, cfg, heroes, foes, chains = [], path = [], closed, hits = [], hitAt = [], inside = new Set(), drawing, busy, effects, turn, who = -1, skillIdx = 0;
 // trails：這一回合大家畫過的線（換回合就清掉）；bolts：遠程招飛出去的光球；zz：折線每個敵人身上的轉彎紀錄
@@ -264,17 +280,22 @@ function start(c) {
   run = { floor: c.floor, up: { dmg: 0, ink: 1, ...(c.up || {}) } };
   heroes = c.party.map((p) => ({ ...HEROES[p.id], id: p.id, tag: p.tag || '', side: 'ally', art: p.id, gear: p.gear || [], maxHp: p.maxHp, hp: Math.max(0, Math.min(p.maxHp, p.hp)), dead: p.hp <= 0, x: 0, y: 0, shield: 0, flash: 0, cds: [0, 0, 0], anim: null, taunt: false, res: 0, wine: 0 }));
   const k = c.scale || 1;
-  foes = c.foes.map((key) => ({ key, ...FOES[key], side: 'enemy', maxHp: Math.round(FOES[key].hp * k), hp: Math.round(FOES[key].hp * k), atk: Math.round(FOES[key].atk * k), dead: false, frozen: false, confused: false, frost: 0, red: false, burn: 0, fear: false, mark: false, stone: 0, stun: false, lost: 0, flash: 0, x: 0, y: 0, acts: 0 }));
+  foes = c.foes.map((key) => ({ key, ...FOES[key], side: 'enemy', maxHp: Math.round(FOES[key].hp * k), hp: Math.round(FOES[key].hp * k), atk: Math.round(FOES[key].atk * k), dead: false, frozen: false, confused: false, frost: 0, red: false, burn: 0, fear: false, mark: false, stone: 0, stun: false, lost: 0, flash: 0, x: 0, y: 0, acts: 0, dodged: false, headAt: null }));
   place(true);
-  effects = []; trails = []; bolts = []; shards = []; zones = []; chains = []; turn = 0; who = -1; busy = false; demo = null; gearNewRound(true);
+  effects = []; trails = []; bolts = []; shards = []; zones = []; chains = []; turn = 0; who = -1; busy = false; demo = null; curse = 1; gearNewRound(true);
   renderHelp();
   nextHero();
-  const chain = foes.some((e) => e.chains), boss = foes.find((e) => e.boss), elite = foes.find((e) => e.elite);
+  const kinds = [...new Set(foes.filter((e) => e.chains).map((e) => e.chainKind || 'chain'))];
+  const sps = [...new Set(foes.filter((e) => e.sp).map((e) => `<b>${e.name}</b>：${e.sp}`))];
+  const boss = foes.find((e) => e.boss), elite = foes.find((e) => e.elite);
   showBox(`<h2>${c.title || `第 ${c.floor} 層`}</h2>
     <p>敵人：${foes.map((e) => e.name).join('、')}</p>
     ${c.note || ''}
     ${boss || elite ? `<p>${(boss || elite).d}</p>` : '<p>三位神魔輪流上場。輪到誰，就從下面選他的一招，照那招的畫法在戰場上畫，畫好按出招。</p>'}
-    ${chain ? '<p class="muted">直線和自由線碰到<b>鎖鏈</b>就會被剪斷，畫圈不受影響。</p>' : ''}
+    ${sps.map((t) => `<p class="muted">${t}</p>`).join('')}
+    ${kinds.includes('chain') ? '<p class="muted">直線和自由線碰到<b>鎖鏈</b>就會被剪斷，畫圈不受影響。</p>' : ''}
+    ${kinds.includes('tree') ? '<p class="muted">直線和自由線碰到<b>樹根</b>（咖啡色、長葉子）就會被剪斷，畫圈不受影響。</p>' : ''}
+    ${kinds.includes('water') ? '<p class="muted">近身招式的線碰到<b>水窪</b>（藍色一灘水）就會被剪斷，遠程招不受影響。</p>' : ''}
     <button class="btn primary wide ok">開始</button>`);
   $('.box .ok').onclick = hideBox;
   tutIntro();
@@ -293,7 +314,7 @@ function place(first) {
     if (e.dead) continue;
     let best = null;
     for (let t = 0; t < 60; t++) {
-      const p = e.side === 'ally' ? { x: rnd(60, 290), y: rnd(310, 660) } : { x: rnd(250, 548), y: rnd(310, 660) };
+      const p = e.side === 'ally' ? { x: rnd(60, 290), y: rnd(310, 660) } : { x: rnd(250, 548), y: e.high ? rnd(300, 400) : rnd(310, 660) };
       if (!spots.some((o) => Math.hypot(o.x - p.x, o.y - p.y) < 120)) { best = p; break; }
       best = best || p;
     }
@@ -305,13 +326,20 @@ function place(first) {
 // 換下一位神魔上場；三位都輪過一次就算一輪，大家換位置
 async function nextHero() {
   if (!heroes.some((h) => !h.dead)) return;
-  let n = who;
-  do { n = (n + 1) % heroes.length; if (n === 0 && who >= 0) await newRound(); } while (heroes[n].dead);
+  let n = who, fresh = who < 0;
+  for (;;) {
+    n = (n + 1) % heroes.length;
+    if (n === 0 && !fresh) { await newRound(); fresh = true; }
+    const x = heroes[n];
+    if (x.dead) continue;
+    if (x.carried) { x.carried = false; float(x, '被抓走了，跳過', '#d0b0ff', 18); await wait(500); continue; }
+    break;
+  }
   who = n; turn++;
   const h = heroes[who];
   h.cds = h.cds.map((c) => Math.max(0, c - 1));
   skillIdx = 0;
-  if (who === heroes.findIndex((x) => !x.dead)) { for (const e of foes) if (!e.dead) setIntent(e); makeChains(); }
+  if (fresh) { for (const e of foes) if (!e.dead) setIntent(e); makeChains(); }
   clearPath(); renderSkills();
 }
 
@@ -324,7 +352,9 @@ async function newRound() {
   for (const e of foes) if (!e.dead && e.burn) { e.burn--; tickDmg(e, 3, '#ff8a30'); fxPush({ type: 'burst', x: e.x, y: e.y - 46, color: '#ff8a30', dur: 450, seed: 2 }); }
   spawnShards();
   // 新的一輪：敵人退回右邊重整隊形，神魔留在上一手停下的位置
-  await Promise.all(foes.filter((e) => !e.dead).map((e) => e.x < 330 ? moveTo(e, { x: rnd(340, 545), y: e.y }, 0.8).then(() => { e.face = -1; }) : null));
+  await Promise.all(foes.filter((e) => !e.dead).map((e) => e.x < 330 || (e.high && e.y > 420) ? moveTo(e, { x: rnd(340, 545), y: e.high ? rnd(300, 400) : e.y }, 0.8).then(() => { e.face = -1; }) : null));
+  // 澤西惡魔：瞬間移動到別的地方
+  for (const e of foes) if (!e.dead && e.blink) { fxPush({ type: 'ring', x: e.x, y: e.y - 46, color: '#c080ff', dur: 400 }); e.x = rnd(260, 545); e.y = rnd(320, 650); fxPush({ type: 'ring', x: e.x, y: e.y - 46, color: '#c080ff', dur: 400 }); }
   await settle();
 }
 
@@ -333,6 +363,10 @@ function setIntent(e) {
   const tank = a.find((h) => h.taunt);
   if (tank && !e.elite) { e.intent = { target: tank, dmg: e.atk }; return; }
   e.acts++;
+  if (e.head) e.headAt = { x: rnd(120, 520), y: rnd(300, 600) };
+  if (e.gust && e.acts % 2 === 0) { e.intent = { all: true, dmg: Math.round(e.atk * 0.6), label: '狂風', gust: true }; return; }
+  if (e.curse && e.acts % 2 === 0) { e.intent = { all: true, dmg: Math.round(e.atk * 0.5), label: '紅眼', curse: true }; return; }
+  if (e.carry && e.acts % 3 === 0) { e.intent = { target: pick(a), dmg: e.atk, carry: true }; return; }
   // 審判官每 3 次行動審判全隊；追殺者專挑生命最少的
   if (e.judge && e.acts % 3 === 0) { e.intent = { all: true, dmg: Math.round(e.atk * 0.8), judge: true }; return; }
   if (e.gaze && Math.random() < e.gaze) { e.intent = { all: true, dmg: Math.round(e.atk * 0.6) }; return; }
@@ -342,13 +376,14 @@ function setIntent(e) {
 
 function makeChains() {
   chains = [];
-  const w = foes.find((e) => e.chains && !e.dead);
-  if (w) for (let i = 0; i < w.chains; i++) { const x = rnd(220, 330), y = rnd(270, 640), a = rnd(-1.3, 1.3), L = 160; chains.push({ x1: x - Math.cos(a) * L / 2, y1: y - Math.sin(a) * L / 2, x2: x + Math.cos(a) * L / 2, y2: y + Math.sin(a) * L / 2 }); }
+  for (const w of foes) if (w.chains && !w.dead) for (let i = 0; i < w.chains; i++) { const x = rnd(220, 330), y = rnd(300, 640), a = rnd(-1.3, 1.3), L = w.chainKind === 'water' ? 130 : 160; chains.push({ x1: x - Math.cos(a) * L / 2, y1: y - Math.sin(a) * L / 2, x2: x + Math.cos(a) * L / 2, y2: y + Math.sin(a) * L / 2, kind: w.chainKind || 'chain' }); }
 }
+// 這一招的線會被哪些東西剪斷（水窪只剪近身招）
+const cutters = () => (hero().noCut ? [] : chains.filter((c) => c.kind !== 'water' || skill().melee));
 
 const hero = () => heroes && heroes[who];
 const skill = () => hero().skills[skillIdx];
-const inkMax = () => Math.round(skill().len * run.up.ink * (hero().ink || 1) * (hero().inkBuff || 1));
+const inkMax = () => Math.round(skill().len * run.up.ink * (hero().ink || 1) * (hero().inkBuff || 1) * curse);
 function clearPath() { path = []; hits = []; hitAt = []; inside = new Set(); zz = new Map(); closed = false; drawing = false; crossMemo = null; updateUi(); }
 
 // ───── 畫線 ─────
@@ -447,7 +482,7 @@ cv.addEventListener('pointermove', (ev) => {
   const used = pathLen(), max = inkMax();
   if (used + d > max) { const k = (max - used) / d; p.x = last.x + (p.x - last.x) * k; p.y = last.y + (p.y - last.y) * k; }
   if (freeShape(sk)) {
-    for (const c of hero().noCut ? [] : chains) if (segCross(last, p, { x: c.x1, y: c.y1 }, { x: c.x2, y: c.y2 })) { path.push(cutAt(last, p, c)); fxPush({ type: 'snap', x: p.x, y: p.y, dur: 600 }); drawing = false; updateUi(); tip('紅線被<b>鎖鏈</b>剪斷了。'); return; }
+    for (const c of cutters()) if (segCross(last, p, { x: c.x1, y: c.y1 }, { x: c.x2, y: c.y2 })) { path.push(cutAt(last, p, c)); fxPush({ type: 'snap', x: p.x, y: p.y, dur: 600 }); drawing = false; updateUi(); tip(`紅線被<b>${CUT[c.kind][0]}</b>剪斷了。`); return; }
     path.push(p);
     if (sk.shape === 'zigzag') zigzagStep(last, p);
     // 線每「穿進」敵人一次就多打一下；隊友只算一次
@@ -514,11 +549,30 @@ function results() {
   const xn = crossings().length;
   if (xn && skill().xc) res = skill().xc.fx(res, xn, h, en, al);
   res = gearResults(h, res);
+  res = res.map(foeMod);
   // 硬殼：每一下少受幾點傷害（最少 1）
   res = res.map((s) => (s.dmg && s.u.armor ? { ...s, dmg: Math.max(1, s.dmg - s.u.armor) } : s));
   // 紅線交會：交叉點附近的敵人各受 6 傷害
   for (const c of crossings()) for (const e of foes) if (!e.dead && dist(center(e), c) < 90) res.push({ u: e, dmg: 6, cross: c });
   return res;
+}
+
+// 敵人特性改傷害：吊死鬼、天邪鬼、姑獲鳥、杜拉漢；餓鬼不吃狀態
+function foeMod(s) {
+  const u = s.u, sk = skill();
+  if (u.side !== 'enemy') return s;
+  if (u.noStatus && (s.red || s.frost || s.freeze)) s = { ...s, red: false, frost: 0, freeze: false, nope: s.dmg ? '' : '不吃這套' };
+  if (!s.dmg) return s;
+  if (u.high && sk.melee) return { ...s, dmg: 0, nope: '搆不到' };
+  let half = false;
+  if (u.circleOnly && sk.shape !== 'circle') half = true;
+  if (u.rtl && path.length > 1) {
+    const c = center(u); let best = 1e9, dx = 0;
+    for (let i = 1; i < path.length; i++) { const m = { x: (path[i - 1].x + path[i].x) / 2, y: (path[i - 1].y + path[i].y) / 2 }, d = dist(m, c); if (d < best) { best = d; dx = path[i].x - path[i - 1].x; } }
+    if (dx >= 0) half = true;
+  }
+  if (u.head && u.headAt && !(closed ? inPoly(u.headAt, path) : path.some((p, i) => i && segHitsCircle(path[i - 1], p, u.headAt, hitR())))) half = true;
+  return half ? { ...s, dmg: Math.max(1, Math.ceil(s.dmg / 2)), half: true } : s;
 }
 
 // 這一招的線和這回合隊友留下的線交叉的地方（最多 3 處）
@@ -629,7 +683,7 @@ async function go() {
   run.glow = null; path = []; hits = [];
   if (foes.every((e) => e.dead)) return winFloor();
   // 三位神魔都出過招，敵人才行動
-  if (heroes.some((x, i) => i > who && !x.dead)) { busy = false; return nextHero(); }
+  if (heroes.some((x, i) => i > who && !x.dead && !x.carried)) { busy = false; return nextHero(); }
   await enemyTurn();
 }
 
@@ -704,6 +758,8 @@ function settle() {
 function apply(s) {
   const u = s.u;
   if (u.dead) return;
+  if (s.nope) float(u, s.nope, '#c0c0c0');
+  if (s.dmg && u.dodge && !u.dodged) { u.dodged = true; float(u, '閃開', '#c0c0c0'); s = { ...s, dmg: 0 }; }
   if (s.red && !u.red) { u.red = true; setTimeout(() => float(u, '紅線', '#ff5c8d', 18), 120); }
   if (s.dmg && u.side === 'enemy' && !s.shared && !s.linked && !s.cross) {
     const h = hero();
@@ -774,7 +830,7 @@ function pickShards() {
 
 // 冰霜疊到 3 層就凍住；回傳這次有沒有凍住
 function addFrost(u, n) {
-  if (u.frozen) return false;
+  if (u.frozen || u.noStatus) return false;
   u.frost += n;
   if (u.frost < 3) { setTimeout(() => float(u, '冰霜 ' + u.frost, '#a0e0ff', 18), 150); return false; }
   u.frost = 0; u.frozen = true;
@@ -783,8 +839,15 @@ function addFrost(u, n) {
 }
 
 async function enemyTurn() {
+  curse = 1;
+  for (const h of heroes) h.carried = false;
   for (const e of foes) {
     if (e.dead) continue;
+    // 溫迪戈：吃掉這輪畫過的線，每條攻擊 +2
+    if (e.devour && trails.length && !e.frozen && !e.stun) {
+      const n = trails.length; trails = []; e.atk += 2 * n; if (e.intent && e.intent.dmg) e.intent.dmg += 2 * n;
+      fxPush({ type: 'ring', x: e.x, y: e.y - 46, color: '#a0e0ff', dur: 600 }); float(e, `吃掉 ${n} 條線 攻擊+${2 * n}`, '#a0e0ff', 20); await wait(500);
+    }
     if (e.frozen) { e.frozen = false; float(e, '凍住，跳過', '#a0e0ff'); await wait(380); continue; }
     if (e.stun) { e.stun = false; float(e, '石像，跳過', '#c0c0c0'); await wait(380); continue; }
     // 恐懼：這次攻擊減半
@@ -803,13 +866,16 @@ async function enemyTurn() {
       } else float(e, '發呆', '#ff5c8d');
     } else if (e.intent.all) {
       // 全隊攻擊：典獄長原地放出凝視、審判官審判
-      e.lunge = performance.now(); fxPush({ type: 'gaze', x: e.x, y: e.y - 60, dur: 600 }); float(e, e.intent.judge ? '審判' : '凝視', '#ff8a8a', 22); await wait(250);
+      e.lunge = performance.now(); fxPush({ type: 'gaze', x: e.x, y: e.y - 60, dur: 600 }); float(e, e.intent.label || (e.intent.judge ? '審判' : '凝視'), '#ff8a8a', 22); await wait(250);
       for (const h of alive) hurt(h, hit(e.intent.dmg));
+      if (e.intent.curse) { curse = 0.5; await wait(300); for (const h of alive) if (!h.dead) float(h, '墨水減半', '#ff4050', 18); }
+      if (e.intent.gust) { await wait(300); await Promise.all(alive.filter((h) => !h.dead).map((h) => moveTo(h, { x: rnd(60, 290), y: rnd(320, 660) }, 1.4))); }
     } else {
       const t = e.intent.target.dead ? pick(alive) : e.intent.target;
       if (t && await approach(e, t)) {
         e.lunge = performance.now(); await wait(180); hurt(t, hit(e.intent.dmg));
         if (e.intent.twice && !t.dead) { await wait(260); e.lunge = performance.now(); await wait(180); hurt(t, hit(e.intent.dmg)); }
+        if (e.intent.carry && !t.dead) { t.carried = true; float(t, '被抓走', '#d0b0ff', 20); }
       }
     }
     await wait(380);
@@ -827,13 +893,13 @@ async function approach(e, t) {
   let to = { x: t.x + 85, y: t.y + 2 };
   if (to.x > 555) to = { x: t.x - 85, y: t.y + 2 };
   // 冰之吐息：路上踩到冰地就被凍住，這次打不出來
-  const ice = frostOnWay(e, to);
+  const ice = !e.blink && frostOnWay(e, to);
   if (ice) { await moveTo(e, ice.at, 0.7); return frostStop(e, ice); }
   // 雪地足跡：踩過雪地疊 2 層冰霜，疊滿就凍在半路
   // 聖火之路：走過火路就燒起來（照樣攻擊）
-  const fire = frostOnWay(e, to, 'fire');
+  const fire = !e.blink && frostOnWay(e, to, 'fire');
   if (fire) { fire.z.done.add(e); addBurn(e, 2); fxPush({ type: 'burst', x: fire.at.x, y: fire.at.y - 30, color: '#ff8a30', dur: 450, seed: 1 }); }
-  const snow = frostOnWay(e, to, 'snow');
+  const snow = !e.blink && frostOnWay(e, to, 'snow');
   if (snow) {
     await moveTo(e, snow.at, 0.7); snow.z.done.add(e);
     if (addFrost(e, 2)) { e.frozen = false; float(e, '凍在半路', '#a0e0ff'); await wait(300); return false; }
@@ -954,7 +1020,7 @@ function rayPath(s, dir, L, extra = 0) {
     break;
   }
   // 鎖鏈把線剪斷
-  for (let i = 1; i < pts.length; i++) for (const c of hero().noCut ? [] : chains) {
+  for (let i = 1; i < pts.length; i++) for (const c of cutters()) {
     const a = pts[i - 1], b = pts[i];
     if (segCross(a, b, { x: c.x1, y: c.y1 }, { x: c.x2, y: c.y2 })) { pts[i] = cutAt(a, b, c); pts.length = i + 1; }
   }
@@ -1029,7 +1095,7 @@ function gearOnApply(s) {
     const o = s.u.link, v = Math.floor(s.dmg / 2);
     if (v > 0) setTimeout(() => { fxPush({ type: 'thread', a: { x: s.u.x, y: s.u.y - 46 }, b: { x: o.x, y: o.y - 46 }, dur: 500 }); apply({ u: o, dmg: v, linked: true }); }, 160);
   }
-  if (s.dmg && s.u.side === 'enemy' && wears(h, 'dracula')) {
+  if (s.dmg && s.u.side === 'enemy' && !s.u.noStatus && wears(h, 'dracula')) {
     const v = Math.min(Math.max(1, Math.round(s.dmg * 0.3)), h.maxHp - h.hp);
     if (v > 0) { h.hp += v; float(h, '吸 +' + v, '#e04060', 18); }
   }
@@ -1446,7 +1512,7 @@ function drawUnit(u, now) {
     const pose = u.flash > now ? 2 : lunging ? 1 : 0;
     if (u.frozen) g.filter = 'saturate(0.3) brightness(1.3) hue-rotate(160deg)';
     const bob = u.moving ? Math.abs(Math.sin(now / 90)) * 5 : 0;
-    drawArt(g, 'u:' + u.sprite, 'pose', pose, x + lx * (u.face === 1 ? -1 : 1), y - bob, 1, { flip: u.face !== 1, white });
+    drawArt(g, 'u:' + u.sprite, 'pose', pose, x + lx * (u.face === 1 ? -1 : 1), y - bob, 1, { flip: u.faceL ? u.face === 1 : u.face !== 1, white });
     g.filter = 'none';
   }
   g.globalAlpha = 1;
@@ -1464,7 +1530,7 @@ function drawUnit(u, now) {
     const aimed = foes.some((e) => !e.dead && !e.frozen && !e.confused && e.intent && (e.intent.all || e.intent.target === u));
     if (aimed) { g.fillStyle = Math.floor(now / 250) % 2 ? '#ff4050' : '#ffb0b0'; g.fillRect(u.x - 52, top - 26, 6, 16); g.fillRect(u.x - 52, top - 7, 6, 5); }
   } else if (u.intent) {
-    const t = u.frozen ? '凍住，跳過' : u.stun ? '石像，跳過' : u.confused ? '會打同伴' : u.intent.all ? `全隊 ${u.intent.dmg}` : `${u.intent.target.name} ${u.intent.dmg}${u.intent.twice ? '×2' : ''}`;
+    const t = u.frozen ? '凍住，跳過' : u.stun ? '石像，跳過' : u.confused ? '會打同伴' : u.intent.all ? `${u.intent.label || '全隊'} ${u.intent.dmg}` : `${u.intent.target.name} ${u.intent.dmg}${u.intent.twice ? '×2' : ''}${u.intent.carry ? ' 抓走' : ''}`;
     g.fillStyle = u.frozen ? '#a0e0ff' : u.confused ? '#ff8ac0' : '#ff8a8a'; g.fillText('⚔ ' + t, u.x, top - 8);
   }
   if (u.side === 'enemy') {
@@ -1485,8 +1551,38 @@ function render(now) {
   if (heroes && who >= 0) {
     gearDrawZones(now);
     for (const c of chains) {
-      g.strokeStyle = '#555060'; g.lineWidth = 9; g.beginPath(); g.moveTo(c.x1, c.y1); g.lineTo(c.x2, c.y2); g.stroke();
-      g.strokeStyle = '#9a96a8'; g.lineWidth = 3; g.setLineDash([10, 6]); g.beginPath(); g.moveTo(c.x1, c.y1); g.lineTo(c.x2, c.y2); g.stroke(); g.setLineDash([]);
+      const [name, c1, c2] = CUT[c.kind || 'chain'];
+      const L = Math.hypot(c.x2 - c.x1, c.y2 - c.y1), ux = (c.x2 - c.x1) / L, uy = (c.y2 - c.y1) / L, mx = (c.x1 + c.x2) / 2, my = (c.y1 + c.y2) / 2;
+      if (c.kind === 'water') {
+        // 水窪：一灘水，表面有波紋
+        g.save(); g.translate(mx, my); g.rotate(Math.atan2(uy, ux));
+        g.fillStyle = 'rgba(30,80,130,0.85)'; g.beginPath(); g.ellipse(0, 0, L / 2 + 8, 22, 0, 0, Math.PI * 2); g.fill();
+        g.strokeStyle = c2; g.lineWidth = 3; g.beginPath(); g.ellipse(0, 0, L / 2 + 8, 22, 0, 0, Math.PI * 2); g.stroke();
+        g.lineWidth = 2; g.globalAlpha = 0.7;
+        for (let k = 0; k < 3; k++) { const r = ((now / 900 + k / 3) % 1); g.beginPath(); g.ellipse(-L / 4 + k * L / 4, 0, 6 + r * 24, 2 + r * 8, 0, 0, Math.PI * 2); g.stroke(); }
+        g.globalAlpha = 1; g.restore();
+      } else if (c.kind === 'tree') {
+        // 樹根：彎彎曲曲的粗根，上面長葉子
+        const pt = (t, w) => ({ x: c.x1 + ux * L * t - uy * w, y: c.y1 + uy * L * t + ux * w });
+        g.lineCap = 'round';
+        for (const [col, wd] of [[c1, 14], ['#6a4a24', 8]]) { g.strokeStyle = col; g.lineWidth = wd; g.beginPath(); for (let t = 0; t <= 1.001; t += 0.05) { const q = pt(t, Math.sin(t * 12) * 7); t ? g.lineTo(q.x, q.y) : g.moveTo(q.x, q.y); } g.stroke(); }
+        g.fillStyle = c2;
+        for (let t = 0.1; t < 1; t += 0.2) { const q = pt(t, Math.sin(t * 12) * 7 + 10); g.beginPath(); g.ellipse(q.x, q.y, 8, 4, Math.atan2(uy, ux) + 0.6, 0, Math.PI * 2); g.fill(); }
+        g.lineCap = 'butt';
+      } else {
+        g.strokeStyle = c1; g.lineWidth = 9; g.lineCap = 'round'; g.beginPath(); g.moveTo(c.x1, c.y1); g.lineTo(c.x2, c.y2); g.stroke(); g.lineCap = 'butt';
+        g.strokeStyle = c2; g.lineWidth = 3; g.setLineDash([10, 6]); g.beginPath(); g.moveTo(c.x1, c.y1); g.lineTo(c.x2, c.y2); g.stroke(); g.setLineDash([]);
+      }
+      // 標上名字，免得跟隊友的線搞混
+      g.font = 'bold 14px sans-serif'; g.textAlign = 'center'; g.fillStyle = '#000'; g.fillRect(mx - 18, my + 22, 36, 18); g.fillStyle = c2; g.fillText(name, mx, my + 36);
+    }
+    // 杜拉漢的頭顱
+    for (const e of foes) if (e.head && e.headAt && !e.dead) {
+      const hp = e.headAt, b = Math.sin(now / 300) * 4;
+      g.fillStyle = 'rgba(255,255,255,0.15)'; g.beginPath(); g.arc(hp.x, hp.y + b, 30, 0, Math.PI * 2); g.fill();
+      g.fillStyle = '#e8e4d8'; g.beginPath(); g.arc(hp.x, hp.y + b - 3, 15, 0, Math.PI * 2); g.fill(); g.fillRect(hp.x - 9, hp.y + b + 6, 18, 9);
+      g.fillStyle = '#201010'; g.beginPath(); g.arc(hp.x - 6, hp.y + b - 3, 4, 0, Math.PI * 2); g.arc(hp.x + 6, hp.y + b - 3, 4, 0, Math.PI * 2); g.fill();
+      g.font = 'bold 13px sans-serif'; g.textAlign = 'center'; g.fillStyle = '#e8e4d8'; g.fillText('頭顱', hp.x, hp.y + b + 32);
     }
     // 眼之碎片：金色小眼睛
     for (const c of shards) {
