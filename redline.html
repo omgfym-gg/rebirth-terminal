@@ -24,7 +24,10 @@
   .traits div { margin-top: 2px; }
   .tip { min-height: 40px; font-size: 13px; line-height: 1.5; color: var(--muted); margin-top: 6px; }
   .tip b { color: #ff8aa0; }
-  .acts { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 4px; }
+  .acts { display: grid; grid-template-columns: 0.8fr 1fr 1fr; gap: 6px; margin-top: 4px; }
+  .acts .how { color: var(--gold); }
+  .tut { font-size: 15px; line-height: 1.6; }
+  .tut .step { color: var(--muted); font-size: 13px; }
   .acts .btn { padding: 10px 4px; font-size: 16px; }
   .overlay { position: fixed; inset: 0; background: rgba(5,4,10,0.86); display: none; align-items: center; justify-content: center; padding: 16px; z-index: 5; }
   .overlay.show { display: flex; }
@@ -55,7 +58,7 @@
   <div class="skills"></div>
   <div class="traits"></div>
   <div class="tip"></div>
-  <div class="acts"><button class="btn redo">重畫</button><button class="btn primary go">出招</button></div>
+  <div class="acts"><button class="btn how">怎麼畫</button><button class="btn redo">重畫</button><button class="btn primary go">出招</button></div>
   <details>
     <summary>玩法說明</summary>
     <div class="help"></div>
@@ -345,6 +348,7 @@ function nextFloor() {
     ${keys.includes('warden') ? '<p>典獄長會拉出<b>鎖鏈</b>（灰色粗線）。直線和自由線碰到鎖鏈就會被剪斷，畫圈不受影響。</p>' : '<p>三位神魔輪流上場。輪到誰，就從下面選他的一招，照那招的畫法在戰場上畫，畫好按出招。</p>'}
     <button class="btn primary wide ok">開始</button>`);
   $('.box .ok').onclick = hideBox;
+  tutIntro();
   gearIntroButton();
 }
 
@@ -479,6 +483,7 @@ function tapAt(p) {
 
 cv.addEventListener('pointerdown', (ev) => {
   if (flying && !$('.overlay').classList.contains('show')) { flying(toCanvas(ev)); return; }
+  demo = null;
   if (busy || !heroes || $('.overlay').classList.contains('show')) return;
   const p = toCanvas(ev), sk = skill(), h = hero();
   pressStart(p, sk.shape === 'tap');
@@ -1373,6 +1378,105 @@ function showInfo(u) {
   $('.box .info-ok').onclick = hideBox;
 }
 
+// ───── 新手教學 ─────
+// 第一次玩：先看四步說明；之後每遇到沒畫過的畫法，戰場上會自動示範一次（按「怎麼畫」可以再看）
+const TUT_KEY = 'rebirth-redline-tut-v1';
+const tut = (() => { try { return JSON.parse(localStorage.getItem(TUT_KEY)) || { intro: false, seen: [] }; } catch (e) { return { intro: false, seen: [] }; } })();
+const saveTut = () => { try { localStorage.setItem(TUT_KEY, JSON.stringify(tut)); } catch (e) { /* 存不了就每次都教 */ } };
+const TUT_STEPS = [
+  ['輪到誰', '三位神魔輪流上場，每次只動一位。<b>腳下有金色光圈</b>的就是現在要出手的人，下方也會寫「輪到 誰」。'],
+  ['選一招', '下方三個按鈕是他的三招，每招寫著<b>畫法</b>（直線、衝刺、自由線、折線、畫圈、連點）和效果。點一下就選好了。'],
+  ['照畫法畫', '在戰場上用手指畫。第一次遇到某種畫法，戰場上會有<b>白色虛線的示範</b>，跟著畫就好；忘了就按左下的<b>「怎麼畫」</b>再看一次。畫完會預覽每個敵人受到多少傷害。'],
+  ['出招、看敵人', '滿意就按<b>出招</b>，不滿意按<b>重畫</b>。三位都出手後敵人才行動，敵人頭上寫著要打誰、打多少。<b>點一下角色或敵人</b>可以看詳細說明。'],
+];
+function tutIntro() {
+  if (tut.intro || run.floor !== 1) return;
+  const ok = $('.box .ok'); if (!ok) return;
+  ok.onclick = () => tutStep(0);
+}
+function tutStep(i) {
+  if (i >= TUT_STEPS.length) { tut.intro = true; saveTut(); hideBox(); autoDemo(); return; }
+  const [t, d] = TUT_STEPS[i];
+  showBox(`<div class="tut"><p class="step">新手教學 ${i + 1}/${TUT_STEPS.length}</p><h2>${t}</h2><p>${d}</p></div>
+    <button class="btn primary wide tnext">${i + 1 < TUT_STEPS.length ? '下一步' : '開始打'}</button>
+    <button class="btn wide tskip">跳過教學</button>`);
+  $('.box .tnext').onclick = () => tutStep(i + 1);
+  $('.box .tskip').onclick = () => tutStep(TUT_STEPS.length);
+}
+
+// 示範：用真的站位算出一條示範線，白色虛線一路畫過去，手指圓點跟著走
+let demo = null;
+function demoFor(shape) {
+  const h = center(hero()), max = inkMax();
+  const en = foes.filter((e) => !e.dead).map(center).sort((a, b) => dist(a, h) - dist(b, h));
+  if (!en.length) return null;
+  const toward = (to, L) => { const d = dist(h, to) || 1; return { x: h.x + (to.x - h.x) / d * L, y: h.y + (to.y - h.y) / d * L }; };
+  const near = en[0], far = dist(h, near);
+  if (shape === 'line') return { pts: [h, toward(near, Math.min(max, far + 120))], note: '從自己身上往敵人的方向拉，放開就是一條直線。' };
+  if (shape === 'dash') return { pts: [h, toward(near, Math.min(max, far))], note: far > max ? '從自己身上往敵人拉一下。<b>現在太遠了</b>，衝不到：先用別的招走近，或換別的招。' : '從自己身上往敵人拉一下，會<b>衝到第一個敵人面前</b>刺下去。' };
+  if (shape === 'free') return { pts: densify([h, ...en.slice(0, 3)], 14), note: '手指不要放開，從自己身上一筆畫過想打的敵人。' };
+  if (shape === 'zigzag') {
+    const a = en[0], b = en[1] || { x: a.x - 90, y: a.y + 120 };
+    return { pts: densify([h, a, b], 14), note: '一筆畫過去，<b>穿過敵人算一關</b>，在敵人身上<b>轉個彎</b>再多一關。' };
+  }
+  if (shape === 'circle') {
+    const c = en[0], pts = [];
+    for (let k = 0; k <= 36; k++) { const t = k / 36 * Math.PI * 2; pts.push({ x: c.x + Math.cos(t) * 80, y: c.y + Math.sin(t) * 70 }); }
+    return { pts, note: '在敵人身邊畫一個圈，<b>頭尾要接起來</b>，圈裡的都會中。' };
+  }
+  if (shape === 'tap') return { pts: [h, ...en.slice(0, 3)], taps: en.slice(0, 3), note: '不用畫線，<b>依序點</b>想打的目標，紅線會在他們之間彈過去。' };
+  return null;
+}
+function startDemo(shape) {
+  const d = demoFor(shape); if (!d) return;
+  demo = { ...d, shape, t0: performance.now() };
+  tip(`<b>示範：${SHAPES[shape]}</b>　${d.note}`);
+}
+function autoDemo() {
+  if (!heroes || busy || !tut.intro || $('.overlay').classList.contains('show')) return;
+  const shape = skill().shape;
+  if (tut.seen.includes(shape)) return;
+  tut.seen.push(shape); saveTut();
+  startDemo(shape);
+}
+function drawDemo(now) {
+  if (!demo || busy) return;
+  const DRAW = 1600, HOLD = 700, LOOPS = 3, t = now - demo.t0;
+  if (t > (DRAW + HOLD) * LOOPS) { demo = null; return; }
+  const k = Math.min(1, (t % (DRAW + HOLD)) / DRAW), pts = demo.pts;
+  const cum = [0]; for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + dist(pts[i], pts[i - 1]));
+  const want = cum[cum.length - 1] * k;
+  let tipP = pts[0];
+  g.save();
+  g.strokeStyle = '#ffffff'; g.lineWidth = 5; g.globalAlpha = 0.85; g.setLineDash([12, 9]); g.lineCap = 'round'; g.lineJoin = 'round';
+  if (demo.taps) {
+    // 連點：依序在目標上閃一下
+    const n = Math.min(demo.taps.length, Math.floor(k * demo.taps.length + 0.001) + (k >= 1 ? 0 : 1));
+    g.beginPath(); pts.slice(0, n + 1).forEach((q, i) => i ? g.lineTo(q.x, q.y) : g.moveTo(q.x, q.y)); g.stroke();
+    demo.taps.slice(0, n).forEach((q, i) => { g.setLineDash([]); g.lineWidth = 3; g.beginPath(); g.arc(q.x, q.y, 24, 0, Math.PI * 2); g.stroke(); g.fillStyle = '#fff'; g.font = 'bold 16px sans-serif'; g.textAlign = 'center'; g.fillText(String(i + 1), q.x, q.y - 30); });
+    tipP = demo.taps[Math.max(0, n - 1)];
+  } else {
+    g.beginPath(); g.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length; i++) {
+      if (cum[i] <= want) { g.lineTo(pts[i].x, pts[i].y); tipP = pts[i]; continue; }
+      const q = (want - cum[i - 1]) / ((cum[i] - cum[i - 1]) || 1);
+      tipP = { x: pts[i - 1].x + (pts[i].x - pts[i - 1].x) * q, y: pts[i - 1].y + (pts[i].y - pts[i - 1].y) * q };
+      g.lineTo(tipP.x, tipP.y); break;
+    }
+    g.stroke();
+  }
+  // 手指
+  g.setLineDash([]); g.globalAlpha = 0.95; g.fillStyle = 'rgba(255,255,255,0.35)'; g.strokeStyle = '#fff'; g.lineWidth = 3;
+  g.beginPath(); g.arc(tipP.x, tipP.y, 16, 0, Math.PI * 2); g.fill(); g.stroke();
+  // 標題
+  const label = '示範：' + SHAPES[demo.shape] + '（碰一下戰場就開始畫）';
+  g.font = 'bold 18px sans-serif'; g.textAlign = 'center';
+  const w = g.measureText(label).width + 24;
+  g.globalAlpha = 0.8; g.fillStyle = '#000'; g.fillRect(W / 2 - w / 2, FLOOR + 8, w, 30);
+  g.globalAlpha = 1; g.fillStyle = '#ffe070'; g.fillText(label, W / 2, FLOOR + 30);
+  g.restore();
+}
+
 // ───── 畫面 ─────
 function fxPush(e) { effects.push({ t0: performance.now(), ...e }); }
 function float(u, text, color, size = 22) { fxPush({ type: 'text', x: u.x, y: u.y - 112, text, color, size, dur: 1000 }); }
@@ -1511,6 +1615,7 @@ function render(now) {
       }
     }
   }
+  drawDemo(now);
   effects = (effects || []).filter((e) => now < e.t0 + e.dur);
   for (const e of effects) {
     const k = (now - e.t0) / e.dur;
@@ -1576,6 +1681,7 @@ function renderSkills() {
     .map(([k, t, x]) => `<div><b style="color:${h.color}">${k}・${t.n}</b>${x}：${t.d}</div>`).join('')
     + `<div>點戰場上的角色或敵人可以看說明${h.skills.some((x) => x.shape === 'tap') ? '（用連點招式時要長按）' : ''}。</div>`;
   gearWho(h);
+  autoDemo();
   updateUi();
 }
 
@@ -1591,7 +1697,7 @@ function updateUi() {
   if (flying) return;
   if (busy) tip(`${hero().name}出招中……`);
   else if (drawing) tip(HOW[sk.shape]);
-  else if (!path.length) tip(`「${sk.name}」：${HOW[sk.shape]}`);
+  else if (!path.length) demo || tip(`「${sk.name}」：${HOW[sk.shape]}`);
   else if (hits.length) {
     const tal = talentsHit(), cx = crossings();
     tip(`「${sk.name}」會打 ${results().filter((x) => x.u.side === 'enemy' && x.dmg && !x.cross).length} 下（${new Set(hits.filter((u) => u.side === 'enemy')).size} 個敵人）${tal.length ? `，觸發天賦 <b>${tal.map((t) => t.name + '・' + t.talent.n).join('、')}</b>` : ''}${cx.length ? `，<b>紅線交會 ${cx.length} 處</b>` : ''}。${sk.shape === 'tap' && hits.length < sk.max ? '可以繼續點，' : ''}滿意就按出招，不滿意按重畫。`);
@@ -1600,8 +1706,10 @@ function updateUi() {
 }
 
 $('.redo').onclick = () => { if (!busy) clearPath(); };
+$('.how').onclick = () => { if (busy || !heroes) return; clearPath(); startDemo(skill().shape); };
 $('.go').onclick = () => (flying ? flying(null) : go());
 $('.help').innerHTML = `
+  <p><b>不會畫？</b>按左下的「怎麼畫」，戰場上會用白色虛線示範這一招的畫法。</p>
   <p><b>看說明</b>：點一下戰場上的角色或敵人，會跳出生命、狀態（勢、冰霜、紅線、凍住…）、招式和裝備的說明。用連點招式時，點一下是選目標，要<b>長按</b>才看說明。</p>
   <p>三位神魔輪流上場，<b>每次只動一位</b>，輪到的神魔腳下有金色光圈。選他的一招，照那招的畫法在戰場上畫，畫完會預覽每個目標受到的效果，按出招才算數。</p>
   ${Object.keys(SHAPES).map((k) => `<p><b>${SHAPES[k]}</b>：${HOW[k]}</p>`).join('')}
