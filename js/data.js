@@ -1,77 +1,41 @@
-// 遊戲資料：生命形態、技能、神魔、敵人、地圖、常客、隱藏真相
+// 遊戲資料：轉生三條路、樓層、岔路事件、常客、隱藏真相（神魔、敵人、裝備在 js/redline.js）
 'use strict';
 
 // 轉生櫃台的三條路：升仙、入魔、為人
 const PATH_ORDER = ['angel', 'demon', 'human'];
 
-// 人類的叫「信仰」，升仙、入魔的叫「職業」
-const faithLabel = (form) => (form === 'human' ? '信仰' : '職業');
-
+// side：這條路能選哪一族的神魔（null 兩族都能）；hpMul：今世神魔的生命倍率；anyGear：神器、邪物都能穿
 const FORMS = {
-  human: {
-    name: '人類', path: '為人', pathDesc: '留在人間。神族、魔族都能信仰', side: null, sprite: 'human',
-    hp: 30, atk: 7, def: 3, spd: 5, mov: 3,
-    innate: '未定之人：繼承技能時，可以從所有前世的技能裡挑選',
-    allowed: () => true,
-  },
   angel: {
-    name: '神使', path: '升仙', pathDesc: '成為神使，擔任神族職業', side: '神', sprite: 'angel',
-    hp: 26, atk: 5, def: 3, spd: 5, mov: 3,
-    innate: '代禱：隊友變成靈魂時，可以多撐 2 回合',
+    name: '神使', path: '升仙', pathDesc: '成為神使，擔任神族', side: '神', sprite: 'angel', hpMul: 1,
+    innate: '只能選神族。靈魂會往秩序走。',
     allowed: (nature) => nature <= 20,
     lockText: '靈魂太偏混沌',
   },
   demon: {
-    name: '惡魔', path: '入魔', pathDesc: '墮為惡魔，擔任魔族職業', side: '魔', sprite: 'demon',
-    hp: 28, atk: 8, def: 2, spd: 6, mov: 3,
-    innate: '吞噬：擊倒敵人時回復 4 點生命',
+    name: '惡魔', path: '入魔', pathDesc: '墮為惡魔，擔任魔族', side: '魔', sprite: 'demon', hpMul: 1,
+    innate: '只能選魔族。靈魂會往混沌走。',
     allowed: (nature) => nature >= -20,
     lockText: '靈魂太偏秩序',
   },
+  human: {
+    name: '人類', path: '為人', pathDesc: '留在人間，神族魔族都能信仰', side: null, sprite: 'human', hpMul: 0.85,
+    innate: '神族、魔族都能選，神器、邪物都能穿。代價：今世神魔生命少一成五。',
+    allowed: () => true,
+  },
 };
 
-const ENEMIES = {
-  shade:   { name: '影子怪',     sprite: 'shade',   hp: 12, atk: 5, def: 1, spd: 4, mov: 3, range: [1, 1], exp: 10, grab: 0.4 },
-  wisp:    { name: '鬼火',       sprite: 'wisp',    hp: 8,  atk: 4, def: 0, spd: 6, mov: 2, range: [2, 3], exp: 10, grab: 0.1 },
-  husk:    { name: '空殼職員',   sprite: 'husk',    hp: 18, atk: 6, def: 2, spd: 3, mov: 2, range: [1, 1], exp: 14, grab: 0.8 },
-  redgirl: { name: '紅衣小女孩', sprite: 'redgirl', hp: 10, atk: 5, def: 1, spd: 7, mov: 0, range: [1, 1], exp: 16, grab: 0.5, blink: true },
-  mirror:  { name: '鏡中人',     sprite: 'mirror',  hp: 16, atk: 0, def: 0, spd: 5, mov: 3, range: [1, 1], exp: 18, grab: 0.6, copy: true },
-  hunter:  { name: '追殺者',     sprite: 'hunter',  hp: 20, atk: 7, def: 2, spd: 6, mov: 4, range: [1, 1], exp: 20, grab: 1.0 },
-  boss:    { name: '無臉典獄長', sprite: 'boss',    hp: 60, atk: 9, def: 3, spd: 4, mov: 2, range: [1, 1], exp: 60, grab: 1.0, boss: true,
-             chain: { range: [2, 3], every: 3, mult: 1.0 } },
-  horus:   { name: '荷魯斯之影', sprite: 'horus',   hp: 64, atk: 8, def: 2, spd: 5, mov: 2, range: [1, 2], exp: 60, grab: 1.0, boss: true,
-             summon: { every: 3, type: 'shade', count: 2 } },
-};
+// 一世 = 10 層。第 5、10 層魔王，第 3、6、9 層精英
+const LIFE_FLOORS = 10;
+const floorKind = (f) => (f % 5 === 0 ? 'boss' : f % 3 === 0 ? 'elite' : 'normal');
 
-// 敵人在第幾層以後才會出現
-const ENEMY_DEPTH = { shade: 0, wisp: 0, husk: 1, redgirl: 2, mirror: 3 };
-
-const COMPANION = { name: '引魂犬', sprite: 'dog', hp: 20, atk: 5, def: 2, spd: 7, mov: 4, range: [1, 1] };
-
-const DUNGEON_DEPTH = 5; // 最後一層是首領
-
-// 每層的場景主題：地板顏色、牆和水的多寡
-const THEMES = [
-  { id: 'corridor', name: '迴廊',             floor: ['#1d1a26', '#211e2b'], speck: '#28243a', walls: [3, 5], water: [0, 1] },
-  { id: 'archive',  name: '積水的檔案室',     floor: ['#18202a', '#1b2430'], speck: '#26334a', walls: [2, 4], water: [2, 3] },
-  { id: 'office',   name: '沒有人的辦公室',   floor: ['#2a1a1e', '#2e1d22'], speck: '#3e262c', walls: [4, 6], water: [0, 0] },
-  { id: 'morgue',   name: '停屍間',           floor: ['#1c2422', '#202826'], speck: '#2c3834', walls: [3, 6], water: [0, 1] },
-  { id: 'shaft',    name: '電梯井',           floor: ['#1a1a1a', '#1f1f1f'], speck: '#2c2c2c', walls: [6, 8], water: [0, 1] },
-  { id: 'garden',   name: '淹水的空中花園',   floor: ['#18241c', '#1c2a20'], speck: '#28402e', walls: [1, 3], water: [2, 4] },
-];
-
-const BOSSES = [
-  { type: 'boss',  room: '典獄長的房間' },
-  { type: 'horus', room: '荷魯斯之影的祭壇' },
-];
-
-// 每層之間的隨機事件
+// 層與層之間的岔路：隨機兩條選一條
 const EVENTS = {
-  rest:   { name: '營火',       desc: '坐下來休息。回復四成生命。' },
-  altar:  { name: '血祭壇',     desc: '獻上目前生命的四分之一，這一世攻擊 +1。' },
+  rest:   { name: '營火',       desc: '坐下來休息。全隊回復四成生命。' },
+  altar:  { name: '血祭壇',     desc: '全隊獻上目前生命的四分之一，這一世每一下傷害 +2。' },
   lost:   { name: '迷途的靈魂', desc: '一個找不到出口的靈魂拉住你的衣角。' },
   chest:  { name: '上鎖的箱子', desc: '可能是寶物，也可能是陷阱。' },
-  spring: { name: '靈泉',       desc: '引魂犬回到你身邊，你回復兩成生命。' },
+  spring: { name: '靈泉',       desc: '泉水洗過靈魂。全隊回復兩成生命，這一世生命上限 +5。' },
 };
 
 // 常客：每一世死後在終端遇到一幕
@@ -154,14 +118,4 @@ const TRUTHS = {
   D: { title: '飼料', text: ['你每一世累積的因果，不管善惡，都被收割走了。', '神與魔不是在打仗，他們是牧羊犬。', '真正在吃東西的，是終端頂樓的董事會。', '你，是飼料。'] },
   E: { title: '查無此人', text: ['終端的名冊裡，查無此人。', '你根本沒有死。你躺在某間醫院裡，昏迷了很久。', '你在地城裡聽見的那些聲音，是你的家人在床邊說話。', '你可以留下，也可以醒來。'] },
   F: { title: '死對頭才是同事', text: ['一直追殺你的那個人，也是轉生者。', '你們的仇恨，是董事會寫好的劇本。', '他和你一樣，一世一世被安排來互相殺死。', '這一次，你們可以一起逃走。'] },
-};
-
-// 神器：打倒首領取得，存進靈魂倉庫；轉生時可以喚醒一件帶著走
-const RELICS = {
-  chain:   { name: '典獄長的鎖鏈', from: 'boss',  desc: '攻擊 +2',                           atk: 2 },
-  lantern: { name: '藍火提燈',     from: 'boss',  desc: '最大生命 +8',                       hp: 8 },
-  key:     { name: '無臉者的鑰匙', from: 'boss',  desc: '變成靈魂時多撐 1 回合，防禦 +1',     soul: 1, def: 1 },
-  eye:     { name: '荷魯斯之眼',   from: 'horus', desc: '每場戰鬥開始時，大招已經充好一半',   charge: 50 },
-  badge:   { name: '黑沙工牌',     from: 'horus', desc: '防禦 +2',                           def: 2 },
-  feather: { name: '鷹羽',         from: 'horus', desc: '移動 +1，速度 +2',                  mov: 1, spd: 2 },
 };

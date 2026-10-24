@@ -1,10 +1,14 @@
-// 遊戲主流程：存檔、靈界（結算終端）、轉生、城鎮、地城
+// 遊戲主流程：存檔、靈界（結算終端）、轉生櫃台、一世十層的一筆紅線、結算
 'use strict';
 
-const SAVE_KEY = 'rebirth-terminal-save-v1';
+// 第一版（格子戰鬥）的存檔格式不同，整合後開新存檔，舊的不轉
+const SAVE_KEY = 'rebirth-terminal-save-v2';
+const OLD_SAVE_KEY = 'rebirth-terminal-save-v1';
 
 const $ = (sel) => document.querySelector(sel);
-const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const randInt = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+const shuffle = (a) => a.slice().sort(() => Math.random() - 0.5);
+const { HEROES, GEAR } = Redline;
 
 function el(tag, attrs = {}, ...children) {
   const node = document.createElement(tag);
@@ -34,29 +38,34 @@ function corrupt(text, level) {
 }
 
 const SHOP = [
-  { id: 'hp',   name: '生命強化', desc: '之後每一世最大生命 +3', cost: 6,  max: 5 },
-  { id: 'atk',  name: '力量強化', desc: '之後每一世攻擊 +1',     cost: 10, max: 3 },
-  { id: 'soul', name: '靈魂韌性', desc: '變成靈魂時多撐 1 回合', cost: 12, max: 1 },
+  { id: 'hp',  name: '生命強化', desc: '所有神魔生命上限 +3',   cost: 6,  max: 5 },
+  { id: 'dmg', name: '朱砂',     desc: '所有招式每一下傷害 +1', cost: 10, max: 3 },
+  { id: 'ink', name: '墨水強化', desc: '所有招式的墨水 +10%',   cost: 12, max: 2 },
 ];
+
+// 每位神魔各自的等級，永久保留、死了也不掉。升一級生命 +4（之後再加解鎖新招、被動二選一）
+const LV_MAX = 30;
+const needExp = (lv) => 20 + 10 * (lv - 1);
+const TAGS = { now: '今世', shadow: '前世之影', crew: '派遣同事' };
 
 const Game = {
   save: null,
-  battle: null,
 
   // ───────── 存檔 ─────────
 
   newSave() {
     const truths = Object.keys(TRUTHS);
     return {
-      version: 1,
+      version: 2,
       truth: truths[randInt(0, truths.length - 1)],
       truthRevealed: false,
       nature: 0, debt: 0, fragments: 0,
-      perm: { hp: 0, atk: 0, soul: 0 },
+      perm: { hp: 0, dmg: 0, ink: 0 },
       boons: { soulExtra: 0, parcel: false },
       history: [],
-      echoes: [],
-      vault: [],
+      lv: {},          // 神魔等級 { id: { lv, exp } }
+      vault: [],       // 這一世拿到的裝備（轉生時清空）
+      eq: {},          // 誰身上穿什麼 { id: { weapon, charm } }
       regulars: { zhang: { act: 0, choices: [] }, kai: { act: 0, choices: [] } },
       life: null,
       ended: false,
@@ -77,16 +86,35 @@ const Game = {
   get lifeNo() { return this.save.history.length + 1; },
   get glitch() { return this.save.history.length; },
 
+  lvOf(id) { return this.save.lv[id] || { lv: 1, exp: 0 }; },
+  maxHpFor(id, lv, mul = 1) {
+    const s = this.save, L = s.life;
+    return Math.round((HEROES[id].hp + 4 * (lv - 1) + s.perm.hp * 3 + ((L && L.bonusHp) || 0)) * mul);
+  },
+  // 加經驗，回傳升了幾級
+  addExp(id, n) {
+    const s = this.save, v = s.lv[id] = s.lv[id] || { lv: 1, exp: 0 };
+    let ups = 0;
+    v.exp += n;
+    while (v.lv < LV_MAX && v.exp >= needExp(v.lv)) { v.exp -= needExp(v.lv); v.lv++; ups++; }
+    if (v.lv >= LV_MAX) v.exp = 0;
+    return ups;
+  },
+  eqOf(id) { return Object.values(this.save.eq[id] || {}).filter((g) => GEAR[g]); },
+
   // ───────── 畫面切換 ─────────
 
   show(id) {
-    if (this.battle && id !== 'battle') { this.battle.destroy(); this.battle = null; }
     for (const s of document.querySelectorAll('.screen')) s.classList.toggle('active', s.id === id);
     window.scrollTo(0, 0);
+    // 背景音樂：戰鬥時一般關卡／魔王關各一首，其他畫面放首頁那首
+    if (typeof Snd !== 'undefined') Snd.bgm(id === 'battle' ? this.battleMusic || 'floor' : 'title');
   },
 
   start() {
     this.load();
+    // 離開：自動存檔，回來時這一層重打
+    $('#battle .leave').onclick = () => { Redline.stop(); this.showTitle(); };
     this.showTitle();
   },
 
@@ -98,13 +126,24 @@ const Game = {
       box.append(el('button', { class: 'btn primary', onclick: () => this.resume() }, `繼續（第 ${this.lifeNo} 世）`));
     }
     box.append(el('button', { class: 'btn' + (hasSave ? '' : ' primary'), onclick: () => this.confirmNew(hasSave) }, '新的靈魂'));
-    box.append(el('button', { class: 'btn', onclick: () => { Tutorial.reset(); alert('新手教學已重置，走到每個畫面時會再出現一次說明。'); } }, '重看新手教學'));
+    box.append(el('button', { class: 'btn', onclick: () => {
+      Tutorial.reset();
+      try { localStorage.removeItem('rebirth-redline-tut-v1'); } catch (e) { /* 存不了就算了 */ }
+      box.append(el('p', { class: 'muted small-note' }, '新手教學已重置，走到每個畫面時會再出現一次說明。'));
+    } }, '重看新手教學'));
+    let old = false;
+    try { old = !hasSave && !!localStorage.getItem(OLD_SAVE_KEY); } catch (e) { /* 讀不到就當沒有 */ }
+    if (old) box.append(el('p', { class: 'muted small-note' }, '戰鬥改成一筆紅線了，舊版的存檔沒辦法接著玩，請開一個新的靈魂。'));
     drawTerminalBanner($('#title canvas'), 0);
     this.show('title');
   },
 
   confirmNew(hasSave) {
-    if (hasSave && !confirm('開始新的靈魂會覆蓋目前的存檔，確定嗎？')) return;
+    // 不用瀏覽器的 confirm（有些地方會直接當成取消）
+    if (hasSave) return this.story(['開始新的靈魂會覆蓋目前的存檔，確定嗎？'], null, { speaker: '終端', choices: [
+      { label: '確定，開新的靈魂', cls: 'danger', action: () => this.confirmNew(false) },
+      { label: '取消', action: () => this.showTitle() },
+    ] });
     this.save = this.newSave();
     this.persist();
     this.story([
@@ -112,13 +151,14 @@ const Game = {
       '歡迎來到「靈魂結算終端」。',
       '人間的祈禱與詛咒堆積如山，神界與魔界都缺人手。',
       '你被分配為「轉生外包職員」。',
+      '每一世你會成為一位神魔，爬一座十層的塔。你死過的每一世，都會變成「前世之影」陪你上場。',
       '請選擇升仙、入魔，或者繼續為人。祝你這一世工作順利。',
     ], () => this.showRebirth(), { speaker: '終端廣播', sprite: null });
   },
 
   resume() {
     const s = this.save;
-    if (s.life && s.life.alive) this.showTown();
+    if (s.life && s.life.alive) this.fight();
     else this.showTerminal();
   },
 
@@ -155,27 +195,40 @@ const Game = {
     next();
   },
 
-  // ───────── 轉生 ─────────
+  // ───────── 轉生櫃台 ─────────
+
+  // 前世之影：死過的每一世都能帶上場，停在死前的等級、空手上場（同一位神魔只算最近那一世）
+  shadowOptions(except) {
+    const seen = new Set(), out = [];
+    for (const h of [...this.save.history].reverse()) {
+      if (!HEROES[h.hero] || h.hero === except || seen.has(h.hero)) continue;
+      seen.add(h.hero);
+      out.push({ id: h.hero, level: h.level, gear: [], life: h.life });
+    }
+    return out;
+  },
 
   showRebirth() {
     const s = this.save;
-    const prev = s.history[s.history.length - 1];
-    const pick = { form: null, faith: null, inherit: null, relic: null };
-    // 每一世只抽一次：每條路隨機三個職業／信仰，存進存檔，重新整理不會重抽
+    const pick = { form: null, hero: null, shadows: [] };
+    // 每一世只抽一次：每條路隨機三位神魔、派遣同事的順序，存進存檔，重新整理不會重抽
     if (!s.offer || s.offer.life !== this.lifeNo) {
-      const draw = (side) => Object.keys(FAITHS).filter((id) => !side || FAITHS[id].side === side)
-        .sort(() => Math.random() - 0.5).slice(0, 3);
-      s.offer = { life: this.lifeNo, paths: {} };
+      const draw = (side) => shuffle(Redline.ALL_IDS.filter((id) => !side || HEROES[id].faith === side)).slice(0, 3);
+      s.offer = { life: this.lifeNo, paths: {}, crew: shuffle(Redline.ALL_IDS) };
       for (const id of PATH_ORDER) s.offer.paths[id] = draw(FORMS[id].side);
       this.persist();
     }
-    // 測試期間：有專屬像素圖的職業（月老、荷魯斯之影）固定出現在能選它的路上，各占一格不互相蓋掉
-    for (const id of PATH_ORDER) {
-      const side = FORMS[id].side, list = s.offer.paths[id];
-      const forced = Object.keys(ART).filter((k) => JOBS[k] && (!side || FAITHS[k].side === side));
-      forced.forEach((job) => { if (!list.includes(job)) list[list.findIndex((j) => !forced.includes(j))] = job; });
-    }
     const root = $('#rebirth .content');
+
+    // 這一世的隊伍：今世＋兩位前世之影；前世不夠就由終端派遣同事補上
+    const party = () => {
+      if (!pick.hero) return [];
+      const opts = this.shadowOptions(pick.hero);
+      const shadows = opts.length <= 2 ? opts : pick.shadows.map((i) => opts[i]).filter(Boolean);
+      const out = [{ id: pick.hero, tag: TAGS.now }, ...shadows.map((o) => ({ id: o.id, tag: TAGS.shadow, level: o.level, gear: [], life: o.life }))];
+      if (opts.length <= 2) for (const id of s.offer.crew) { if (out.length >= 3) break; if (!out.some((p) => p.id === id)) out.push({ id, tag: TAGS.crew }); }
+      return out;
+    };
 
     const render = () => {
       root.innerHTML = '';
@@ -183,313 +236,231 @@ const Game = {
       root.append(el('p', { class: 'muted' }, `靈魂本質：${natureLabel(s.nature)}（${s.nature}）　因果債：${s.debt}`));
       root.append(el('p', { class: 'muted small-note' }, '靈魂本質越偏混沌越難升仙，越偏秩序越難入魔。擔任神族會往秩序走，魔族會往混沌走。'));
 
-      root.append(el('h3', {}, '升仙・入魔・為人'));
+      root.append(el('h3', {}, '① 升仙・入魔・為人'));
       const forms = el('div', { class: 'cards' });
       for (const id of PATH_ORDER) {
         const f = FORMS[id];
         const ok = f.allowed(s.nature);
-        const c = el('button', { class: 'card' + (pick.form === id ? ' selected' : '') + (ok ? '' : ' locked'), onclick: () => {
+        forms.append(el('button', { class: 'card' + (pick.form === id ? ' selected' : '') + (ok ? '' : ' locked'), onclick: () => {
           if (!ok) return;
-          // 換路的時候，原本選的職業／信仰如果不屬於這條路就清掉
-          if (pick.faith && !s.offer.paths[id].includes(pick.faith)) pick.faith = null;
-          pick.form = id; pick.inherit = null; render();
+          // 換路的時候，原本選的神魔如果不在這條路上就清掉
+          if (pick.hero && !s.offer.paths[id].includes(pick.hero)) { pick.hero = null; pick.shadows = []; }
+          pick.form = id; render();
         } },
           spriteImg(f.sprite),
           el('b', {}, f.path),
           el('small', {}, f.pathDesc),
-          el('small', {}, ok ? `生命 ${f.hp}　攻擊 ${f.atk}` : f.lockText),
-          ok ? el('small', {}, `防禦 ${f.def}　速度 ${f.spd}`) : null,
-          el('small', { class: 'muted' }, f.innate));
-        forms.append(c);
+          el('small', { class: 'muted' }, ok ? f.innate : f.lockText)));
       }
       root.append(forms);
 
-      const side = pick.form ? FORMS[pick.form].side : null;
-      root.append(el('h3', {}, !pick.form ? '職業／信仰' : side === '神' ? '神族職業' : side === '魔' ? '魔族職業' : '信仰（神族、魔族都可能出現）'));
-      if (pick.form) root.append(el('p', { class: 'muted' }, '這一世櫃台隨機給你三個選擇。'));
+      root.append(el('h3', {}, '② 今世的你'));
       if (!pick.form) root.append(el('p', { class: 'muted' }, '先選升仙、入魔或為人。'));
-      const faiths = el('div', { class: 'cards two' });
-      const g = pick.form ? gaugeName(pick.form) : '能量';
-      for (const id of pick.form ? s.offer.paths[pick.form] : []) {
-        faiths.append(el('button', { class: 'card job' + (pick.faith === id ? ' selected' : ''), onclick: () => { pick.faith = id; render(); } },
-          ...jobCard(id, g, !side)));
-      }
-      root.append(faiths);
-
-      const options = pick.form ? this.inheritOptions(pick.form, pick.faith) : [];
-      if (pick.inherit && !options.includes(pick.inherit)) pick.inherit = null;
-      if (prev) {
-        root.append(el('h3', {}, '繼承一個前世技能'));
-        if (!pick.form) root.append(el('p', { class: 'muted' }, '先選生命形態，才知道技能會怎麼變異。'));
-        else if (!options.length) root.append(el('p', { class: 'muted' }, '沒有可以繼承的技能。'));
-        else {
-          const box = el('div', { class: 'cards two' });
-          for (const id of options) {
-            const sk = mutateSkill(id, pick.form);
-            const from = JOBS[id.split('.')[0]];
-            box.append(el('button', { class: 'card' + (pick.inherit === id ? ' selected' : ''), onclick: () => { pick.inherit = id; render(); } },
-              el('b', {}, sk.n + (from ? `（${from.name}）` : '')), el('small', {}, describeSkill(sk, g)), el('small', { class: 'muted' }, MUTATION[pick.form].note)));
-          }
-          root.append(box);
-        }
-      }
-
-      const vault = s.vault || [];
-      if (vault.length) {
-        root.append(el('h3', {}, '喚醒一件神器（靈魂倉庫）'));
+      else {
+        root.append(el('p', { class: 'muted' }, '這一世櫃台隨機給你三位，請選擇一位。等級跟著每位神魔永久保留。'));
         const box = el('div', { class: 'cards two' });
-        box.append(el('button', { class: 'card' + (!pick.relic ? ' selected' : ''), onclick: () => { pick.relic = null; render(); } }, el('b', {}, '不帶'), el('small', { class: 'muted' }, '讓神器繼續沉睡')));
-        for (const id of vault) {
-          box.append(el('button', { class: 'card' + (pick.relic === id ? ' selected' : ''), onclick: () => { pick.relic = id; render(); } },
-            el('b', {}, RELICS[id].name), el('small', {}, RELICS[id].desc)));
+        for (const id of s.offer.paths[pick.form]) {
+          box.append(el('button', { class: 'card job' + (pick.hero === id ? ' selected' : ''), onclick: () => { pick.hero = id; pick.shadows = []; render(); } },
+            ...heroCard(id, this.lvOf(id).lv)));
         }
         root.append(box);
       }
 
-      const ready = pick.form && pick.faith && (!prev || !options.length || pick.inherit);
-      root.append(el('button', { class: 'btn primary wide', disabled: ready ? null : 'disabled', onclick: () => this.beginLife(pick) }, '轉生'));
+      const p = party();
+      if (pick.hero) {
+        root.append(el('h3', {}, '③ 隊友'));
+        const opts = this.shadowOptions(pick.hero);
+        if (opts.length > 2) {
+          root.append(el('p', { class: 'muted' }, `從前世裡挑兩位，當「前世之影」陪你上場（已選 ${pick.shadows.length}/2）。他們停在死前的等級、穿著死前的裝備。`));
+          const box = el('div', { class: 'cards two' });
+          opts.forEach((o, i) => {
+            const on = pick.shadows.includes(i);
+            box.append(el('button', { class: 'card job' + (on ? ' selected' : ''), onclick: () => {
+              if (on) pick.shadows = pick.shadows.filter((x) => x !== i); else if (pick.shadows.length < 2) pick.shadows.push(i);
+              render();
+            } }, ...shadowCard(o)));
+          });
+          root.append(box);
+        } else {
+          root.append(el('p', { class: 'muted' }, opts.length ? '你的前世都會以「前世之影」上場；人數不夠的，由終端派遣同事補上。' : '你還沒有前世。終端派了兩位同事來幫你。'));
+          for (const m of p.slice(1)) root.append(el('div', { class: 'card job' }, ...(m.tag === TAGS.shadow ? shadowCard(m) : shadowCard({ id: m.id, level: this.lvOf(m.id).lv, gear: this.eqOf(m.id) }, TAGS.crew))));
+        }
+        root.append(el('p', { class: 'muted small-note' }, `出手順序：${p.map((m) => `${HEROES[m.id].name}（${m.tag}）`).join(' → ')}`));
+      }
+
+      const ready = pick.form && pick.hero && p.length === 3;
+      root.append(el('button', { class: 'btn primary wide', disabled: ready ? null : 'disabled', onclick: () => this.beginLife(pick.form, p) }, '轉生，出發爬塔'));
       Tutorial.tip('rebirth');
     };
     render();
     this.show('rebirth');
   },
 
-  // 可以繼承的前世技能：人類能挑所有前世，其他只能挑上一世；這一世職業本來就有的不算
-  inheritOptions(form, faith) {
+  beginLife(form, party) {
+    if (typeof Snd !== 'undefined') Snd.sfx('rebirth');
     const s = this.save;
-    const lives = form === 'human' ? s.history : s.history.slice(-1);
-    const ids = new Set();
-    for (const h of lives) for (const id of h.skills || []) if (!faith || !id.startsWith(faith + '.')) ids.add(id);
-    return [...ids];
-  },
-
-  beginLife(pick) {
-    const s = this.save;
+    s.vault = []; s.eq = {}; // 每一世的裝備從零開始
+    const hero = party[0].id;
+    const lines = [];
+    // 阿凱的包裹：今世的神魔先升一級
+    if (s.boons.parcel) {
+      s.boons.parcel = false;
+      const v = s.lv[hero] = s.lv[hero] || { lv: 1, exp: 0 };
+      if (v.lv < LV_MAX) { v.lv++; lines.push(`阿凱送來的包裹裡裝著一份經驗。${HEROES[hero].name}升到 Lv.${v.lv}。`); }
+    }
     s.life = {
-      form: pick.form, faith: pick.faith, inherit: pick.inherit, relic: pick.relic || null,
-      level: s.boons.parcel ? 2 : 1, exp: 0, hp: null,
-      floor: 0, kills: 0, rescued: 0, alive: true, companionAlive: true,
+      form, hero, party, floor: 0, kills: 0, hp: {}, maxHp: {},
+      up: { dmg: s.perm.dmg, ink: 1 + 0.1 * s.perm.ink },
+      bonusHp: s.boons.soulExtra ? 6 : 0, alive: true,
     };
-    if (s.boons.parcel) s.boons.parcel = false;
-    s.life.hp = this.heroStats().maxHp;
+    if (s.boons.soulExtra) lines.push('張醫師縫的那一針還在。這一世全隊生命上限 +6。');
+    s.boons.soulExtra = 0;
+    for (const m of party) {
+      const lv = m.tag === TAGS.shadow ? m.level : this.lvOf(m.id).lv;
+      s.life.maxHp[m.id] = s.life.hp[m.id] = this.maxHpFor(m.id, lv, m.tag === TAGS.now ? FORMS[form].hpMul : 1);
+    }
     this.persist();
-    const f = FORMS[pick.form];
+    const H = HEROES[hero];
     this.story([
-      pick.form === 'angel' ? `你升仙成為神使，擔任${FAITHS[pick.faith].name}的職業。`
-        : pick.form === 'demon' ? `你入魔成為惡魔，擔任${FAITHS[pick.faith].name}的職業。`
-        : `你轉生為人，信仰${FAITHS[pick.faith].name}。`,
-      `${FAITHS[pick.faith].title}・${FAITHS[pick.faith].name}：「${FAITHS[pick.faith].quote}」`,
-      pick.inherit ? `前世的「${getSkill(pick.inherit).n}」在你身上變成了「${mutateSkill(pick.inherit, pick.form).n}」。` : '這一世沒有帶著前世的技能。',
-      '一隻黑色的小狗從終端的門縫鑽出來，跟在你腳邊。牠是引魂犬。',
-    ], () => this.showTown(), { speaker: '轉生櫃台', sprite: f.sprite });
+      form === 'angel' ? `你升仙成為神使，擔任${H.name}。` : form === 'demon' ? `你入魔成為惡魔，擔任${H.name}。` : `你轉生為人，信仰${H.name}。`,
+      ORIGINS[hero] ? `${H.name}：${ORIGINS[hero][1]}` : `${H.name}・${H.role}`,
+      ...party.slice(1).map((m) => m.tag === TAGS.shadow ? `第 ${m.life} 世的你，${HEROES[m.id].name}的影子，站到了你身後。` : `終端派來的同事${HEROES[m.id].name}朝你點點頭。`),
+      ...lines,
+      `眼前是一座十層的塔。第 5、10 層有魔王，第 3、6、9 層有精英。`,
+    ], () => this.fight(), { speaker: '轉生櫃台', sprite: FORMS[form].sprite });
   },
 
-  heroStats() {
-    const s = this.save, L = s.life, f = FORMS[L.form];
-    const lv = L.level - 1;
-    const r = RELICS[L.relic] || {};
-    const statue = s.echoes.some((e) => e.type === 'statue') ? 1 : 0;
-    const p = JOBS[L.faith].passive.p;
-    const skills = [`${L.faith}.0`, `${L.faith}.1`];
-    const skillDefs = {};
-    for (const id of skills) skillDefs[id] = getSkill(id);
-    if (L.inherit) { skills.push(L.inherit); skillDefs[L.inherit] = mutateSkill(L.inherit, L.form); }
-    return {
-      sprite: f.sprite, art: ART[L.faith] ? L.faith : null,
-      maxHp: f.hp + s.perm.hp * 3 + lv * 4 + (r.hp || 0) + (p.hp || 0),
-      hp: L.hp,
-      atk: f.atk + s.perm.atk + lv + statue + (L.bonusAtk || 0) + (r.atk || 0) + (p.atk || 0),
-      def: f.def + Math.floor(lv / 2) + (r.def || 0) + (p.def || 0),
-      spd: f.spd + (r.spd || 0) + (p.spd || 0), mov: f.mov + (r.mov || 0) + (p.mov || 0),
-      skills, skillDefs,
-      companionAlive: L.companionAlive,
-    };
-  },
+  // ───────── 爬塔：一層一場一筆紅線 ─────────
 
-  // ───────── 城鎮 ─────────
-
-  showTown() {
-    const s = this.save, L = s.life, st = this.heroStats();
-    drawTownBanner($('#town canvas'));
-    const root = $('#town .content');
-    root.innerHTML = '';
-    root.append(el('h2', {}, `第 ${this.lifeNo} 世・邊境城鎮`));
-    root.append(el('div', { class: 'hero-card' },
-      st.art ? artImg(st.art, 64) : spriteImg(st.sprite),
-      el('div', {},
-        el('b', {}, `${FORMS[L.form].name}　Lv.${L.level}`),
-        el('div', {}, `生命 ${L.hp}/${st.maxHp}　攻擊 ${st.atk}　防禦 ${st.def}`),
-        el('div', { class: 'muted' }, `${faithLabel(L.form)}：${FAITHS[L.faith].title}・${FAITHS[L.faith].name}`),
-        el('div', { class: 'muted' }, `技能：${st.skills.map((id) => st.skillDefs[id].n).join('、')}　大招：${FAITHS[L.faith].ult.n}`),
-        L.relic ? el('div', { class: 'muted' }, `神器：${RELICS[L.relic].name}（${RELICS[L.relic].desc}）`) : null)));
-
-    root.append(el('div', { class: 'card job' }, ...jobCard(L.faith, gaugeName(L.form), false)));
-    if (L.inherit) root.append(el('div', { class: 'echo' }, el('b', {}, `前世技能「${st.skillDefs[L.inherit].n}」`), el('div', {}, describeSkill(st.skillDefs[L.inherit], gaugeName(L.form)))));
-
-    root.append(el('h3', {}, '前世回響'));
-    if (!s.echoes.length) root.append(el('p', { class: 'muted' }, '這座城鎮還不認識你的靈魂。'));
-    for (const e of s.echoes) root.append(el('div', { class: 'echo ' + e.type }, el('b', {}, e.title), el('div', {}, e.text)));
-
-    root.append(el('button', { class: 'btn primary wide', onclick: () => this.enterDungeon() }, '進入地城'));
-    Tutorial.tip('town');
-    root.append(el('button', { class: 'btn wide', onclick: () => this.showTitle() }, '回標題（自動存檔）'));
-    this.show('town');
-  },
-
-  // ───────── 地城 ─────────
-
-  enterDungeon() {
+  // 出戰的三位：都穿這一世拿到的裝備（前世之影也是空手來的）
+  battleParty() {
     const L = this.save.life;
-    // 每次進地城都重新抽場景和首領
-    const themes = THEMES.map((t) => t.id).sort(() => Math.random() - 0.5).slice(0, DUNGEON_DEPTH - 1);
-    L.run = { themes, boss: BOSSES[randInt(0, BOSSES.length - 1)].type };
-    L.floor = 0;
-    L.bonusAtk = 0;
-    L.hp = this.heroStats().maxHp;
-    L.companionAlive = true;
-    this.persist();
-    this.fight();
+    return L.party.map((m) => ({ id: m.id, tag: m.tag, hp: L.hp[m.id], maxHp: L.maxHp[m.id], gear: this.eqOf(m.id), res: (L.res || {})[m.id] || 0 }));
   },
 
-  floorName(i, life = this.save.life) {
-    if (!life || !life.run) return `地下 ${i + 1} 層`;
-    if (i >= DUNGEON_DEPTH - 1) return `地下 ${i + 1} 層・${BOSSES.find((b) => b.type === life.run.boss).room}`;
-    return `地下 ${i + 1} 層・${THEMES.find((t) => t.id === life.run.themes[i]).name}`;
+  floorFoes(f) {
+    const kind = floorKind(f);
+    // 越深層，一般敵人的種類越多
+    const pool = ['zombie', 'wisp', 'shade', 'jinmenken', ...(f >= 2 ? ['mizuki', 'gaki'] : []), ...(f >= 4 ? ['husk', 'printer', 'diaoxigui', 'amanojaku'] : []), ...(f >= 7 ? ['mirror', 'jerseydevil'] : [])];
+    const one = (a) => a[randInt(0, a.length - 1)];
+    const some = (n) => Array.from({ length: n }, () => one(pool));
+    if (kind === 'boss') return f >= 10 ? [one(['wardenX', 'dullahan', 'wendigo']), ...some(2)] : [one(['judge', 'guhuoniao']), 'wisp'];
+    if (kind === 'elite') return [one(f === 3 ? ['warden', 'lintoujie', 'tengu'] : ['warden', 'hunter', 'lintoujie', 'tengu', 'mothman']), ...some(f === 3 ? 1 : 2)];
+    return f === 1 ? ['zombie', 'wisp'] : some(f >= 7 ? 4 : 3);
   },
 
-  async fight() {
+  fight() {
     const s = this.save, L = s.life;
-    if (!L.run) return this.enterDungeon();
-    const isBoss = L.floor >= DUNGEON_DEPTH - 1;
-    const spec = generateFloor(L.floor, L.run.themes[L.floor], isBoss ? L.run.boss : null, s.debt >= 4 && L.floor === 2);
+    const f = L.floor + 1, kind = floorKind(f);
+    // 中途離開再回來：同一層重打，敵人重抽
+    const foes = this.floorFoes(f);
+    this.battleMusic = kind === 'boss' ? 'boss' : 'floor';
     this.show('battle');
-    $('#battle .floor-name').textContent = spec.name;
-    $('#battle .log').innerHTML = '';
-    const opts = {
-      faith: L.faith, form: L.form,
-      soulExtra: s.boons.soulExtra + s.perm.soul + ((RELICS[L.relic] || {}).soul || 0),
-      startCharge: (RELICS[L.relic] || {}).charge || 0,
-      gauge: gaugeName(L.form),
-    };
-    this.battle = new Battle($('#battle canvas'), BattleUI, spec, this.heroStats(), opts);
-    const res = await this.battle.run();
-    await sleep(700);
-    if (!this.battle) return; // 戰鬥中離開了畫面
-    L.kills += res.kills;
-    const jp = JOBS[L.faith].passive.p;
-    if (jp.fragPerKill && res.kills) s.fragments += jp.fragPerKill * res.kills;
-    L.rescued += this.battle.rescued || 0;
-    L.companionAlive = res.companionAlive;
-    if (res.result === 'win') {
-      if (this.battle.units.some((u) => u.type === 'hunter' && u.gone)) {
-        s.debt = Math.max(0, s.debt - 2);
-        s.echoes = s.echoes.filter((e) => e.type !== 'bounty' || s.debt >= 4);
-      }
-      this.afterWin(res);
-    } else {
-      L.hp = 0;
-      this.die(res.outcome, res.cause);
-    }
-  },
-
-  afterWin(res) {
-    const s = this.save, L = s.life;
-    const lines = [`${this.floorName(L.floor)}　突破！`];
-    L.exp += res.exp;
-    let ups = 0;
-    while (L.exp >= L.level * 20) { L.exp -= L.level * 20; L.level++; ups++; }
-    if (ups) lines.push(`等級提升到 Lv.${L.level}。`);
-    const jp = JOBS[L.faith].passive.p;
-    if (jp.fragPerKill && res.kills) lines.push(`「${JOBS[L.faith].passive.n}」：多得 ${jp.fragPerKill * res.kills} 個靈魂碎片。`);
-    if (jp.debtHeal && s.debt > 0) { s.debt--; lines.push(`「${JOBS[L.faith].passive.n}」：因果債 -1。`); }
-    // 取回前世殘魂
-    const remnant = s.echoes.find((e) => e.type === 'remnant' && e.floor === L.floor);
-    if (remnant) {
-      s.fragments += remnant.frag;
-      s.echoes = s.echoes.filter((e) => e !== remnant);
-      lines.push(`你在角落找到前世的殘魂。它把 ${remnant.frag} 個靈魂碎片交還給你，然後安心地散了。`);
-    }
-    L.hp = Math.max(res.hp, 1);
-    if (L.floor >= DUNGEON_DEPTH - 1) {
-      this.persist();
-      lines.push(L.run.boss === 'horus'
-        ? '荷魯斯之影散成一地黑沙。沙子裡有一張工牌，上面的照片是你。'
-        : '典獄長的鎖鏈斷了。地城深處傳來一聲很長的嘆息。');
-      return this.story(lines, () => this.bossLoot(), { speaker: '地城' });
-    }
-    L.floor++;
-    this.persist();
-    // 下樓之前的岔路：營火一定在，另外隨機兩個事件
-    const others = Object.keys(EVENTS).filter((k) => k !== 'rest').sort(() => Math.random() - 0.5).slice(0, 2);
-    lines.push('往下的樓梯分成了三條路。');
-    this.story(lines, null, {
-      speaker: '地城',
-      choices: ['rest', ...others].map((k) => ({ label: `${EVENTS[k].name}：${EVENTS[k].desc}`, action: () => this.runEvent(k) })),
+    Redline.start({
+      floor: f,
+      title: `第 ${f} 層${kind === 'boss' ? '・魔王' : kind === 'elite' ? '・精英' : ''}`,
+      note: `<p class="muted">第 ${this.lifeNo} 世・一世共 ${LIFE_FLOORS} 層</p>`,
+      foes, scale: 1 + 0.12 * (f - 1) + 0.1 * (this.lifeNo - 1), up: L.up,
+      party: this.battleParty(),
+      gearButton: () => Redline.gearBox(this.gearStore(), () => this.fight(), '開始'),
+      onEnd: (r) => this.afterFloor(f, r),
     });
   },
 
+  gearStore() {
+    const s = this.save, L = s.life;
+    return { note: '這一世拿到的裝備，轉生時會清空。', bag: s.vault, eq: s.eq, heroes: L.party.map((m) => m.id), anyKind: (hid) => L.form === 'human' && hid === L.hero, save: () => this.persist() };
+  },
+
+  afterFloor(f, r) {
+    const s = this.save, L = s.life;
+    L.kills += r.kills;
+    if (!r.win) {
+      for (const id in L.hp) L.hp[id] = 0;
+      return this.die('faded', `第 ${f} 層`);
+    }
+    Object.assign(L.hp, r.hp);
+    // 元寶、飽足這類資源一整世累積，到下一層還在
+    L.res = Object.assign(L.res || {}, r.res);
+    L.floor = f;
+    const lines = [`第 ${f} 層　突破！（擊倒 ${r.kills}、經驗 ${r.exp}）`];
+    // 經驗給今世和派遣同事；前世之影停在死前的等級
+    for (const m of L.party) {
+      if (m.tag === TAGS.shadow) continue;
+      const ups = this.addExp(m.id, r.exp);
+      if (!ups) continue;
+      L.maxHp[m.id] += 4 * ups; L.hp[m.id] += 4 * ups;
+      lines.push(`${HEROES[m.id].name}升到 Lv.${this.lvOf(m.id).lv}（生命上限 +${4 * ups}）。`);
+    }
+    this.persist();
+    const kind = floorKind(f);
+    const next = () => {
+      Redline.hideBox();
+      if (f >= LIFE_FLOORS) return this.story([...lines, '典獄長本尊的鎖鏈一條一條斷掉。塔頂的門開了。'], () => this.victory(), { speaker: '塔' });
+      // 下一層之前的岔路：隨機兩條選一條
+      const two = shuffle(Object.keys(EVENTS)).slice(0, 2);
+      lines.push('往上的樓梯分成了兩條路。');
+      this.story(lines, null, { speaker: '塔', choices: two.map((k) => ({ label: `${EVENTS[k].name}：${EVENTS[k].desc}`, action: () => this.runEvent(k) })) });
+    };
+    if (kind === 'normal') return next();
+    this.drop(kind, next);
+  },
+
+  // 精英、魔王掉裝備：三選一。只掉今世穿得了的（神族掉神器、魔族掉邪物，為人兩種都掉）；魔王優先掉今世的專屬兵器
+  drop(kind, next) {
+    const s = this.save, L = s.life;
+    const general = shuffle(Object.keys(GEAR).filter((id) => !GEAR[id].own && !s.vault.includes(id) && Redline.canUse(L.hero, id, L.form === 'human')));
+    const own = ['ex_' + L.hero].filter((id) => GEAR[id] && !s.vault.includes(id));
+    const ids = (kind === 'boss' ? [...own.slice(0, 2), ...general] : general).slice(0, 3);
+    if (!ids.length) {
+      s.fragments += 5; this.persist();
+      Redline.showBox('<h2>戰利品</h2><p>能拿的都拿過了。殘骸換成 5 個靈魂碎片。</p><button class="btn primary wide ok">繼續</button>');
+      $('.box .ok').onclick = next;
+      return;
+    }
+    Redline.gearOffer(this.gearStore(), ids, kind === 'boss' ? '魔王掉落' : '精英掉落', next);
+  },
+
   runEvent(kind) {
-    const L = this.save.life, maxHp = this.heroStats().maxHp;
-    const heal = (ratio) => { const before = L.hp; L.hp = Math.min(maxHp, L.hp + Math.ceil(maxHp * ratio)); return L.hp - before; };
+    const s = this.save, L = s.life;
+    const ids = L.party.map((m) => m.id);
+    const each = (fn) => { for (const id of ids) L.hp[id] = Math.max(0, Math.min(L.maxHp[id], Math.round(fn(L.hp[id], L.maxHp[id])))); };
     const go = (lines) => { this.persist(); this.story(lines, () => this.fight(), { speaker: EVENTS[kind].name }); };
-    if (kind === 'rest') return go([`火光很暖。你回復了 ${heal(0.4)} 點生命。`]);
+    if (kind === 'rest') { each((hp, max) => hp + max * 0.4); return go(['火光很暖。全隊回復了四成生命。']); }
     if (kind === 'spring') {
-      L.companionAlive = true;
-      return go(['泉水裡映出一隻黑色的小狗，牠甩甩水跳了出來。', `引魂犬回來了。你回復了 ${heal(0.2)} 點生命。`]);
+      for (const id of ids) L.maxHp[id] += 5;
+      each((hp, max) => hp + 5 + max * 0.2);
+      return go(['泉水裡映出你好幾世的臉。', '全隊回復兩成生命，這一世生命上限 +5。']);
     }
     if (kind === 'altar') {
-      const cost = Math.max(1, Math.floor(L.hp / 4));
-      L.hp = Math.max(1, L.hp - cost);
-      L.bonusAtk = (L.bonusAtk || 0) + 1;
-      return go([`你割開手掌，失去 ${cost} 點生命。`, '祭壇上的眼睛睜開了一下。這一世攻擊 +1。']);
+      each((hp) => Math.max(1, hp - Math.max(1, Math.floor(hp / 4))));
+      L.up.dmg += 2;
+      return go(['大家都割開了手掌，失去四分之一的生命。', '祭壇上的眼睛睜開了一下。這一世每一下傷害 +2。']);
     }
     if (kind === 'chest') {
       if (Math.random() < 0.6) {
-        this.save.fragments += 3;
-        return go(['箱子裡有一瓶藥和幾片發光的碎片。', `你回復了 ${heal(0.3)} 點生命，靈魂碎片 +3。`]);
+        s.fragments += 3; each((hp, max) => hp + max * 0.3);
+        return go(['箱子裡有一瓶藥和幾片發光的碎片。', '全隊回復三成生命，靈魂碎片 +3。']);
       }
-      const hurt = Math.max(1, Math.ceil(maxHp * 0.2));
-      L.hp = Math.max(1, L.hp - hurt);
-      return go(['箱子張開嘴，咬了你一口。', `你失去 ${hurt} 點生命。`]);
+      each((hp, max) => Math.max(1, hp - Math.ceil(max * 0.2)));
+      return go(['箱子張開嘴，咬了每個人一口。', '全隊失去兩成生命。']);
     }
     if (kind === 'lost') {
-      const s = this.save;
       return this.story(['一個透明的上班族一直在找出口。', '「請問……打卡機在哪裡？我今天好像還沒下班。」'], null, {
         speaker: EVENTS.lost.name,
         choices: [
           { label: '幫忙：帶他到樓梯口', action: () => { s.nature = clampNature(s.nature - 5); s.fragments += 3; go(['他說謝謝，然後慢慢消失在樓梯上。', '（靈魂碎片 +3，靈魂偏向秩序）']); } },
           { label: '保留：繞過他', action: () => go(['你繞了過去。身後一直傳來找東西的聲音。']) },
-          { label: '利用：把他吸收掉', action: () => { s.debt += 1; s.nature = clampNature(s.nature + 5); L.hp = maxHp; go(['他還來不及喊，就變成了你的一部分。', '（生命全滿，因果債 +1）']); } },
+          { label: '利用：把他吸收掉', cls: 'danger', action: () => { s.debt += 1; s.nature = clampNature(s.nature + 5); each((hp, max) => max); go(['他還來不及喊，就變成了你們的一部分。', '（全隊生命全滿，因果債 +1）']); } },
         ],
       });
     }
   },
 
-  bossLoot() {
-    const s = this.save, L = s.life;
-    s.vault = s.vault || [];
-    const pool = Object.keys(RELICS).filter((id) => RELICS[id].from === L.run.boss && !s.vault.includes(id));
-    if (!pool.length) {
-      s.fragments += 10;
-      this.persist();
-      return this.story(['首領身上什麼都沒有了。你把它的殘骸換成了 10 個靈魂碎片。'], () => this.victory(), { speaker: '戰利品' });
-    }
-    const offer = pool.sort(() => Math.random() - 0.5).slice(0, 2);
-    const take = (id) => {
-      s.vault.push(id);
-      this.persist();
-      this.story([`你拿起了「${RELICS[id].name}」。`, '它在你手裡慢慢變冷。這一世用不到了，但它會跟著你的靈魂，存進靈魂倉庫。', '（下一世轉生時可以喚醒它）'], () => this.victory(), { speaker: '戰利品' });
-    };
-    this.story(['首領倒下的地方，留下了發光的東西。', '你只拿得動一件。'], null, {
-      speaker: '戰利品',
-      choices: offer.map((id) => ({ label: `${RELICS[id].name}：${RELICS[id].desc}`, action: () => take(id) })),
-    });
-  },
-
   victory() {
     this.story([
-      '你從地城走出來的時候，城鎮已經過了好多年。',
-      '你在這裡老去，安靜地壽終正寢。',
+      '你從塔頂走出來的時候，人間已經過了好多年。',
+      '你在那裡老去，安靜地壽終正寢。',
       '然後，熟悉的日光燈又亮了起來。',
       '「歡迎回來。」',
     ], () => this.die('victory', null), { speaker: '人間' });
@@ -499,79 +470,44 @@ const Game = {
 
   die(outcome, cause) {
     const s = this.save, L = s.life;
-    const st = this.heroStats();
+    const H = HEROES[L.hero], lv = this.lvOf(L.hero).lv;
     const record = {
-      life: this.lifeNo, form: L.form, faith: L.faith, skills: st.skills,
-      floor: L.floor, floorName: this.floorName(L.floor), kills: L.kills, outcome, cause,
+      life: this.lifeNo, form: L.form, hero: L.hero, level: lv, gear: this.eqOf(L.hero),
+      party: L.party.map((m) => m.id), floor: L.floor, kills: L.kills, outcome, cause,
     };
     s.history.push(record);
     L.alive = false;
+    // 裝備不帶到下一世，前世之影也是空手上場
+    s.vault = []; s.eq = {};
 
-    let frag = (L.floor + 1) * 3 + L.kills;
-    if (outcome === 'escaped') frag += 5;
-    if (outcome === 'victory') frag += 10;
+    let frag = L.floor * 3 + L.kills;
+    if (outcome === 'victory') frag += 15;
     s.fragments += frag;
     // 靈魂本質跟著這一世站在哪一邊走：神族往秩序、魔族往混沌
-    const lean = FAITHS[L.faith].side === '神' ? -5 : 5;
-    s.nature = clampNature(s.nature + lean + (outcome === 'sealed' ? 5 : 0));
-    s.boons.soulExtra = 0;
-
-    // 留下前世回響
-    const n = record.life;
-    if (L.kills >= 6 || outcome === 'victory') {
-      s.echoes = s.echoes.filter((e) => e.type !== 'statue');
-      s.echoes.push({ type: 'statue', title: '英雄雕像', text: `廣場上立著第 ${n} 世的你。村民對你的靈魂很友善（攻擊 +1）。` });
-    }
-    if (outcome !== 'victory') {
-      s.echoes = s.echoes.filter((e) => !(e.type === 'remnant' && e.floor === L.floor));
-      s.echoes.push({ type: 'remnant', floor: L.floor, frag: 5, title: '殘魂', text: `地下 ${L.floor + 1} 層留著第 ${n} 世的殘魂。突破那一層就能取回 5 個碎片。` });
-    }
-    if (s.debt >= 4 && !s.echoes.some((e) => e.type === 'bounty')) {
-      s.echoes.push({ type: 'bounty', title: '懸賞令', text: '你欠下的因果太多了。地下 3 層有追殺者在等你。打倒他可以減少因果債。' });
-    }
+    s.nature = clampNature(s.nature + (H.faith === '神' ? -5 : 5));
     this.persist();
 
-    const how = {
-      faded: '你的靈魂撐不住，被吸回了終端。',
-      sealed: `你的靈魂被${cause || '敵人'}封進了封印石。`,
-      escaped: '你的靈魂從裂縫逃回了終端，帶著多一點的碎片。',
-      victory: '你壽終正寢。',
-    }[outcome];
+    const n = record.life;
     const lines = [
       `第 ${n} 世・因果紀錄`,
-      `形態：${FORMS[L.form].name}　${faithLabel(L.form)}：${FAITHS[L.faith].name}`,
-      `到達：${record.floorName}　擊倒：${L.kills}`,
-      cause ? `死因：${cause}` : '死因：天年已盡',
-      how,
+      `形態：${FORMS[L.form].name}　今世：${H.name} Lv.${lv}`,
+      `爬到：第 ${L.floor} 層（共 ${LIFE_FLOORS} 層）　擊倒：${L.kills}`,
+      cause ? `倒在：${cause}` : '死因：天年已盡',
+      outcome === 'victory' ? '你壽終正寢。' : '全隊倒下，你的靈魂被吸回了終端。',
       `獲得靈魂碎片 ${frag}。`,
+      `${H.name}會以「前世之影」的身分，在之後的轉生陪著你。`,
     ];
-    this.story(lines, () => this.afterDeath(outcome), { speaker: '靈魂結算終端', glitch: this.glitch - 1 });
+    this.story(lines, () => this.afterDeath(), { speaker: '靈魂結算終端', glitch: this.glitch - 1 });
   },
 
-  afterDeath(outcome) {
+  afterDeath() {
     const s = this.save;
     const steps = [];
-    if (outcome === 'sealed') steps.push((next) => this.redeem(next));
     const reg = this.nextRegular();
     if (reg) steps.push((next) => this.regularScene(reg, next));
     if (s.history.length >= 6 && !s.truthRevealed) steps.push((next) => this.revealTruth(next));
     const run = () => { const f = steps.shift(); if (f) f(run); else this.showTerminal(); };
     run();
-  },
-
-  redeem(next) {
-    const s = this.save;
-    const cost = Math.ceil(s.fragments / 2);
-    this.story([
-      '封印石裡很暗，很擠，好像還有別人。',
-      '一個戴著工牌的人敲了敲石頭：「贖魂手續要收費喔。」',
-    ], null, {
-      speaker: '贖魂窗口', glitch: this.glitch,
-      choices: [
-        { label: `付 ${cost} 個碎片贖回`, action: () => { s.fragments -= cost; this.persist(); next(); } },
-        { label: '賒帳（因果債 +2）', action: () => { s.debt += 2; this.persist(); next(); } },
-      ],
-    });
   },
 
   nextRegular() {
@@ -600,8 +536,8 @@ const Game = {
       st.act++;
       this.persist();
       const tail = [];
-      if (e.boon === 'soulExtra') tail.push('（下一世變成靈魂時，可以多撐 1 回合。）');
-      if (e.boon === 'parcel') tail.push('（下一世從 Lv.2 開始。）');
+      if (e.boon === 'soulExtra') tail.push('（下一世全隊生命上限 +6。）');
+      if (e.boon === 'parcel') tail.push('（下一世今世的神魔先升 1 級。）');
       if (e.frag) tail.push(`（靈魂碎片 +${e.frag}）`);
       if (e.debt) tail.push(`（因果債 +${e.debt}）`);
       this.story([c.result, ...tail], next, { speaker: R.name, sprite: R.sprite, glitch: this.glitch });
@@ -658,10 +594,17 @@ const Game = {
           owned >= item.max ? '已滿' : `${item.cost} 碎片`)));
     }
 
+    const met = Object.keys(s.lv).filter((id) => HEROES[id]);
+    if (met.length) {
+      root.append(el('h3', {}, '神魔等級'));
+      root.append(el('div', { class: 'history' }, ...met.map((id) => { const v = this.lvOf(id); return el('div', {}, `${HEROES[id].name}　Lv.${v.lv}${v.lv < LV_MAX ? `（經驗 ${v.exp}/${needExp(v.lv)}）` : ''}`); })));
+    }
+
     root.append(el('h3', {}, '前世'));
     const list = el('div', { class: 'history' });
+    if (!s.history.length) list.append(el('div', { class: 'muted' }, '還沒有。'));
     for (const h of [...s.history].reverse()) {
-      list.append(el('div', {}, corrupt(`第 ${h.life} 世：${FORMS[h.form].name}・${FAITHS[h.faith].name}・${(h.floorName || `地下 ${h.floor + 1} 層`).split('・')[0]}・${outcomeLabel(h.outcome)}`, this.glitch - 3)));
+      list.append(el('div', {}, corrupt(`第 ${h.life} 世：${FORMS[h.form].name}・${HEROES[h.hero] ? HEROES[h.hero].name : '？'} Lv.${h.level}・第 ${h.floor} 層・${outcomeLabel(h.outcome)}`, this.glitch - 3)));
     }
     root.append(list);
     root.append(el('button', { class: 'btn primary wide', onclick: () => this.showRebirth() }, '前往轉生櫃台'));
@@ -673,21 +616,33 @@ const Game = {
 
 function clampNature(n) { return Math.max(-100, Math.min(100, n)); }
 function natureLabel(n) { return n <= -30 ? '秩序' : n >= 30 ? '混沌' : n < 0 ? '偏秩序' : n > 0 ? '偏混沌' : '中立'; }
-function outcomeLabel(o) { return { faded: '靈魂消散', sealed: '被搶魂', escaped: '逃魂', victory: '壽終正寢' }[o] || o; }
+function outcomeLabel(o) { return { faded: '全隊倒下', victory: '壽終正寢' }[o] || o; }
 
-// 轉生櫃台和城鎮裡的職業卡片內容
-function jobCard(id, g, showSide) {
-  const j = JOBS[id];
-  const rival = JOBS[j.rival];
+const SHAPE_NAMES = { line: '直線', dash: '衝刺', free: '自由線', zigzag: '折線', circle: '畫圈', tap: '連點' };
+// 轉生櫃台的神魔卡片：出處、被動、天賦、三招的畫法
+function heroCard(id, lv, tag) {
+  const H = HEROES[id];
   return [
-    ART[id] ? artImg(id) : null,
-    el('b', {}, `${j.name}${showSide ? `（${j.side}族）` : ''}`),
-    el('small', { class: 'muted' }, `${j.title}　死對頭：${rival ? rival.name : '？'}`),
+    Redline.artImg(id, 64),
+    el('b', { style: `color:${H.color}` }, `${H.name}　Lv.${lv}${tag ? `（${tag}）` : ''}`),
+    el('small', { class: 'muted' }, `${H.faith}族・${H.role}・生命 ${H.hp}`),
     ORIGINS[id] ? el('small', { class: 'origin' }, el('span', { class: 'tag origin' }, ORIGINS[id][0]), ORIGINS[id][1]) : null,
-    el('small', { class: 'quote' }, `「${j.quote}」`),
-    el('small', {}, el('span', { class: 'tag' }, '被動'), `「${j.passive.n}」${describePassive(j.passive.p, g)}`),
-    ...j.skills.map((sk) => el('small', {}, el('span', { class: 'tag' }, '技能'), `「${sk.n}」${describeSkill(sk, g)}`)),
-    el('small', {}, el('span', { class: 'tag ult' }, '大招'), `「${j.ult.n}」${describeSkill(j.ult, g)}`),
+    el('small', {}, el('span', { class: 'tag' }, '被動'), `「${H.passive.n}」${H.passive.d}`),
+    el('small', {}, el('span', { class: 'tag' }, '天賦'), `「${H.talent.n}」${H.talent.d}`),
+    ...H.skills.map((sk, i) => el('small', {}, el('span', { class: 'tag' + (i === 2 ? ' ult' : '') }, SHAPE_NAMES[sk.shape]), `「${sk.name}」`, el('span', { html: sk.desc }))),
+  ];
+}
+// 隊友的小卡片（前世之影、派遣同事）
+function shadowCard(o, crew) {
+  const H = HEROES[o.id];
+  const gear = (o.gear || []).filter((g) => GEAR[g]).map((g) => GEAR[g].n);
+  return [
+    Redline.artImg(o.id, 56),
+    el('b', { style: `color:${H.color}` }, `${H.name}　Lv.${o.level}${crew ? '' : `（第 ${o.life} 世的你）`}`),
+    el('small', { class: 'muted' }, `${crew || '前世之影'}・${H.faith}族・${H.role}`),
+    el('small', {}, `招式：${H.skills.map((k) => `${k.name}（${SHAPE_NAMES[k.shape]}）`).join('、')}`),
+    el('small', {}, `天賦「${H.talent.n}」：${H.talent.d}`),
+    el('small', { class: 'muted' }, gear.length ? `裝備：${gear.join('、')}` : '沒有裝備'),
   ];
 }
 
@@ -698,70 +653,7 @@ function spriteImg(name) {
   return c;
 }
 
-// 戰鬥畫面的按鈕與訊息
-const BattleUI = {
-  battleLog(text) {
-    const log = $('#battle .log');
-    log.prepend(el('div', {}, text));
-    while (log.children.length > 4) log.lastChild.remove();
-  },
-  battleRound(n, extra) { $('#battle .round').textContent = `第 ${n} 回合` + (extra ? `・${extra}` : ''); },
-  showActions(u, actions) {
-    const box = $('#battle .actions');
-    box.innerHTML = '';
-    for (const a of actions) {
-      box.append(el('button', {
-        class: 'btn act' + (a.id === 'ult' && a.ready ? ' glow' : ''),
-        'data-id': a.id,
-        disabled: a.ready ? null : 'disabled',
-        onclick: () => Game.battle && Game.battle.chooseAction(a.id),
-      }, a.name));
-    }
-    $('#battle .hint').textContent = '點藍色格子移動，或直接選擇行動。';
-    this.showSkillDesc(u);
-    Tutorial.tip('battle');
-    if (u.skills.some((s) => s.cdLeft > 0)) Tutorial.tip('cooldown');
-    if (u.charge >= 100) Tutorial.tip('ult');
-    this.showHero(u);
-  },
-  // 按鈕下面列出每招在做什麼；選中的那招會亮起來
-  showSkillDesc(u) {
-    const box = $('#battle .skill-desc');
-    box.innerHTML = '';
-    const g = Game.battle ? Game.battle.gauge : '能量';
-    for (const s of u.skills) {
-      box.append(el('div', { 'data-id': 'skill:' + s.id }, el('span', { class: 'tag' }, '技能'), `「${s.n}」${describeSkill(s, g)}`));
-    }
-    box.append(el('div', { 'data-id': 'ult' }, el('span', { class: 'tag ult' }, '大招'), `「${u.ult.n}」${describeSkill(u.ult, g)}（${g}滿 100% 才能用）`));
-    box.append(el('div', { class: 'muted' }, `攻擊：打相鄰的一個敵人。防禦：受到的傷害減半到下回合。結束：這回合不做事。`));
-  },
-  showSoulActions() {
-    const box = $('#battle .actions');
-    box.innerHTML = '';
-    box.append(el('button', { class: 'btn act', onclick: () => Game.battle && Game.battle.chooseAction('wait') }, '等待救援'));
-    $('#battle .skill-desc').innerHTML = '';
-    $('#battle .hint').textContent = '點藍色格子讓靈魂飄過去。紫色裂縫可以逃走。';
-    Tutorial.tip('soul');
-    if (Game.battle) $('#battle .hero-hp').textContent = `靈魂 剩 ${Game.battle.hero.soulTimer} 回合`;
-  },
-  setActiveAction(id) {
-    for (const b of document.querySelectorAll('#battle .actions .btn')) b.classList.toggle('active', b.dataset.id === id);
-    for (const d of document.querySelectorAll('#battle .skill-desc [data-id]')) d.classList.toggle('active', d.dataset.id === id);
-    if (id) Tutorial.tip('target');
-    $('#battle .hint').textContent = id ? '點紅色格子選擇目標。再按一次按鈕取消。' : '點藍色格子移動，或直接選擇行動。';
-  },
-  hideActions() {
-    $('#battle .actions').innerHTML = '';
-    $('#battle .skill-desc').innerHTML = '';
-    $('#battle .hint').textContent = '';
-  },
-  showHero(u) {
-    const g = Game.battle ? Game.battle.gauge : '能量';
-    $('#battle .hero-hp').textContent = `生命 ${u.hp}/${u.maxHp}・${g} ${u.charge}%`;
-  },
-};
-
-// ───────── 標題與場景的小插圖 ─────────
+// ───────── 標題與靈界的小插圖 ─────────
 
 function drawTerminalBanner(canvas, glitch) {
   const W = 120, H = 60, S = 4;
@@ -782,27 +674,6 @@ function drawTerminalBanner(canvas, glitch) {
   px(57, 51, 6, 9, '#a0d8ff');
   // 亂碼掃描線
   for (let i = 0; i < glitch * 2; i++) px(0, randInt(0, H), W, 1, 'rgba(255,60,60,0.25)');
-}
-
-function drawTownBanner(canvas) {
-  const W = 120, H = 60, S = 4;
-  canvas.width = W * S; canvas.height = H * S;
-  const g = canvas.getContext('2d');
-  const px = (x, y, w, h, c) => { g.fillStyle = c; g.fillRect(x * S, y * S, w * S, h * S); };
-  px(0, 0, W, H, '#1a1830');
-  px(0, 30, W, 30, '#221f3a');
-  px(92, 8, 8, 8, '#f0e6b0');
-  px(94, 8, 6, 6, '#1a1830');
-  const houses = [[8, 34, 18], [30, 30, 22], [58, 36, 16], [80, 32, 20]];
-  for (const [x, y, w] of houses) {
-    px(x, y, w, H - y, '#2e2a48');
-    for (let i = 0; i < w / 2; i++) px(x + i, y - i * 0.6 - 1, w - i * 2, 1, '#3d2a2a');
-    px(x + 3, y + 6, 3, 3, '#f0c060');
-    px(x + w - 7, y + 6, 3, 3, Math.random() < 0.5 ? '#f0c060' : '#222');
-  }
-  px(0, 52, W, 8, '#141226');
-  px(54, 44, 12, 16, '#0d0c18');
-  px(56, 46, 8, 14, '#3a1f4a');
 }
 
 window.addEventListener('DOMContentLoaded', () => Game.start());
