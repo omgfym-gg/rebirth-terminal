@@ -1477,7 +1477,7 @@ let casting = false; // 只有神魔出招這段時間的命中才播技能特�
 function skillFx(u) {
   const h = hero();
   if (!casting || !h) return;
-  const img = SKILL_FX[h.id] || (SKILL_FX[h.id] = Object.assign(new Image(), { src: `assets/skills/${h.id}.png` }));
+  const img = SKILL_FX[h.id] || (SKILL_FX[h.id] = Object.assign(new Image(), { src: (window.EMBED && EMBED[`assets/skills/${h.id}.png`]) || `assets/skills/${h.id}.png` }));
   const now = performance.now();
   if (u.fxAt && now - u.fxAt < 120) return; // 同一下連發只播一次
   u.fxAt = now;
