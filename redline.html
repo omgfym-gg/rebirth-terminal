@@ -97,7 +97,7 @@ const HEROES = {
   guangong: {
     name: '關公', faith: '神', hp: 52, color: '#40d070', role: '近戰重擊', res: ['氣勢', 5],
     passive: { n: '氣勢', d: '關公每打中敵人一下，氣勢 +1（最多 5，頭上顯示「氣」），每過一輪少 1。放青龍斬時用掉全部氣勢，每 1 點氣勢讓每一下多 4 傷害。' },
-    talent: { n: '溫酒斬華雄', d: '隊友的線穿過關公（或穿過關公留下的線），關公下一招每一下傷害 +5、氣勢 +1。' },
+    talent: { n: '溫酒斬華雄', d: '隊友的線穿過關公（或穿過關公上一手留下的線），關公下一招每一下傷害 +5、氣勢 +1。' },
     onHit: (h) => addRes(h, 1),
     round: (h) => { h.res = Math.max(0, h.res - 1); },
     talentFx: (t) => { t.wine = 5; addRes(t, 1); },
@@ -113,7 +113,7 @@ const HEROES = {
   yuelao: {
     name: '月老', faith: '神', hp: 40, color: '#ff5c8d', role: '牽線支援',
     passive: { n: '紅線', d: '月老打到的敵人綁上紅線（到下一輪）。綁紅線的敵人受傷，其他綁紅線的敵人也受一半。' },
-    talent: { n: '向月檢書', d: '隊友的線穿過月老（或穿過月老留下的線），月老回 6 生命，那條線打到的敵人全部綁紅線。' },
+    talent: { n: '向月檢書', d: '隊友的線穿過月老（或穿過月老上一手留下的線），月老回 6 生命，那條線打到的敵人全部綁紅線。' },
     talentFx: (t, c) => { apply({ u: t, heal: 6 }); for (const e of c.en) e.red = true; },
     skills: [
       { name: '赤繩繫足', shape: 'free', len: 820, anim: 'cast', desc: '紅繩飛過去：經過的敵人各受 5 傷害並綁紅線，經過的隊友各回 6 生命。',
@@ -127,7 +127,7 @@ const HEROES = {
   yukionna: {
     name: '雪女', faith: '魔', hp: 36, color: '#a0e0ff', role: '冰凍控制',
     passive: { n: '冰霜', d: '打中疊冰霜，疊到 3 層就凍住（下次不能行動）。每輪少 1 層。打凍住的敵人叫碎冰。' },
-    talent: { n: '雪地足跡', d: '隊友的線穿過雪女（或穿過雪女留下的線），那條線結成雪地，敵人走過去打人時疊 2 層冰霜。' },
+    talent: { n: '雪地足跡', d: '隊友的線穿過雪女（或穿過雪女上一手留下的線），那條線結成雪地，敵人走過去打人時疊 2 層冰霜。' },
     talentFx: (t, c) => c.later(() => { if (path.length > 1) zones.push({ type: 'snow', pts: densify(path, 10).map((p) => ({ x: p.x, y: p.y + 46 })), done: new Set() }); }),
     skills: [
       { name: '冰柱', shape: 'line', len: 540, anim: 's1', desc: '射出冰柱：直線上的敵人各受 8 傷害、冰霜 1 層。凍住的敵人改成碎冰 16 傷害，但會解凍。',
@@ -141,7 +141,7 @@ const HEROES = {
   brigid: {
     name: '布麗姬', faith: '神', hp: 44, color: '#ff8a30', role: '聖火與療癒',
     passive: { n: '永恆之火', d: '布麗姬打中燃燒中的敵人，那一下傷害 +4。燃燒的敵人每輪開始受 3 傷害，燒完就熄。' },
-    talent: { n: '布麗姬十字', d: '隊友的線穿過布麗姬（或穿過她留下的線），那條線打到的敵人全部燃燒 2 輪。' },
+    talent: { n: '布麗姬十字', d: '隊友的線穿過布麗姬（或穿過她上一手留下的線），那條線打到的敵人全部燃燒 2 輪。' },
     mod: (h, s) => (s.dmg && s.u.burn ? { ...s, dmg: s.dmg + 4 } : s),
     talentFx: (t, c) => { for (const e of c.en) addBurn(e, 2); },
     skills: [
@@ -156,7 +156,7 @@ const HEROES = {
   tudigong: {
     name: '土地公', faith: '神', hp: 54, color: '#ffc830', role: '守護與元寶', res: ['元寶', 5],
     passive: { n: '元寶', d: '土地公每打中敵人一下，元寶 +1（最多 5，頭上顯示「元」）。張福德顯靈會用掉全部元寶，每個多 3 傷害。' },
-    talent: { n: '虎爺', d: '隊友的線穿過土地公（或穿過他留下的線），虎爺跳出來咬那條線打到的第一個敵人 8 傷害。' },
+    talent: { n: '虎爺', d: '隊友的線穿過土地公（或穿過他上一手留下的線），虎爺跳出來咬那條線打到的第一個敵人 8 傷害。' },
     onHit: (h) => addRes(h, 1),
     talentFx: (t, c) => { const e = c.en[0]; if (e) setTimeout(() => { float(e, '虎爺！', '#ffc830', 18); apply({ u: e, dmg: 8, shared: true }); }, 200); },
     skills: [
@@ -171,7 +171,7 @@ const HEROES = {
   hermes: {
     name: '赫爾墨斯', faith: '神', hp: 40, color: '#f0d070', role: '神速遊走', ink: 1.4, noCut: true,
     passive: { n: '有翼涼鞋', d: '赫爾墨斯的墨水多 40%，畫的線不會被典獄長的鎖鏈剪斷。' },
-    talent: { n: '引魂者', d: '隊友的線穿過赫爾墨斯（或穿過他留下的線），那條線打到、生命不到兩成的敵人直接被帶走（精英除外）。' },
+    talent: { n: '引魂者', d: '隊友的線穿過赫爾墨斯（或穿過他上一手留下的線），那條線打到、生命不到兩成的敵人直接被帶走（精英除外）。' },
     talentFx: (t, c) => { for (const e of c.en) if (!e.elite && e.hp <= e.maxHp * 0.2) apply({ u: e, execute: '引魂' }); },
     skills: [
       { name: '神使傳令', shape: 'free', len: 900, melee: true, anim: 's2', desc: '飛奔穿過去：經過的敵人各受 4 傷害，同一個敵人每多穿一次再 +2。',
@@ -185,7 +185,7 @@ const HEROES = {
   dagda: {
     name: '達格達', faith: '神', hp: 60, color: '#d8a060', role: '巨棒與大鍋', res: ['飽足', 20],
     passive: { n: '飽足', d: '達格達回血超過生命上限的部分存成飽足（最多 20，頭上顯示「飽」）。巨棒決斷會用掉全部飽足，每點多 1 傷害。' },
-    talent: { n: '豐饒之鍋', d: '隊友的線穿過達格達（或穿過他留下的線），畫線的那位隊友回 8 生命。' },
+    talent: { n: '豐饒之鍋', d: '隊友的線穿過達格達（或穿過他上一手留下的線），畫線的那位隊友回 8 生命。' },
     talentFx: (t, c) => apply({ u: c.h, heal: 8 }),
     skills: [
       { name: '巨棒決斷', shape: 'line', len: 380, melee: true, wide: true, anim: 's2', spendRes: true, desc: '扛著巨棒衝過去橫掃（判定特別寬）：直線上的敵人各受 9 傷害，用掉全部飽足，每點多 1。',
@@ -199,7 +199,7 @@ const HEROES = {
   hanako: {
     name: '花子', faith: '魔', hp: 42, color: '#b060e0', role: '恐懼與敲門', res: ['敲門', 3],
     passive: { n: '敲門', d: '花子每打中敵人一下就敲一次門（頭上顯示「敲」）。敲滿 3 次，那一下把敵人拉進隔間，多 12 傷害，然後重新數。' },
-    talent: { n: '沖水', d: '隊友的線穿過花子（或穿過她留下的線），那條線打到的敵人全部恐懼（下次攻擊減半）。' },
+    talent: { n: '沖水', d: '隊友的線穿過花子（或穿過她上一手留下的線），那條線打到的敵人全部恐懼（下次攻擊減半）。' },
     // 照順序數敲門，數到 3 的那一下多 12（預覽和出招用同一套算法）
     post: (h, res) => { let r = h.res; return res.map((s) => { if (!s.dmg || s.u.side !== 'enemy' || s.cross) return s; r++; if (r < 3) return s; r = 0; return { ...s, dmg: s.dmg + 12, pull: true }; }); },
     onHit: (h, s) => { if (s.pull) { h.res = 0; float(s.u, '拉進隔間！', '#b060e0'); } else addRes(h, 1); },
@@ -216,7 +216,7 @@ const HEROES = {
   anubis: {
     name: '阿努比斯', faith: '魔', hp: 48, color: '#f0c040', role: '冥界審判',
     passive: { n: '天秤', d: '阿努比斯打生命比例比自己低的敵人，傷害加五成。' },
-    talent: { n: '木乃伊包紮', d: '隊友的線穿過阿努比斯（或穿過他留下的線），畫線的那位隊友得 8 護盾。' },
+    talent: { n: '木乃伊包紮', d: '隊友的線穿過阿努比斯（或穿過他上一手留下的線），畫線的那位隊友得 8 護盾。' },
     mod: (h, s) => (s.dmg && s.u.side === 'enemy' && !s.cross && s.u.hp / s.u.maxHp < h.hp / h.maxHp ? { ...s, dmg: Math.round(s.dmg * 1.5) } : s),
     talentFx: (t, c) => apply({ u: c.h, shield: 8 }),
     skills: [
@@ -231,7 +231,7 @@ const HEROES = {
   hachi: {
     name: '八尺大人', faith: '魔', hp: 46, color: '#e8e8ff', role: '恐懼與標記',
     passive: { n: '七日之期', d: '八尺大人打到的敵人被標記（頭上顯示「標」），整層都在。被標記的敵人受到每一下攻擊都 +2，誰打都算。' },
-    talent: { n: '帽簷下的視線', d: '隊友的線穿過八尺大人（或穿過她留下的線），那條線打到的敵人全部被標記。' },
+    talent: { n: '帽簷下的視線', d: '隊友的線穿過八尺大人（或穿過她上一手留下的線），那條線打到的敵人全部被標記。' },
     onHit: (h, s) => { s.u.mark = true; },
     talentFx: (t, c) => { for (const e of c.en) e.mark = true; },
     skills: [
@@ -246,7 +246,7 @@ const HEROES = {
   medusa: {
     name: '美杜莎', faith: '魔', hp: 44, color: '#70d060', role: '石化',
     passive: { n: '石化', d: '美杜莎每打中敵人一下疊 1 層石化（頭上顯示「石」），疊到 3 層變成石像，下次不能行動。' },
-    talent: { n: '蛇毒', d: '隊友的線穿過美杜莎（或穿過她留下的線），那條線打到的敵人各疊 1 層石化。' },
+    talent: { n: '蛇毒', d: '隊友的線穿過美杜莎（或穿過她上一手留下的線），那條線打到的敵人各疊 1 層石化。' },
     onHit: (h, s) => addStone(s.u, 1),
     talentFx: (t, c) => { for (const e of c.en) addStone(e, 1); },
     skills: [
@@ -261,7 +261,7 @@ const HEROES = {
   horusshadow: {
     name: '荷魯斯之影', faith: '魔', hp: 46, color: '#e0b850', role: '暗影與碎片', res: ['眼之碎片', 6],
     passive: { n: '眼之碎片', d: '戰場上會掉出眼之碎片（金色小眼睛），任何人畫的線經過就撿起來給荷魯斯之影（最多 6，頭上顯示「眼」）。天空之神的審判會用掉全部碎片，集滿 6 片傷害加倍。' },
-    talent: { n: '真知之眼', d: '隊友的線穿過荷魯斯之影（或穿過他留下的線），眼之碎片 +2。' },
+    talent: { n: '真知之眼', d: '隊友的線穿過荷魯斯之影（或穿過他上一手留下的線），眼之碎片 +2。' },
     talentFx: (t) => addRes(t, 2),
     skills: [
       { name: '權杖金光', shape: 'line', len: 600, anim: 'punch', desc: '權杖射出金光：直線上的敵人各受 7 傷害。',
@@ -275,7 +275,7 @@ const HEROES = {
   redgirl: {
     name: '紅衣小女孩', faith: '魔', hp: 44, color: '#ff4050', role: '迷途',
     passive: { n: '迷途', d: '紅衣小女孩每打中敵人一下疊 1 層迷途（頭上顯示「迷」），疊到 5 層敵人就迷路：下次行動改打自己的同伴。' },
-    talent: { n: '跟我走', d: '隊友的線穿過紅衣小女孩（或穿過她留下的線），那條線打到的敵人各疊 1 層迷途。' },
+    talent: { n: '跟我走', d: '隊友的線穿過紅衣小女孩（或穿過她上一手留下的線），那條線打到的敵人各疊 1 層迷途。' },
     onHit: (h, s) => addLost(s.u, 1),
     talentFx: (t, c) => { for (const e of c.en) addLost(e, 1); },
     skills: [
