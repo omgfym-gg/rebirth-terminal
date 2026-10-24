@@ -258,7 +258,7 @@ const Game = {
       root.append(el('h3', {}, '② 今世的你'));
       if (!pick.form) root.append(el('p', { class: 'muted' }, '先選升仙、入魔或為人。'));
       else {
-        root.append(el('p', { class: 'muted' }, '這一世櫃台隨機給你三位。等級跟著每位神魔永久保留。'));
+        root.append(el('p', { class: 'muted' }, '這一世櫃台隨機給你三位，請選擇一位。等級跟著每位神魔永久保留。'));
         const box = el('div', { class: 'cards two' });
         for (const id of s.offer.paths[pick.form]) {
           box.append(el('button', { class: 'card job' + (pick.hero === id ? ' selected' : ''), onclick: () => { pick.hero = id; pick.shadows = []; render(); } },
