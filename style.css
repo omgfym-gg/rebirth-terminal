@@ -145,6 +145,7 @@ canvas.art { image-rendering: pixelated; width: auto; align-self: center; }
 .rl { display: flex; flex-direction: column; gap: 4px; height: calc(100vh - 12px); height: calc(100dvh - 12px); }
 body:has(#battle.active) #app { padding: 6px 8px; }
 #battle.screen.active { display: flex; }
+#battle.screen:not(.active) { display: none; }
 .stage-wrap { flex: 1 1 auto; min-height: 120px; display: flex; justify-content: center; align-items: center; overflow: hidden; }
 .stage { width: 100%; border: 2px solid var(--line); background: #0b0a12; touch-action: none; image-rendering: auto; }
 .top { display: flex; align-items: center; gap: 8px; font-size: 14px; }
