@@ -300,7 +300,7 @@ const FOES = {
 };
 
 let run, heroes, foes, chains = [], path = [], closed, hits = [], hitAt = [], inside = new Set(), drawing, busy, effects, turn, who = -1, skillIdx = 0;
-// trails：這一輪大家畫過的線（敵人行動完才消失）；bolts：遠程招飛出去的光球；zz：折線每個敵人身上的轉彎紀錄
+// trails：上一手畫的線（只留一條）；bolts：遠程招飛出去的光球；zz：折線每個敵人身上的轉彎紀錄
 let trails = [], bolts = [], zz = new Map();
 
 function newRun() {
@@ -379,7 +379,6 @@ async function nextHero() {
 
 async function newRound() {
   gearNewRound();
-  trails = [];
   for (const h of heroes) { h.taunt = false; if (h.round) h.round(h); }
   for (const e of foes) { e.frost = Math.max(0, e.frost - 1); e.red = false; }
   // 燃燒：每輪開始燒 3
@@ -573,7 +572,7 @@ function results() {
   return res;
 }
 
-// 這一招的線和這一輪隊友留下的線交叉的地方（最多 3 處）
+// 這一招的線和上一手隊友留下的線交叉的地方（最多 3 處）
 let crossMemo = null;
 function crossings() {
   if (crossMemo) return crossMemo;
@@ -671,7 +670,8 @@ async function go() {
   }
   for (const st of self) apply(st);
   h.moving = false;
-  trails.push({ owner: h, pts: path.slice(), loop: sk.shape === 'circle' });
+  // 地上只留上一手畫的線（換下一位畫完就換成他的）
+  trails = [{ owner: h, pts: path.slice(), loop: sk.shape === 'circle' }];
   later.forEach((f) => f());
   pickShards();
   await gearAfterMove(h, sk);
@@ -1465,9 +1465,9 @@ function render(now) {
       g.fillStyle = '#201000'; g.beginPath(); g.arc(c.x, c.y + b, 4, 0, Math.PI * 2); g.fill();
       g.strokeStyle = '#e0b850'; g.lineWidth = 2; g.beginPath(); g.moveTo(c.x - 4, c.y + b + 7); g.lineTo(c.x - 7, c.y + b + 15); g.stroke();
     }
-    // 這一輪隊友留下的線，畫線跟它交叉就是紅線交會
+    // 上一手隊友留下的線，畫線跟它交叉就是紅線交會
     for (const t of trails) {
-      g.strokeStyle = t.owner.color; g.lineWidth = 3; g.globalAlpha = busy ? 0.05 : 0.16; g.setLineDash([14, 10]); g.lineCap = 'round';
+      g.strokeStyle = t.owner.color; g.lineWidth = 3; g.globalAlpha = busy ? 0.08 : 0.3; g.setLineDash([14, 10]); g.lineCap = 'round';
       g.beginPath(); t.pts.forEach((p, i) => i ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y)); if (t.loop) g.closePath(); g.stroke();
       g.setLineDash([]); g.globalAlpha = 1;
     }
@@ -1605,7 +1605,7 @@ $('.help').innerHTML = `
   <p>三位神魔輪流上場，<b>每次只動一位</b>，輪到的神魔腳下有金色光圈。選他的一招，照那招的畫法在戰場上畫，畫完會預覽每個目標受到的效果，按出招才算數。</p>
   ${Object.keys(SHAPES).map((k) => `<p><b>${SHAPES[k]}</b>：${HOW[k]}</p>`).join('')}
   <p>墨水條用完就不能再畫。標「近身」的招式神魔會自己跑過去打，其他招式站在原地放出去。</p>
-  <p><b>天賦</b>：線穿過隊友，會發動那位隊友的天賦。<b>紅線交會</b>：這一輪隊友畫過的線會留在地上（淡淡的虛線），你的線跟它交叉，交叉點會炸開，附近敵人各受 6 傷害，也會發動那條線主人的天賦。</p>
+  <p><b>天賦</b>：線穿過隊友，會發動那位隊友的天賦。<b>紅線交會</b>：上一位隊友畫的線會留在地上（淡淡的虛線，下一位畫完就換成他的），你的線跟它交叉，交叉點會炸開，附近敵人各受 6 傷害，也會發動那條線主人的天賦。</p>
   <p>神魔出招時會沿著你畫的線跑過去，最後停在線的終點，所以畫線也是在決定下一輪站哪裡。三位神魔各出一招之後，敵人才一起行動，會走到目標面前打。敵人頭上寫著這一輪要打誰、打多少，可以先凍住、先打死，或用護盾擋。</p>
   ${ORDER.map((id) => { const H = HEROES[id]; return H.skills.map((s) => `<p><b>${H.name}・${s.name}</b>（${SHAPES[s.shape]}${s.melee ? '・近身' : ''}${s.cd ? `，冷卻 ${s.cd} 輪` : ''}）：${s.desc}</p>`).join('') + `<p><b>${H.name}・被動・${H.passive.n}</b>：${H.passive.d}</p><p><b>${H.name}・天賦・${H.talent.n}</b>：${H.talent.d}</p>`; }).join('')}
   <p>每 3 層有精英無臉典獄長，他的鎖鏈會剪斷直線和自由線，畫圈不受影響。</p>
