@@ -11,10 +11,18 @@
   .top { display: flex; align-items: center; gap: 8px; font-size: 14px; margin-bottom: 4px; }
   .top .floor { flex: 1; color: var(--gold); font-weight: bold; }
   .ink { height: 8px; background: #000; border: 1px solid var(--line); margin: 4px 0; }
-  .ink div { height: 100%; background: #ff3048; width: 100%; }
-  .tip { min-height: 40px; font-size: 13px; line-height: 1.5; color: var(--muted); }
+  .ink div { height: 100%; width: 100%; }
+  .who { display: flex; align-items: center; gap: 8px; margin: 6px 0 4px; font-size: 15px; }
+  .who canvas { height: 40px; }
+  .who b { font-size: 17px; }
+  .skills { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
+  .sk { padding: 5px 4px; font-size: 11px; line-height: 1.35; text-align: left; }
+  .sk b { display: block; font-size: 14px; }
+  .sk .shape { color: var(--gold); }
+  .sk.on { border-color: var(--gold); background: #3a3420; }
+  .tip { min-height: 40px; font-size: 13px; line-height: 1.5; color: var(--muted); margin-top: 6px; }
   .tip b { color: #ff8aa0; }
-  .acts { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 6px; }
+  .acts { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 4px; }
   .acts .btn { padding: 10px 4px; font-size: 16px; }
   .overlay { position: fixed; inset: 0; background: rgba(5,4,10,0.86); display: none; align-items: center; justify-content: center; padding: 16px; z-index: 5; }
   .overlay.show { display: flex; }
@@ -33,8 +41,10 @@
   <div class="top"><span class="floor"></span><span class="turn muted"></span></div>
   <canvas class="stage" width="600" height="700"></canvas>
   <div class="ink"><div></div></div>
+  <div class="who"></div>
+  <div class="skills"></div>
   <div class="tip"></div>
-  <div class="acts"><button class="btn redo">重畫</button><button class="btn primary go">出擊</button></div>
+  <div class="acts"><button class="btn redo">重畫</button><button class="btn primary go">出招</button></div>
   <details>
     <summary>玩法說明</summary>
     <div class="help"></div>
@@ -47,63 +57,99 @@
 <script>
 'use strict';
 (() => {
-// 一筆紅線：每回合從一位神魔身上拉出一條紅線，一筆畫完。
-// 線穿過隊友：那位隊友的力量加到線上（之後打到的敵人都吃這個效果），隊友也得到護盾。
-// 線穿過敵人：造成傷害，越後面打到的越痛。墨水有限，路線就是策略。
+// 一筆紅線：神魔輪流上場。輪到誰，就選他的一招，再照那招的畫法在戰場上畫：
+// 直線（從自己身上拉出一刀）、自由線（一筆穿過好幾個目標）、圈（圈住的目標都中）。
 const W = 600, H = 700, FLOOR = 230;
 const cv = document.querySelector('.stage'), g = cv.getContext('2d');
 const $ = (s) => document.querySelector(s);
 const rnd = (a, b) => a + Math.random() * (b - a);
 const pick = (a) => a[Math.floor(Math.random() * a.length)];
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+const HIT_R = 42;
 
+const SHAPES = { line: '直線', free: '自由線', circle: '畫圈' };
+const HOW = {
+  line: '從<b>自己身上</b>往想打的方向拉一條直線，線上的敵人都會中。',
+  free: '從<b>自己身上</b>開始，<b>一筆</b>畫過想打的目標，經過的順序有編號。',
+  circle: '在戰場上<b>畫一個圈</b>，頭尾接起來，圈住的目標都會中。',
+};
+const BASE_HP = { guangong: 52, yuelao: 40, yukionna: 36 };
+
+// 每招：shape 畫法、len 墨水長度、cd 冷卻（自己的回合數）、anim 角色動作、run 算出每個目標的效果
 const HEROES = {
-  guangong: { name: '關公', hp: 46, color: '#40d070', buff: '武聖', desc: '線經過關公之後，每次打到敵人傷害 +5。' },
-  yuelao:   { name: '月老', hp: 38, color: '#ff5c8d', buff: '姻緣', desc: '線經過月老之後，每打到一個敵人，生命最低的隊友回復 3。' },
-  yukionna: { name: '雪女', hp: 34, color: '#a0e0ff', buff: '吹雪', desc: '線經過雪女之後，打到的敵人被凍住，下回合不能行動。' },
+  guangong: {
+    name: '關公', color: '#40d070', role: '近戰重擊',
+    skills: [
+      { name: '青龍斬', shape: 'line', len: 430, anim: 's1', desc: '直線上的敵人各受 11 傷害。',
+        run: (en) => en.map((u) => ({ u, dmg: 11 })) },
+      { name: '過五關', shape: 'free', len: 700, cd: 1, anim: 's2', desc: '一筆最多斬 5 個敵人，每多過一關傷害 +5（7、12、17…）。',
+        run: (en) => en.slice(0, 5).map((u, i) => ({ u, dmg: 7 + i * 5 })) },
+      { name: '單刀赴會', shape: 'line', len: 340, cd: 3, anim: 'ult', dash: true, desc: '衝去砍直線上第一個敵人 30 傷害。這一輪敵人全部改打關公，關公得 12 護盾。',
+        run: (en, al, h) => [...en.slice(0, 1).map((u) => ({ u, dmg: 30 })), { u: h, shield: 12, taunt: true }] },
+    ],
+  },
+  yuelao: {
+    name: '月老', color: '#ff5c8d', role: '牽線支援',
+    skills: [
+      { name: '紅線牽', shape: 'free', len: 820, anim: 'punch', desc: '經過的敵人各受 6 傷害，經過的隊友各回 8 生命。',
+        run: (en, al) => [...en.map((u) => ({ u, dmg: 6 })), ...al.map((u) => ({ u, heal: 8 }))] },
+      { name: '姻緣簿', shape: 'circle', len: 760, cd: 1, anim: 'cast', desc: '圈住的隊友得 9 護盾、回 4 生命；圈住的敵人受 3 傷害。',
+        run: (en, al) => [...al.map((u) => ({ u, shield: 9, heal: 4 })), ...en.map((u) => ({ u, dmg: 3 }))] },
+      { name: '亂點鴛鴦', shape: 'free', len: 900, cd: 3, anim: 'cast', desc: '經過的敵人被綁錯姻緣：下次行動改打自己的同伴，也各受 4 傷害。',
+        run: (en) => en.map((u) => ({ u, dmg: 4, confuse: true })) },
+    ],
+  },
+  yukionna: {
+    name: '雪女', color: '#a0e0ff', role: '冰凍控制',
+    skills: [
+      { name: '冰柱', shape: 'line', len: 540, anim: 's1', desc: '直線上的敵人各受 8 傷害，已經凍住的改受 16。',
+        run: (en) => en.map((u) => ({ u, dmg: u.frozen ? 16 : 8 })) },
+      { name: '吹雪', shape: 'circle', len: 640, cd: 1, anim: 's2', desc: '圈住的敵人凍住（下次不能行動），各受 4 傷害。',
+        run: (en) => en.map((u) => ({ u, dmg: 4, freeze: true })) },
+      { name: '雪夜之約', shape: 'free', len: 1000, cd: 3, anim: 'ult', desc: '一筆經過的敵人全部凍住，各受 10 傷害。',
+        run: (en) => en.map((u) => ({ u, dmg: 10, freeze: true })) },
+    ],
+  },
 };
 const ORDER = ['guangong', 'yuelao', 'yukionna'];
 const FOES = {
-  zombie: { name: '夜行殭屍', sprite: 'zombie', hp: 26, atk: 9 },
-  wisp:   { name: '鬼火', sprite: 'wisp', hp: 14, atk: 6 },
-  warden: { name: '無臉典獄長', sprite: 'boss', hp: 90, atk: 14, elite: true },
+  zombie: { name: '夜行殭屍', sprite: 'zombie', hp: 30, atk: 11 },
+  wisp:   { name: '鬼火', sprite: 'wisp', hp: 16, atk: 8 },
+  warden: { name: '無臉典獄長', sprite: 'boss', hp: 110, atk: 17, elite: true },
 };
-const HIT_R = 42, SHIELD = 5;
 
-let run, heroes, foes, chains, path, seq, inkMax, inkUsed, drawing, busy, effects, turn, T0 = performance.now();
+let run, heroes, foes, chains = [], path = [], closed, hits = [], drawing, busy, effects, turn, who = -1, skillIdx = 0;
 
 function newRun() {
-  run = { floor: 0, ink: 900, base: 6, step: 2, up: { guangong: 0, yuelao: 0, yukionna: 0 }, hp: {} };
-  for (const id of ORDER) run.hp[id] = HEROES[id].hp;
+  run = { floor: 0, up: { dmg: 0, ink: 1 }, maxHp: { ...BASE_HP }, hp: { ...BASE_HP } };
   nextFloor();
 }
 
 function nextFloor() {
   run.floor++;
   const f = run.floor, k = 1 + 0.15 * (f - 1);
-  heroes = ORDER.map((id, i) => ({ id, ...HEROES[id], side: 'ally', art: id, maxHp: HEROES[id].hp, hp: run.hp[id], dead: run.hp[id] <= 0, x: 0, y: 0, shield: 0, flash: 0 }));
+  heroes = ORDER.map((id) => ({ id, ...HEROES[id], side: 'ally', art: id, maxHp: run.maxHp[id], hp: run.hp[id], dead: run.hp[id] <= 0, x: 0, y: 0, shield: 0, flash: 0, cds: [0, 0, 0], anim: null, taunt: false }));
   const keys = f % 3 === 0 ? ['warden', 'zombie', ...(f >= 6 ? ['wisp'] : [])] : f === 1 ? ['zombie', 'wisp'] : ['zombie', 'zombie', 'wisp', ...(f >= 4 ? ['wisp'] : [])];
-  foes = keys.map((key) => ({ key, ...FOES[key], side: 'enemy', maxHp: Math.round(FOES[key].hp * k), hp: Math.round(FOES[key].hp * k), atk: Math.round(FOES[key].atk * k), dead: false, frozen: 0, flash: 0, x: 0, y: 0 }));
-  placeFoes(true);
-  effects = []; turn = 0;
-  newTurn();
+  foes = keys.map((key) => ({ key, ...FOES[key], side: 'enemy', maxHp: Math.round(FOES[key].hp * k), hp: Math.round(FOES[key].hp * k), atk: Math.round(FOES[key].atk * k), dead: false, frozen: false, confused: false, flash: 0, x: 0, y: 0 }));
+  place(true);
+  effects = []; turn = 0; who = -1; busy = false;
+  nextHero();
   showBox(`<h2>第 ${f} 層${keys.includes('warden') ? '・精英' : ''}</h2>
     <p>敵人：${keys.map((x) => FOES[x].name).join('、')}</p>
-    ${keys.includes('warden') ? '<p>典獄長會拉出<b>鎖鏈</b>（灰色粗線）。紅線碰到鎖鏈就會被剪斷，要繞過去。</p>' : '<p>從任一位神魔身上開始畫，<b>一筆</b>穿過隊友和敵人。先經過隊友，後面打到的敵人才吃得到加持。</p>'}
+    ${keys.includes('warden') ? '<p>典獄長會拉出<b>鎖鏈</b>（灰色粗線）。直線和自由線碰到鎖鏈就會被剪斷，畫圈不受影響。</p>' : '<p>三位神魔輪流上場。輪到誰，就從下面選他的一招，照那招的畫法在戰場上畫，畫好按出招。</p>'}
     <button class="btn primary wide ok">開始</button>`);
   $('.box .ok').onclick = hideBox;
 }
 
-// 敵人站位：每回合換位置，路線每次都不一樣
-function placeFoes(first) {
+// 站位：每一輪大家都換位置，路線每次都要重想
+function place(first) {
   const spots = [];
   for (const e of [...heroes, ...foes]) {
     if (e.dead) continue;
     let best = null;
     for (let t = 0; t < 60; t++) {
-      const p = e.side === 'ally' ? { x: rnd(60, 300), y: rnd(300, 660) } : { x: rnd(240, 548), y: rnd(300, 660) };
-      const near = spots.some((o) => Math.hypot(o.x - p.x, o.y - p.y) < 120);
-      if (!near) { best = p; break; }
+      const p = e.side === 'ally' ? { x: rnd(60, 290), y: rnd(310, 660) } : { x: rnd(250, 548), y: rnd(310, 660) };
+      if (!spots.some((o) => Math.hypot(o.x - p.x, o.y - p.y) < 120)) { best = p; break; }
       best = best || p;
     }
     spots.push(best);
@@ -111,27 +157,49 @@ function placeFoes(first) {
   }
 }
 
-function newTurn() {
-  turn++;
-  for (const h of heroes) h.shield = 0;
-  for (const e of foes) {
-    if (e.dead) continue;
-    const a = heroes.filter((h) => !h.dead);
-    e.intent = e.elite && turn % 2 === 0 ? { all: true, dmg: Math.round(e.atk * 0.6) } : { target: pick(a), dmg: e.atk };
-  }
-  // 典獄長的鎖鏈：擋在場中間的粗線
-  chains = [];
-  const w = foes.find((e) => e.elite && !e.dead);
-  if (w) for (let i = 0; i < 2; i++) { const x = rnd(200, 300), y = rnd(260, 640), a = rnd(-1.2, 1.2), L = 150; chains.push({ x1: x - Math.cos(a) * L / 2, y1: y - Math.sin(a) * L / 2, x2: x + Math.cos(a) * L / 2, y2: y + Math.sin(a) * L / 2 }); }
-  clearPath();
+// 換下一位神魔上場；三位都輪過一次就算一輪，大家換位置
+async function nextHero() {
+  if (!heroes.some((h) => !h.dead)) return;
+  let n = who;
+  do { n = (n + 1) % 3; if (n === 0 && who >= 0) await newRound(); } while (heroes[n].dead);
+  who = n; turn++;
+  const h = heroes[who];
+  h.cds = h.cds.map((c) => Math.max(0, c - 1));
+  skillIdx = 0;
+  if (who === heroes.findIndex((x) => !x.dead)) { for (const e of foes) if (!e.dead) setIntent(e); makeChains(); }
+  clearPath(); renderSkills();
 }
 
-function clearPath() { path = []; seq = []; inkUsed = 0; drawing = false; updateUi(); }
+async function newRound() {
+  for (const h of heroes) h.taunt = false;
+  place(false);
+  const t0 = performance.now();
+  await new Promise((res) => { const f = () => { const k = Math.min(1, (performance.now() - t0) / 450); for (const e of [...heroes, ...foes]) if (e.to) { e.x = e.from.x + (e.to.x - e.from.x) * k; e.y = e.from.y + (e.to.y - e.from.y) * k; } k < 1 ? requestAnimationFrame(f) : res(); }; requestAnimationFrame(f); });
+  for (const e of [...heroes, ...foes]) delete e.to;
+}
+
+function setIntent(e) {
+  const a = heroes.filter((h) => !h.dead);
+  const tank = a.find((h) => h.taunt);
+  if (tank && !e.elite) { e.intent = { target: tank, dmg: e.atk }; return; }
+  e.intent = e.elite && Math.random() < 0.4 ? { all: true, dmg: Math.round(e.atk * 0.6) } : { target: tank || pick(a), dmg: e.atk };
+}
+
+function makeChains() {
+  chains = [];
+  const w = foes.find((e) => e.elite && !e.dead);
+  if (w) for (let i = 0; i < 2; i++) { const x = rnd(220, 330), y = rnd(270, 640), a = rnd(-1.3, 1.3), L = 160; chains.push({ x1: x - Math.cos(a) * L / 2, y1: y - Math.sin(a) * L / 2, x2: x + Math.cos(a) * L / 2, y2: y + Math.sin(a) * L / 2 }); }
+}
+
+const hero = () => heroes && heroes[who];
+const skill = () => hero().skills[skillIdx];
+const inkMax = () => Math.round(skill().len * run.up.ink);
+function clearPath() { path = []; hits = []; closed = false; drawing = false; updateUi(); }
 
 // ───── 畫線 ─────
 const center = (u) => ({ x: u.x, y: u.y - 46 });
+const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 function toCanvas(ev) { const r = cv.getBoundingClientRect(); return { x: (ev.clientX - r.left) * W / r.width, y: (ev.clientY - r.top) * H / r.height }; }
-
 function segHitsCircle(a, b, c, r) {
   const dx = b.x - a.x, dy = b.y - a.y, L = dx * dx + dy * dy || 1;
   const t = Math.max(0, Math.min(1, ((c.x - a.x) * dx + (c.y - a.y) * dy) / L));
@@ -141,116 +209,143 @@ function segCross(a, b, c, d) {
   const o = (p, q, r) => (q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x);
   return o(a, b, c) * o(a, b, d) < 0 && o(c, d, a) * o(c, d, b) < 0;
 }
+function cutAt(a, b, c) {
+  // 線和鎖鏈的交點
+  const x1 = a.x, y1 = a.y, x2 = b.x, y2 = b.y, x3 = c.x1, y3 = c.y1, x4 = c.x2, y4 = c.y2;
+  const den = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4); if (!den) return b;
+  const t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / den;
+  return { x: x1 + (x2 - x1) * t, y: y1 + (y2 - y1) * t };
+}
+function inPoly(p, poly) {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = poly[i], b = poly[j];
+    if ((a.y > p.y) !== (b.y > p.y) && p.x < (b.x - a.x) * (p.y - a.y) / (b.y - a.y) + a.x) inside = !inside;
+  }
+  return inside;
+}
+const pathLen = () => path.reduce((s, p, i) => i ? s + dist(p, path[i - 1]) : 0, 0);
+const living = () => [...heroes, ...foes].filter((u) => !u.dead);
+
+// 直線：從神魔身上往手指方向拉，最長 len，碰到鎖鏈就停
+function straight(to) {
+  const s = center(hero()), d = dist(s, to) || 1, L = Math.min(d, inkMax());
+  let end = { x: s.x + (to.x - s.x) / d * L, y: s.y + (to.y - s.y) / d * L };
+  for (const c of chains) if (segCross(s, end, { x: c.x1, y: c.y1 }, { x: c.x2, y: c.y2 })) end = cutAt(s, end, c);
+  path = [s, end];
+  hits = living().filter((u) => u !== hero() && segHitsCircle(s, end, center(u), HIT_R)).sort((a, b) => dist(center(a), s) - dist(center(b), s));
+}
 
 cv.addEventListener('pointerdown', (ev) => {
-  if (busy || $('.overlay').classList.contains('show')) return;
-  const p = toCanvas(ev);
-  const start = heroes.find((h) => !h.dead && Math.hypot(center(h).x - p.x, center(h).y - p.y) < HIT_R + 10);
-  if (!start) { tip('要從<b>神魔身上</b>開始畫。'); return; }
+  if (busy || !heroes || $('.overlay').classList.contains('show')) return;
+  const p = toCanvas(ev), sk = skill(), h = hero();
   clearPath();
-  drawing = true; path = [center(start)]; seq = [start];
+  if (sk.shape !== 'circle' && dist(center(h), p) > HIT_R + 16) { tip(`這招要從<b>${h.name}身上</b>開始畫（腳下有金色光圈的那位）。`); return; }
+  drawing = true;
+  if (sk.shape === 'line') straight(p);
+  else if (sk.shape === 'free') path = [center(h)];
+  else path = [p];
   cv.setPointerCapture(ev.pointerId);
+  updateUi();
 });
 cv.addEventListener('pointermove', (ev) => {
   if (!drawing) return;
-  const p = toCanvas(ev), last = path[path.length - 1];
-  let d = Math.hypot(p.x - last.x, p.y - last.y);
+  const p = toCanvas(ev), sk = skill();
+  if (sk.shape === 'line') { straight(p); updateUi(); return; }
+  const last = path[path.length - 1], d = dist(p, last);
   if (d < 6) return;
-  // 墨水用完就停
-  if (inkUsed + d > run.ink) { const k = (run.ink - inkUsed) / d; p.x = last.x + (p.x - last.x) * k; p.y = last.y + (p.y - last.y) * k; d = run.ink - inkUsed; }
-  // 碰到鎖鏈就斷
-  for (const c of chains) if (segCross(last, p, { x: c.x1, y: c.y1 }, { x: c.x2, y: c.y2 })) { drawing = false; path.push(p); fxPush({ type: 'snap', x: p.x, y: p.y, dur: 600 }); tip('紅線被<b>鎖鏈</b>剪斷了。'); updateUi(); return; }
-  inkUsed += d; path.push(p);
-  for (const u of [...heroes, ...foes]) if (!u.dead && !seq.includes(u) && segHitsCircle(last, p, center(u), HIT_R)) seq.push(u);
-  if (inkUsed >= run.ink - 0.5) drawing = false;
+  const used = pathLen(), max = inkMax();
+  if (used + d > max) { const k = (max - used) / d; p.x = last.x + (p.x - last.x) * k; p.y = last.y + (p.y - last.y) * k; }
+  if (sk.shape === 'free') {
+    for (const c of chains) if (segCross(last, p, { x: c.x1, y: c.y1 }, { x: c.x2, y: c.y2 })) { path.push(cutAt(last, p, c)); fxPush({ type: 'snap', x: p.x, y: p.y, dur: 600 }); drawing = false; updateUi(); tip('紅線被<b>鎖鏈</b>剪斷了。'); return; }
+    path.push(p);
+    for (const u of living()) if (u !== hero() && !hits.includes(u) && segHitsCircle(last, p, center(u), HIT_R)) hits.push(u);
+  } else path.push(p);
+  if (pathLen() >= max - 0.5) endDraw();
   updateUi();
 });
-const endDraw = () => { if (drawing) { drawing = false; updateUi(); } };
+function endDraw() {
+  if (!drawing) return;
+  drawing = false;
+  if (skill().shape === 'circle') {
+    // 頭尾要夠近才算圈起來
+    closed = path.length > 8 && dist(path[0], path[path.length - 1]) < Math.max(90, pathLen() * 0.25);
+    hits = closed ? living().filter((u) => inPoly(center(u), path) || inPoly({ x: u.x, y: u.y - 10 }, path)) : [];
+  }
+  updateUi();
+  if (skill().shape === 'circle' && !closed) tip('圈沒有<b>收口</b>，頭尾要接起來，再畫一次。');
+}
 cv.addEventListener('pointerup', endDraw);
 cv.addEventListener('pointercancel', endDraw);
 
-// 依線經過的順序算出每一步的效果（預覽和出擊共用）
-function simulate() {
-  const out = [];
-  let power = run.base, hits = 0;
-  const buffs = { guangong: false, yuelao: false, yukionna: false };
-  for (const u of seq) {
-    if (u.side === 'ally') {
-      buffs[u.id] = true;
-      out.push({ u, kind: 'buff' });
-    } else {
-      const dmg = power + hits * run.step + (buffs.guangong ? 5 + run.up.guangong : 0);
-      out.push({ u, kind: 'hit', dmg, freeze: buffs.yukionna, heal: buffs.yuelao ? 3 + run.up.yuelao : 0 });
-      hits++;
-    }
-  }
-  return out;
+function results() {
+  const h = hero(), en = hits.filter((u) => u.side === 'enemy'), al = hits.filter((u) => u.side === 'ally');
+  return skill().run(en, al, h).map((s) => (s.dmg ? { ...s, dmg: s.dmg + run.up.dmg } : s));
 }
 
-// ───── 出擊 ─────
+// ───── 出招 ─────
 async function go() {
-  if (busy || seq.length < 2) return;
-  busy = true; updateUi();
-  const steps = simulate();
-  const total = path.length;
-  // 紅線一路走過去，碰到誰就結算誰
-  let reached = 0;
-  const reachIndex = steps.map((s) => { const c = center(s.u); let best = 0, bd = 1e9; for (let i = reached; i < total; i++) { const d = Math.hypot(path[i].x - c.x, path[i].y - c.y); if (d < bd) { bd = d; best = i; } if (d < HIT_R) break; } reached = best; return best; });
-  const t0 = performance.now(), ms = Math.min(1800, 300 + total * 10);
-  let done = 0;
-  await new Promise((res) => {
-    const f = () => {
-      const k = Math.min(1, (performance.now() - t0) / ms);
-      run.anim = Math.floor(k * (total - 1));
-      while (done < steps.length && reachIndex[done] <= run.anim) apply(steps[done++]);
-      k < 1 ? requestAnimationFrame(f) : res();
-    };
-    requestAnimationFrame(f);
-  });
-  while (done < steps.length) apply(steps[done++]);
-  run.anim = null;
-  await wait(500);
+  if (busy || !hits.length) return;
+  const h = hero(), sk = skill(), steps = results();
+  busy = true; updateUi(); renderSkills();
+  h.cds[skillIdx] = (sk.cd || 0) + 1;
+  // 角色動作；單刀赴會會衝到敵人面前
+  const a = artAnim(h.art, sk.anim) || artAnim(h.art, 'punch');
+  const total = a ? a.ms.reduce((x, y) => x + y, 0) : 600;
+  h.anim = { a, t0: performance.now() };
+  const firstFoe = steps.find((s) => s.dmg)?.u;
+  if (sk.dash && firstFoe) h.lunge = { t0: performance.now(), ms: total + 300, dx: firstFoe.x - 80 - h.x, dy: firstFoe.y - h.y };
+  float(h, sk.name, h.color, 26);
+  await wait(total * 0.5);
+  // 線發光，依序結算
+  run.glow = { t0: performance.now(), ms: 700 };
+  for (const s of steps) { await wait(sk.shape === 'circle' ? 70 : 150); apply(s); }
+  await wait(600);
+  run.glow = null; path = []; hits = [];
   if (foes.every((e) => e.dead)) return winFloor();
+  // 三位神魔都出過招，敵人才行動
+  if (heroes.some((x, i) => i > who && !x.dead)) { busy = false; return nextHero(); }
   await enemyTurn();
 }
 
 function apply(s) {
   const u = s.u;
-  if (s.kind === 'buff') {
-    u.shield += SHIELD + (u.id === 'guangong' ? run.up.guangong : 0);
-    float(u, HEROES[u.id].buff, HEROES[u.id].color);
-    fxPush({ type: 'ring', x: u.x, y: u.y - 46, color: HEROES[u.id].color, dur: 500 });
-    return;
-  }
   if (u.dead) return;
-  u.hp -= s.dmg; u.flash = performance.now() + 200;
-  float(u, String(s.dmg), s.dmg >= 15 ? '#ffe070' : '#fff');
-  fxPush({ type: 'burst', x: u.x, y: u.y - 46, color: '#ff3048', dur: 450, seed: Math.random() * 6 });
-  if (s.freeze) { u.frozen = 1; fxPush({ type: 'ice', x: u.x, y: u.y, dur: 700 }); }
-  if (s.heal) { const low = heroes.filter((h) => !h.dead).sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)[0]; if (low) heal(low, s.heal); }
-  if (u.hp <= 0) { u.hp = 0; u.dead = true; u.deadAt = performance.now(); }
+  if (s.dmg) {
+    u.hp -= s.dmg; u.flash = performance.now() + 200;
+    float(u, String(s.dmg), s.dmg >= 15 ? '#ffe070' : '#fff');
+    fxPush({ type: 'burst', x: u.x, y: u.y - 46, color: hero().color, dur: 450, seed: Math.random() * 6 });
+    if (u.hp <= 0) { u.hp = 0; u.dead = true; u.deadAt = performance.now(); }
+  }
+  if (s.freeze && !u.dead) { u.frozen = true; fxPush({ type: 'ice', x: u.x, y: u.y, dur: 700 }); float(u, '凍住', '#a0e0ff'); }
+  if (s.confuse && !u.dead) { u.confused = true; setTimeout(() => float(u, '亂點鴛鴦', '#ff5c8d'), 200); }
+  if (s.heal) { const v = Math.min(s.heal, u.maxHp - u.hp); if (v > 0) { u.hp += v; float(u, '+' + v, '#7fe07f'); fxPush({ type: 'ring', x: u.x, y: u.y - 46, color: '#7fe07f', dur: 500 }); } }
+  if (s.shield) { u.shield += s.shield; setTimeout(() => float(u, '盾 +' + s.shield, '#ffe070'), 150); fxPush({ type: 'ring', x: u.x, y: u.y - 46, color: '#ffe070', dur: 500 }); }
+  if (s.taunt) { u.taunt = true; for (const e of foes) if (!e.dead && !e.elite) e.intent = { target: u, dmg: e.atk }; float(u, '嘲諷', '#40d070'); }
 }
-
-function heal(h, n) { const v = Math.min(n, h.maxHp - h.hp); if (v > 0) { h.hp += v; float(h, '+' + v, '#7fe07f'); } }
 
 async function enemyTurn() {
   for (const e of foes) {
     if (e.dead) continue;
-    if (e.frozen) { e.frozen = 0; float(e, '凍住', '#a0e0ff'); await wait(350); continue; }
+    if (e.frozen) { e.frozen = false; float(e, '凍住，跳過', '#a0e0ff'); await wait(380); continue; }
     e.lunge = performance.now();
     await wait(180);
-    const targets = e.intent.all ? heroes.filter((h) => !h.dead) : [e.intent.target.dead ? pick(heroes.filter((h) => !h.dead)) : e.intent.target].filter(Boolean);
-    for (const h of targets) hurt(h, e.intent.dmg);
+    if (e.confused) {
+      e.confused = false;
+      const mates = foes.filter((o) => !o.dead && o !== e);
+      if (mates.length) { const o = pick(mates); o.hp -= e.atk; o.flash = performance.now() + 200; float(o, String(e.atk), '#ff5c8d'); if (o.hp <= 0) { o.hp = 0; o.dead = true; o.deadAt = performance.now(); } }
+      else float(e, '發呆', '#ff5c8d');
+    } else {
+      const alive = heroes.filter((h) => !h.dead);
+      const targets = e.intent.all ? alive : [e.intent.target.dead ? pick(alive) : e.intent.target].filter(Boolean);
+      for (const h of targets) hurt(h, e.intent.dmg);
+    }
     await wait(420);
     if (heroes.every((h) => h.dead)) return lose();
   }
-  // 敵人換位置
-  placeFoes(false);
-  const t0 = performance.now();
-  await new Promise((res) => { const f = () => { const k = Math.min(1, (performance.now() - t0) / 450); for (const e of [...heroes, ...foes]) if (e.to) { e.x = e.from.x + (e.to.x - e.from.x) * k; e.y = e.from.y + (e.to.y - e.from.y) * k; } k < 1 ? requestAnimationFrame(f) : res(); }; requestAnimationFrame(f); });
-  for (const e of [...heroes, ...foes]) delete e.to;
+  if (foes.every((e) => e.dead)) return winFloor();
   busy = false;
-  newTurn();
+  await nextHero();
 }
 
 function hurt(h, d) {
@@ -258,31 +353,31 @@ function hurt(h, d) {
   if (blocked) float(h, '擋 ' + blocked, '#ffe070');
   if (d <= 0) return;
   h.hp -= d; h.flash = performance.now() + 200;
+  const a = artAnim(h.art, 'hurt'); if (a) h.anim = { a, t0: performance.now() };
   setTimeout(() => float(h, String(d), '#ff7070'), blocked ? 250 : 0);
   if (h.hp <= 0) { h.hp = 0; h.dead = true; }
 }
 
 // ───── 獎勵 ─────
 const REWARDS = [
-  { name: '多一點墨水', desc: '紅線可以畫得更長（+20%）。', fn: () => { run.ink = Math.round(run.ink * 1.2); } },
-  { name: '青龍偃月', desc: '關公的武聖加持再 +3 傷害，經過關公的護盾也 +3。', fn: () => { run.up.guangong += 3; } },
-  { name: '月下姻緣簿', desc: '月老的姻緣加持每次多回復 3 生命。', fn: () => { run.up.yuelao += 3; } },
-  { name: '連環', desc: '線上每多打到一個敵人，傷害多加 2（越長的連段越痛）。', fn: () => { run.step += 2; } },
-  { name: '朱砂', desc: '紅線的基礎傷害 +3。', fn: () => { run.base += 3; } },
-  { name: '休息', desc: '全隊回復 50% 生命，倒下的隊友也回來。', fn: () => { for (const id of ORDER) run.hp[id] = Math.min(HEROES[id].hp, Math.max(0, run.hp[id]) + Math.round(HEROES[id].hp * 0.5)); } },
+  { name: '多一點墨水', desc: '所有招式都可以畫得更長（+20%）。', fn: () => { run.up.ink *= 1.2; } },
+  { name: '朱砂', desc: '所有招式的傷害 +2。', fn: () => { run.up.dmg += 2; } },
+  { name: '休息', desc: '全隊回復 50% 生命，倒下的隊友也回來。', fn: () => { for (const id of ORDER) run.hp[id] = Math.min(run.maxHp[id], Math.max(0, run.hp[id]) + Math.round(run.maxHp[id] * 0.5)); } },
+  { name: '強身', desc: '全隊生命上限 +6，也回復 6。', fn: () => { for (const id of ORDER) { run.maxHp[id] += 6; run.hp[id] += 6; } } },
 ];
-
 function winFloor() {
+  busy = true;
   for (const h of heroes) run.hp[h.id] = h.dead ? Math.round(h.maxHp * 0.3) : Math.min(h.maxHp, h.hp + 6);
   const opts = [...REWARDS].sort(() => Math.random() - 0.5).slice(0, 3);
-  showBox(`<h2>第 ${run.floor} 層通過</h2><p>用了 ${turn} 回合。選一項：</p>
-    ${opts.map((o, i) => `<button class="btn opt" data-i="${i}"><b>${o.name}</b><br>${o.desc}</button>`).join('')}`);
-  document.querySelectorAll('.box .opt').forEach((b) => b.onclick = () => { opts[+b.dataset.i].fn(); hideBox(); busy = false; nextFloor(); });
+  setTimeout(() => {
+    showBox(`<h2>第 ${run.floor} 層通過</h2><p>用了 ${turn} 手。選一項：</p>
+      ${opts.map((o, i) => `<button class="btn opt" data-i="${i}"><b>${o.name}</b><br>${o.desc}</button>`).join('')}`);
+    document.querySelectorAll('.box .opt').forEach((b) => b.onclick = () => { opts[+b.dataset.i].fn(); hideBox(); nextFloor(); });
+  }, 500);
 }
-
 function lose() {
   showBox(`<h2>全隊倒下</h2><p>爬到第 ${run.floor} 層。</p><button class="btn primary wide again">再爬一次</button>`);
-  $('.box .again').onclick = () => { hideBox(); busy = false; newRun(); };
+  $('.box .again').onclick = () => { hideBox(); newRun(); };
 }
 
 function showBox(html) { $('.box').innerHTML = html; $('.overlay').classList.add('show'); }
@@ -291,7 +386,7 @@ function tip(html) { $('.tip').innerHTML = html; }
 
 // ───── 畫面 ─────
 function fxPush(e) { effects.push({ t0: performance.now(), ...e }); }
-function float(u, text, color) { fxPush({ type: 'text', x: u.x, y: u.y - 110, text, color, dur: 900 }); }
+function float(u, text, color, size = 22) { fxPush({ type: 'text', x: u.x, y: u.y - 112, text, color, size, dur: 1000 }); }
 
 function drawBg(now) {
   g.fillStyle = '#1b1826'; g.fillRect(0, 0, W, FLOOR);
@@ -309,20 +404,32 @@ function drawBg(now) {
   for (let x = -600; x < W + 600; x += 90) { g.beginPath(); g.moveTo(W / 2 + (x - W / 2) * 0.4, FLOOR); g.lineTo(x, H); g.stroke(); }
 }
 
+function heroFrame(h, now) {
+  if (!h.anim || !h.anim.a) return ['pose', 0];
+  const ms = h.anim.a.ms; let t = now - h.anim.t0, i = 0;
+  if (t >= ms.reduce((a, b) => a + b, 0)) { h.anim = null; return ['pose', 0]; }
+  while (i < ms.length - 1 && t >= ms[i]) t -= ms[i++];
+  return [h.anim.a.sheet, i];
+}
+
 function drawUnit(u, now) {
   if (u.dead && u.side === 'enemy') { const k = (now - u.deadAt) / 600; if (k >= 1) return; g.globalAlpha = 1 - k; }
   if (u.dead && u.side === 'ally') g.globalAlpha = 0.3;
   const white = u.flash > now && Math.floor((u.flash - now) / 60) % 2 === 0;
-  g.fillStyle = 'rgba(0,0,0,0.4)'; g.beginPath(); g.ellipse(u.x, u.y, u.elite ? 44 : 28, 6, 0, 0, Math.PI * 2); g.fill();
-  // 線經過的單位亮圈
-  if (seq.includes(u) && !u.dead) { g.strokeStyle = u.side === 'ally' ? HEROES[u.id].color : '#ff3048'; g.lineWidth = 3; g.beginPath(); g.ellipse(u.x, u.y, u.elite ? 50 : 34, 9, 0, 0, Math.PI * 2); g.stroke(); }
-  let lx = 0;
-  if (u.lunge && now - u.lunge < 360) lx = -30 * Math.sin((now - u.lunge) / 360 * Math.PI);
-  if (u.side === 'ally') drawArt(g, u.art, 'pose', 0, u.x, u.y, 1, { white });
+  let ox = 0, oy = 0;
+  if (u.side === 'ally' && u.lunge) { const k = (now - u.lunge.t0) / u.lunge.ms; if (k < 1) { const s = k < 0.25 ? k / 0.25 : k < 0.75 ? 1 : (1 - k) / 0.25; ox = u.lunge.dx * s; oy = u.lunge.dy * s; } else u.lunge = null; }
+  const x = u.x + ox, y = u.y + oy;
+  g.fillStyle = 'rgba(0,0,0,0.4)'; g.beginPath(); g.ellipse(x, y, u.elite ? 44 : 28, 6, 0, 0, Math.PI * 2); g.fill();
+  // 現在上場的神魔：腳下金色光圈
+  if (u.side === 'ally' && u === hero() && !u.dead) { const p = 0.6 + 0.4 * Math.sin(now / 200); g.strokeStyle = `rgba(255,224,112,${p})`; g.lineWidth = 4; g.beginPath(); g.ellipse(x, y, 40, 10, 0, 0, Math.PI * 2); g.stroke(); }
+  if (hits.includes(u) && !u.dead) { g.strokeStyle = u.side === 'ally' ? '#7fe07f' : '#ff3048'; g.lineWidth = 3; g.beginPath(); g.ellipse(x, y, u.elite ? 50 : 34, 9, 0, 0, Math.PI * 2); g.stroke(); }
+  if (u.side === 'ally') { const [sheet, i] = heroFrame(u, now); drawArt(g, u.art, sheet, i, x, y, 1, { white }); }
   else {
-    const pose = u.flash > now ? 2 : (u.lunge && now - u.lunge < 360) ? 1 : 0;
+    const lunging = u.lunge && now - u.lunge < 360;
+    const lx = lunging ? -30 * Math.sin((now - u.lunge) / 360 * Math.PI) : 0;
+    const pose = u.flash > now ? 2 : lunging ? 1 : 0;
     if (u.frozen) g.filter = 'saturate(0.3) brightness(1.3) hue-rotate(160deg)';
-    drawArt(g, 'u:' + u.sprite, 'pose', pose, u.x + lx, u.y, 1, { flip: true, white });
+    drawArt(g, 'u:' + u.sprite, 'pose', pose, x + lx, y, 1, { flip: true, white });
     g.filter = 'none';
   }
   g.globalAlpha = 1;
@@ -332,51 +439,52 @@ function drawUnit(u, now) {
   g.fillStyle = u.side === 'ally' ? '#5fd35f' : '#e05050'; g.fillRect(u.x - 29, top - 1, 58 * u.hp / u.maxHp, 7);
   g.font = 'bold 15px sans-serif'; g.textAlign = 'center';
   if (u.side === 'ally') {
-    g.fillStyle = '#fff'; g.fillText(`${u.name} ${u.hp}`, u.x, top - 8);
-    if (u.shield) { g.fillStyle = '#ffe070'; g.fillText('盾 ' + u.shield, u.x + 50, top + 6); }
-    const aimed = foes.some((e) => !e.dead && !e.frozen && e.intent && (e.intent.all || e.intent.target === u));
+    g.fillStyle = u === hero() ? '#ffe070' : '#fff'; g.fillText(`${u.name} ${u.hp}`, u.x, top - 8);
+    if (u.shield) { g.fillStyle = '#ffe070'; g.fillText('盾 ' + u.shield, u.x + 52, top + 6); }
+    const aimed = foes.some((e) => !e.dead && !e.frozen && !e.confused && e.intent && (e.intent.all || e.intent.target === u));
     if (aimed) { g.fillStyle = Math.floor(now / 250) % 2 ? '#ff4050' : '#ffb0b0'; g.fillRect(u.x - 52, top - 26, 6, 16); g.fillRect(u.x - 52, top - 7, 6, 5); }
   } else if (u.intent) {
-    const t = u.frozen ? '凍住，跳過' : u.intent.all ? `全隊 ${u.intent.dmg}` : `${u.intent.target.name} ${u.intent.dmg}`;
-    g.fillStyle = u.frozen ? '#a0e0ff' : '#ff8a8a'; g.fillText('⚔ ' + t, u.x, top - 8);
+    const t = u.frozen ? '凍住，跳過' : u.confused ? '會打同伴' : u.intent.all ? `全隊 ${u.intent.dmg}` : `${u.intent.target.name} ${u.intent.dmg}`;
+    g.fillStyle = u.frozen ? '#a0e0ff' : u.confused ? '#ff8ac0' : '#ff8a8a'; g.fillText('⚔ ' + t, u.x, top - 8);
   }
 }
 
 function render(now) {
   drawBg(now);
-  if (heroes) {
+  if (heroes && who >= 0) {
     for (const c of chains) {
       g.strokeStyle = '#555060'; g.lineWidth = 9; g.beginPath(); g.moveTo(c.x1, c.y1); g.lineTo(c.x2, c.y2); g.stroke();
       g.strokeStyle = '#9a96a8'; g.lineWidth = 3; g.setLineDash([10, 6]); g.beginPath(); g.moveTo(c.x1, c.y1); g.lineTo(c.x2, c.y2); g.stroke(); g.setLineDash([]);
     }
     for (const u of [...heroes, ...foes].sort((a, b) => a.y - b.y)) drawUnit(u, now);
-    // 紅線
-    const n = run.anim != null ? run.anim + 1 : path.length;
     if (path.length > 1) {
+      const sk = skill(), col = hero().color, glow = run.glow;
       g.lineCap = 'round'; g.lineJoin = 'round';
-      g.strokeStyle = run.anim != null ? 'rgba(255,48,72,0.25)' : 'rgba(255,48,72,0.9)'; g.lineWidth = 6;
-      g.beginPath(); path.forEach((p, i) => i ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y)); g.stroke();
-      if (run.anim != null) {
-        g.strokeStyle = '#ff3048'; g.lineWidth = 8; g.shadowColor = '#ff3048'; g.shadowBlur = 14;
-        g.beginPath(); for (let i = 0; i < n; i++) i ? g.lineTo(path[i].x, path[i].y) : g.moveTo(path[i].x, path[i].y); g.stroke();
-        g.shadowBlur = 0;
-      }
+      g.strokeStyle = glow ? col : '#ff3048'; g.lineWidth = glow ? 10 : 6;
+      g.globalAlpha = glow ? Math.max(0, 1 - (now - glow.t0) / glow.ms * 0.7) : 0.9;
+      if (glow) { g.shadowColor = col; g.shadowBlur = 18; }
+      g.beginPath(); path.forEach((p, i) => i ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y));
+      if (sk.shape === 'circle' && closed) { g.closePath(); const a0 = g.globalAlpha; g.fillStyle = col; g.globalAlpha = a0 * 0.15; g.fill(); g.globalAlpha = a0; }
+      g.stroke(); g.shadowBlur = 0; g.globalAlpha = 1;
     }
-    // 預覽傷害
-    if (!busy && seq.length > 1) {
-      g.font = 'bold 18px sans-serif'; g.textAlign = 'center';
-      simulate().forEach((s, i) => {
+    // 預覽：每個目標會受到什麼
+    if (!busy && hits.length && !drawing) {
+      const en = hits.filter((u) => u.side === 'enemy');
+      results().forEach((s) => {
         const c = center(s.u);
-        g.fillStyle = '#000'; g.beginPath(); g.arc(c.x - 36, c.y - 30, 13, 0, Math.PI * 2); g.fill();
-        g.fillStyle = '#ffe070'; g.font = 'bold 15px sans-serif'; g.fillText(String(i), c.x - 36, c.y - 25);
-        if (s.kind === 'hit') { g.font = 'bold 18px sans-serif'; g.fillStyle = '#000'; g.fillText(`-${s.dmg}${s.freeze ? '❄' : ''}`, c.x + 1, c.y + 21); g.fillStyle = '#ffe070'; g.fillText(`-${s.dmg}${s.freeze ? '❄' : ''}`, c.x, c.y + 20); }
+        const t = [s.dmg ? '-' + s.dmg : '', s.freeze ? '凍' : '', s.confuse ? '亂' : '', s.heal ? '+' + s.heal : '', s.shield ? '盾' + s.shield : ''].filter(Boolean).join(' ');
+        if (!t) return;
+        g.font = 'bold 18px sans-serif'; g.textAlign = 'center';
+        g.fillStyle = '#000'; g.fillText(t, c.x + 1, c.y + 23);
+        g.fillStyle = s.dmg ? '#ffe070' : '#7fe07f'; g.fillText(t, c.x, c.y + 22);
+        if (skill().shape === 'free' && s.u.side === 'enemy') { g.fillStyle = '#000'; g.beginPath(); g.arc(c.x - 36, c.y - 30, 13, 0, Math.PI * 2); g.fill(); g.fillStyle = '#ffe070'; g.font = 'bold 15px sans-serif'; g.fillText(String(en.indexOf(s.u) + 1), c.x - 36, c.y - 25); }
       });
     }
   }
   effects = (effects || []).filter((e) => now < e.t0 + e.dur);
   for (const e of effects) {
     const k = (now - e.t0) / e.dur;
-    if (e.type === 'text') { g.globalAlpha = 1 - k; g.font = 'bold 22px sans-serif'; g.textAlign = 'center'; g.fillStyle = '#000'; g.fillText(e.text, e.x + 2, e.y - k * 30 + 2); g.fillStyle = e.color; g.fillText(e.text, e.x, e.y - k * 30); g.globalAlpha = 1; }
+    if (e.type === 'text') { g.globalAlpha = 1 - k * k; g.font = `bold ${e.size}px sans-serif`; g.textAlign = 'center'; g.fillStyle = '#000'; g.fillText(e.text, e.x + 2, e.y - k * 30 + 2); g.fillStyle = e.color; g.fillText(e.text, e.x, e.y - k * 30); g.globalAlpha = 1; }
     if (e.type === 'burst') for (let s = 0; s < 12; s++) { const a = s * 0.52 + e.seed, d = 8 + k * 46; g.globalAlpha = 1 - k; g.fillStyle = s % 3 ? e.color : '#fff'; g.fillRect(e.x + Math.cos(a) * d - 4, e.y + Math.sin(a) * d - 4, 8, 8); g.globalAlpha = 1; }
     if (e.type === 'ring') { g.globalAlpha = 1 - k; g.strokeStyle = e.color; g.lineWidth = 4; g.beginPath(); g.arc(e.x, e.y, 20 + k * 40, 0, Math.PI * 2); g.stroke(); g.globalAlpha = 1; }
     if (e.type === 'ice') { g.globalAlpha = 0.7 * (1 - k); for (let s = 0; s < 6; s++) { g.fillStyle = s % 2 ? '#c0ecff' : '#fff'; g.fillRect(e.x - 30 + s * 11, e.y - 20 - (s % 3) * 14, 7, 20 + (s % 3) * 14); } g.globalAlpha = 1; }
@@ -385,31 +493,49 @@ function render(now) {
   requestAnimationFrame(render);
 }
 
+// ───── 介面 ─────
+function renderSkills() {
+  const h = hero();
+  const w = $('.who'); w.innerHTML = '';
+  w.appendChild(artImg(h.id, 40));
+  w.insertAdjacentHTML('beforeend', `<div>輪到 <b style="color:${h.color}">${h.name}</b>・${h.role}</div>`);
+  const box = $('.skills'); box.innerHTML = '';
+  h.skills.forEach((sk, i) => {
+    const b = document.createElement('button'), cd = h.cds[i];
+    b.className = 'btn sk' + (i === skillIdx ? ' on' : '');
+    b.disabled = cd > 0 || busy;
+    b.innerHTML = `<b>${sk.name}${i === 2 ? '★' : ''}</b><span class="shape">${SHAPES[sk.shape]}</span>${cd > 0 ? `・還要 ${cd} 輪` : sk.cd ? `・冷卻 ${sk.cd}` : ''}<br>${sk.desc}`;
+    b.onclick = () => { if (busy) return; skillIdx = i; clearPath(); renderSkills(); };
+    box.appendChild(b);
+  });
+  updateUi();
+}
+
 function updateUi() {
-  if (!run) return;
+  if (!run || !heroes || who < 0) return;
   $('.floor').textContent = `第 ${run.floor} 層`;
-  $('.turn').textContent = `第 ${turn} 回合`;
-  $('.ink div').style.width = Math.max(0, 100 - inkUsed / run.ink * 100) + '%';
-  $('.go').disabled = busy || seq.length < 2;
+  $('.turn').textContent = `第 ${turn} 手`;
+  const sk = skill(), used = sk.shape === 'line' && path.length > 1 ? dist(path[0], path[1]) : pathLen();
+  $('.ink div').style.width = Math.max(0, 100 - used / inkMax() * 100) + '%';
+  $('.ink div').style.background = hero().color;
+  $('.go').disabled = busy || !hits.length || drawing;
   $('.redo').disabled = busy || !path.length;
-  if (busy) tip('紅線出擊中……');
-  else if (seq.length < 2) tip('從一位神魔身上開始，<b>一筆</b>畫過隊友和敵人。線經過的順序有編號，敵人身上會顯示預計傷害。');
-  else {
-    const s = simulate(), dmg = s.filter((x) => x.kind === 'hit').reduce((a, b) => a + b.dmg, 0);
-    tip(`這條線：經過 ${s.filter((x) => x.kind === 'buff').map((x) => x.u.name).join('、')}，打到 ${s.filter((x) => x.kind === 'hit').length} 個敵人，總傷害 <b>${dmg}</b>。滿意就按出擊。`);
-  }
+  if (busy) tip(`${hero().name}出招中……`);
+  else if (drawing) tip(HOW[sk.shape]);
+  else if (!path.length) tip(`「${sk.name}」：${HOW[sk.shape]}`);
+  else if (hits.length) tip(`「${sk.name}」會打中 ${hits.filter((u) => u.side === 'enemy').length} 個敵人${hits.some((u) => u.side === 'ally') ? `、碰到 ${hits.filter((u) => u.side === 'ally').length} 位隊友` : ''}。滿意就按出招，不滿意按重畫。`);
+  else tip(`這條線沒有碰到目標，按重畫再來。`);
 }
 
 $('.redo').onclick = () => { if (!busy) clearPath(); };
 $('.go').onclick = go;
 $('.help').innerHTML = `
-  <p>每回合畫<b>一條</b>紅線，必須從一位神魔身上開始，手指不離開螢幕一筆畫完。下方紅條是墨水，用完線就停。</p>
-  <p><b>穿過隊友</b>：這位隊友得到 ${SHIELD} 點護盾，並把加持加到線上，<b>之後</b>打到的敵人才有效果。起點那位也算。</p>
-  ${ORDER.map((id) => `<p><b>${HEROES[id].name}・${HEROES[id].buff}</b>：${HEROES[id].desc}</p>`).join('')}
-  <p><b>穿過敵人</b>：造成傷害，線上越後面打到的敵人傷害越高。</p>
-  <p>敵人頭上會寫這回合要打誰、打多少，被瞄準的隊友頭上有紅色驚嘆號，記得讓線經過他拿護盾。每回合大家都會換位置，路線要重新想。</p>
-  <p>每 3 層有精英無臉典獄長，他的鎖鏈會剪斷紅線。</p>`;
-window.__s = () => ({ run, heroes, foes, seq, path, chains });
+  <p>三位神魔輪流上場，<b>每次只動一位</b>，輪到的神魔腳下有金色光圈。選他的一招，照那招的畫法在戰場上畫，畫完會預覽每個目標受到的效果，按出招才算數。</p>
+  <p><b>直線</b>：從神魔身上往外拉。<b>自由線</b>：從神魔身上開始一筆畫過去。<b>畫圈</b>：在任何地方圈一圈，頭尾要接起來。墨水條用完就不能再畫。</p>
+  <p>三位神魔各出一招之後，敵人才一起行動，然後大家換位置。敵人頭上寫著這一輪要打誰、打多少，可以先凍住、先打死，或用護盾擋。</p>
+  ${ORDER.map((id) => HEROES[id].skills.map((s) => `<p><b>${HEROES[id].name}・${s.name}</b>（${SHAPES[s.shape]}${s.cd ? `，冷卻 ${s.cd} 輪` : ''}）：${s.desc}</p>`).join('')).join('')}
+  <p>每 3 層有精英無臉典獄長，他的鎖鏈會剪斷直線和自由線，畫圈不受影響。</p>`;
+window.__s = () => ({ run, heroes, foes, hits, path, chains, who, skillIdx, busy });
 newRun();
 requestAnimationFrame(render);
 })();
