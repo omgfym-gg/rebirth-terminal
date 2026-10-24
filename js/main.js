@@ -64,7 +64,7 @@ const Game = {
       boons: { soulExtra: 0, parcel: false },
       history: [],
       lv: {},          // 神魔等級 { id: { lv, exp } }
-      vault: [],       // 靈魂倉庫：拿到的裝備，轉生都帶著走
+      vault: [],       // 這一世拿到的裝備（轉生時清空）
       eq: {},          // 誰身上穿什麼 { id: { weapon, charm } }
       regulars: { zhang: { act: 0, choices: [] }, kai: { act: 0, choices: [] } },
       life: null,
@@ -227,10 +227,6 @@ const Game = {
       if (opts.length <= 2) for (const id of s.offer.crew) { if (out.length >= 3) break; if (!out.some((p) => p.id === id)) out.push({ id, tag: TAGS.crew }); }
       return out;
     };
-    const store = () => ({
-      bag: s.vault, eq: s.eq, heroes: party().filter((p) => p.tag !== TAGS.shadow).map((p) => p.id),
-      anyKind: (hid) => pick.form === 'human' && hid === pick.hero, save: () => this.persist(),
-    });
 
     const render = () => {
       root.innerHTML = '';
@@ -288,7 +284,6 @@ const Game = {
           for (const m of p.slice(1)) root.append(el('div', { class: 'card job' }, ...(m.tag === TAGS.shadow ? shadowCard(m) : shadowCard({ id: m.id, level: this.lvOf(m.id).lv, gear: this.eqOf(m.id) }, TAGS.crew))));
         }
         root.append(el('p', { class: 'muted small-note' }, `出手順序：${p.map((m) => `${HEROES[m.id].name}（${m.tag}）`).join(' → ')}`));
-        if (s.vault.length) root.append(el('button', { class: 'btn wide', onclick: () => Redline.gearBox(store(), () => { Redline.hideBox(); render(); }, '好了', p.filter((m) => m.tag === TAGS.shadow)) }, `整理裝備（靈魂倉庫 ${s.vault.length} 件）`));
       }
 
       const ready = pick.form && pick.hero && p.length === 3;
@@ -301,6 +296,7 @@ const Game = {
 
   beginLife(form, party) {
     const s = this.save;
+    s.vault = []; s.eq = {}; // 每一世的裝備從零開始
     const hero = party[0].id;
     const lines = [];
     // 阿凱的包裹：今世的神魔先升一級
@@ -333,7 +329,7 @@ const Game = {
 
   // ───────── 爬塔：一層一場一筆紅線 ─────────
 
-  // 出戰的三位：今世和派遣同事穿靈魂倉庫的裝備，前世之影穿死前的裝備
+  // 出戰的三位：今世和派遣同事穿這一世拿到的裝備，前世之影穿死前的裝備
   battleParty() {
     const L = this.save.life;
     return L.party.map((m) => ({ id: m.id, tag: m.tag, hp: L.hp[m.id], maxHp: L.maxHp[m.id], gear: m.tag === TAGS.shadow ? (m.gear || []) : this.eqOf(m.id) }));
@@ -369,7 +365,7 @@ const Game = {
 
   gearStore() {
     const s = this.save, L = s.life;
-    return { bag: s.vault, eq: s.eq, heroes: L.party.filter((m) => m.tag !== TAGS.shadow).map((m) => m.id), anyKind: (hid) => L.form === 'human' && hid === L.hero, save: () => this.persist() };
+    return { note: '這一世拿到的裝備，轉生時會清空。', bag: s.vault, eq: s.eq, heroes: L.party.filter((m) => m.tag !== TAGS.shadow).map((m) => m.id), anyKind: (hid) => L.form === 'human' && hid === L.hero, save: () => this.persist() };
   },
 
   afterFloor(f, r) {
@@ -404,11 +400,11 @@ const Game = {
     this.drop(kind, next);
   },
 
-  // 精英、魔王掉裝備：三選一，存進靈魂倉庫。魔王優先掉隊上神魔的專屬兵器
+  // 精英、魔王掉裝備：三選一。只掉今世穿得了的（神族掉神器、魔族掉邪物，為人兩種都掉）；魔王優先掉今世的專屬兵器
   drop(kind, next) {
     const s = this.save, L = s.life;
-    const general = shuffle(Object.keys(GEAR).filter((id) => !GEAR[id].own && !s.vault.includes(id)));
-    const own = shuffle(L.party.map((m) => 'ex_' + m.id).filter((id) => GEAR[id] && !s.vault.includes(id)));
+    const general = shuffle(Object.keys(GEAR).filter((id) => !GEAR[id].own && !s.vault.includes(id) && Redline.canUse(L.hero, id, L.form === 'human')));
+    const own = ['ex_' + L.hero].filter((id) => GEAR[id] && !s.vault.includes(id));
     const ids = (kind === 'boss' ? [...own.slice(0, 2), ...general] : general).slice(0, 3);
     if (!ids.length) {
       s.fragments += 5; this.persist();
@@ -475,6 +471,8 @@ const Game = {
     };
     s.history.push(record);
     L.alive = false;
+    // 裝備不帶到下一世（前世之影穿著死前的裝備上場）
+    s.vault = []; s.eq = {};
 
     let frag = L.floor * 3 + L.kills;
     if (outcome === 'victory') frag += 15;
@@ -595,7 +593,6 @@ const Game = {
       root.append(el('h3', {}, '神魔等級'));
       root.append(el('div', { class: 'history' }, ...met.map((id) => { const v = this.lvOf(id); return el('div', {}, `${HEROES[id].name}　Lv.${v.lv}${v.lv < LV_MAX ? `（經驗 ${v.exp}/${needExp(v.lv)}）` : ''}`); })));
     }
-    if (s.vault.length) root.append(el('p', { class: 'muted' }, `靈魂倉庫：${s.vault.map((id) => GEAR[id] ? GEAR[id].n : id).join('、')}`));
 
     root.append(el('h3', {}, '前世'));
     const list = el('div', { class: 'history' });

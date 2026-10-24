@@ -988,7 +988,7 @@ const GEAR = {
   ex_redgirl: { n: '紅色雨衣', kind: '邪物', slot: 'weapon', own: 'redgirl', icon: '衣', color: '#ff4050', from: '臺灣都市傳說',
     d: '山裡的那件紅衣：每輪第一個要打紅衣小女孩的敵人會在山裡迷路，走到別的地方、這次打不到人。代價：每輪開始扣 1 生命。', roundCost: 1 },
 };
-// 裝備清單：背包和誰身上穿什麼由呼叫的人存（試玩存在手機、主遊戲存在靈魂倉庫），戰鬥裡每位神魔帶著 gear 陣列上場
+// 裝備清單：背包和誰身上穿什麼由呼叫的人存（試玩存在手機、主遊戲存在這一世的存檔），戰鬥裡每位神魔帶著 gear 陣列上場
 const gearOf = (h) => (h.gear || []).filter((id) => GEAR[id]);
 const wears = (h, id) => !!h && gearOf(h).includes(id);
 // anyKind：這一世為人，神器、邪物都能用（專屬兵器還是只有本人能用）
@@ -1257,7 +1257,7 @@ function gearBox(store, done, doneText = '繼續', fixed = []) {
       return `<button class="btn opt gslot" data-h="${hid}" data-s="${sl}">${SLOT[sl]}：${it ? `<b style="color:${it.color}">${it.n}</b><br>${it.d}` : '<span class="muted">空的，點一下裝上</span>'}</button>`; }).join('')}</div>`).join('');
   const fix = fixed.map((f) => `<div class="gear-hero"><b style="color:${HEROES[f.id].color}">${HEROES[f.id].name}</b><span class="muted">（${f.tag || ''}・穿著原本的裝備，不能換）</span>
     ${f.gear.length ? f.gear.filter((id) => GEAR[id]).map((id) => `<p><b style="color:${GEAR[id].color}">${GEAR[id].n}</b>：${GEAR[id].d}</p>`).join('') : '<p class="muted">沒有裝備。</p>'}</div>`).join('');
-  showBox(`<h2>裝備</h2><p class="muted">靈魂倉庫 ${store.bag.length} 件，轉生也帶著走。點欄位換裝。</p>${rows}${fix}<button class="btn primary wide gdone" style="margin-top:10px">${doneText}</button>`);
+  showBox(`<h2>裝備</h2><p class="muted">背包 ${store.bag.length} 件。${store.note || ''}點欄位換裝。</p>${rows}${fix}<button class="btn primary wide gdone" style="margin-top:10px">${doneText}</button>`);
   document.querySelectorAll('.box .gslot').forEach((b) => b.onclick = () => gearPickFor(store, b.dataset.h, b.dataset.s, () => gearBox(store, done, doneText, fixed)));
   $('.box .gdone').onclick = () => { store.save(); done(); };
 }
@@ -1280,7 +1280,7 @@ function gearPickFor(store, hid, sl, back) {
 function gearOffer(store, ids, title, next, nextText = '繼續') {
   if (!ids.length) return next();
   const forWho = (id) => GEAR[id].own ? HEROES[GEAR[id].own].name + '專屬' : GEAR[id].kind === '神器' ? '神族能用' : '魔族能用';
-  showBox(`<h2>${title}</h2><p>選一件放進靈魂倉庫：</p>
+  showBox(`<h2>${title}</h2><p>選一件帶走：</p>
     ${ids.map((id) => { const it = GEAR[id]; return `<button class="btn opt gget" data-id="${id}"><b style="color:${it.color}">${it.n}</b>（${it.kind}・${SLOT[it.slot]}・${forWho(id)}）<br>${it.d}</button>`; }).join('')}`);
   document.querySelectorAll('.box .gget').forEach((b) => b.onclick = () => {
     const id = b.dataset.id; store.bag.push(id);
