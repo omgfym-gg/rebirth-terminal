@@ -3,18 +3,20 @@
 // 背景音樂有檔案就放檔案（assets/audio/），沒有就用程式寫的晶片循環曲頂著。
 // 手機瀏覽器要等玩家先點一下畫面才准出聲，所以第一次點擊時才真的開始。
 const Snd = (() => {
-// 背景音樂檔：放進 assets/audio/ 之後在這裡登記，沒登記的用晶片曲
+// 背景音樂檔：放進 assets/audio/ 之後在這裡登記，沒登記的用晶片曲。
+// 一首就單曲循環；寫成陣列就是歌單，一首播完接下一首，每次進場從下一首開始
 const FILES = {
   // Stable Audio Open 生成，原檔留在小黑電腦的下載資料夾（git 歷史裡也有）；已去尾端靜音、頭尾交叉淡化成可無縫循環
   title: 'assets/audio/title.mp3?v=1',
-  floor: 'assets/audio/floor.mp3?v=1',
+  floor: ['assets/audio/floor.mp3?v=1'],
   boss: 'assets/audio/boss.mp3?v=1',
 };
+const pos = {};
 const KEY = 'rebirth-terminal-sound-v1';
 let pref = { mute: false };
 try { pref = { ...pref, ...JSON.parse(localStorage.getItem(KEY) || '{}') }; } catch (e) { /* 私密模式 */ }
 let ctx = null, master = null, sfxBus = null, musicBus = null, noiseBuf = null, unlocked = false;
-let want = null, playing = null, src = null, seq = null, fileBus = null;
+let want = null, playing = null, src = null, seq = null, fileBus = null, tok = 0, nextAt = null;
 const buffers = {};
 
 function init() {
@@ -127,7 +129,8 @@ function startSeq(name) {
 
 function stopMusic() {
   if (seq) { seq(); seq = null; }
-  if (src) { const s = src, t = ctx.currentTime; src = null; s.gn.gain.setTargetAtTime(0, t, 0.15); s.stop(t + 0.8); }
+  if (src) { fadeOut(src); src = null; }
+  clearTimeout(nextAt); tok++;
   playing = null;
 }
 // 換背景音樂：'title' 首頁／'floor' 一般關卡／'boss' 魔王關；同一首不會重頭播
@@ -138,17 +141,42 @@ function bgm(name) {
   playing = name;
   if (!name) return;
   if (FILES[name]) {
-    // 用 WebAudio 解碼後循環播放，接縫不會有空白；檔案抓不到就改用晶片曲
-    if (!buffers[name]) buffers[name] = fetch(FILES[name]).then((r) => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
-      .then((a) => new Promise((ok, no) => ctx.decodeAudioData(a, ok, no)));
-    buffers[name].then((buf) => {
-      if (playing !== name || src) return;
-      const s = ctx.createBufferSource(), gn = ctx.createGain(), t = ctx.currentTime;
-      s.buffer = buf; s.loop = true; s.gn = gn;
-      gn.gain.setValueAtTime(0, t); gn.gain.linearRampToValueAtTime(1, t + 0.8);
-      s.connect(gn); gn.connect(fileBus); s.start(t); src = s;
-    }).catch(() => { delete buffers[name]; if (playing === name && !seq) seq = startSeq(name); });
+    const list = [].concat(FILES[name]), my = tok;
+    pos[name] = pos[name] === undefined ? Math.floor(Math.random() * list.length) : (pos[name] + 1) % list.length;
+    playFile(name, list, my);
   } else seq = startSeq(name);
+}
+// 用 WebAudio 解碼後播放，循環接縫不會有空白；檔案抓不到就改用晶片曲
+function load(url) {
+  if (!buffers[url]) buffers[url] = fetch(url).then((r) => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
+    .then((a) => new Promise((ok, no) => ctx.decodeAudioData(a, ok, no)))
+    .catch((e) => { delete buffers[url]; throw e; });
+  return buffers[url];
+}
+function fadeOut(s) { const t = ctx.currentTime; s.gn.gain.setTargetAtTime(0, t, 0.4); s.stop(t + 2.5); }
+function playFile(name, list, my) {
+  const url = list[pos[name]];
+  load(url).then((buf) => {
+    if (tok !== my) return;
+    const s = ctx.createBufferSource(), gn = ctx.createGain(), t = ctx.currentTime;
+    s.buffer = buf; s.loop = list.length === 1; s.gn = gn;
+    gn.gain.setValueAtTime(0, t); gn.gain.linearRampToValueAtTime(1, t + 0.8);
+    s.connect(gn); gn.connect(fileBus); s.start(t);
+    if (src) fadeOut(src);
+    src = s;
+    if (list.length > 1) {
+      // 歌單：快播完時先把下一首載好，最後 1.5 秒交叉淡入
+      load(list[(pos[name] + 1) % list.length]).catch(() => {});
+      // 用音訊時鐘算剩多少（切到背景時聲音會暫停，計時器卻還在跑）
+      const next = () => {
+        if (tok !== my || src !== s) return;
+        const left = buf.duration - (ctx.currentTime - t) - 1.5;
+        if (left > 0.2) { nextAt = setTimeout(next, left * 1000); return; }
+        pos[name] = (pos[name] + 1) % list.length; playFile(name, list, my);
+      };
+      nextAt = setTimeout(next, Math.max(1000, (buf.duration - 1.5) * 1000));
+    }
+  }).catch(() => { if (tok === my && !seq && !src) seq = startSeq(name); });
 }
 
 function setMute(m) {
