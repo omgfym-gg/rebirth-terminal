@@ -1447,7 +1447,7 @@ function showInfo(u) {
       ${gearOf(u).length ? '<h3>裝備</h3>' + gearOf(u).map((id) => row(GEAR[id].n, GEAR[id].d, GEAR[id].color)).join('') : ''}`;
   } else {
     const F = FOES[u.key], it = u.intent;
-    const intent = u.frozen ? '凍住了，這一輪不會行動。' : u.confused ? '被亂點鴛鴦，下一次會打自己的同伴。' : !it ? '還沒決定。' : it.all ? `${it.judge ? '審判' : '凝視'}全隊，每人 ${it.dmg} 傷害。` : `走到${it.target.name}面前打 ${it.dmg}${it.twice ? '，連砍兩下' : ''}。`;
+    const intent = u.frozen ? '凍住了，這一輪不會行動。' : u.confused ? '被亂點鴛鴦，下一次會打自己的同伴。' : u.stun ? '變成石像，這一輪不會行動。' : !it ? '還沒決定。' : it.seize ? `走去把${it.seize.name}的靈魂抓走封印。` : it.all ? `${it.label || (it.judge ? '審判' : '凝視')}全隊，每人 ${it.dmg} 傷害。` : `走到${it.target.name}面前打 ${it.dmg}${it.twice ? '，連砍兩下' : ''}${it.carry ? '，然後把他抓走' : ''}。`;
     html = `<h2 style="color:#ff8a8a">${u.name}</h2><p class="muted">${F.boss ? '魔王' : F.elite ? '精英敵人' : '敵人'}</p>
       <p>生命 ${u.hp}/${u.maxHp}・攻擊 ${u.atk}</p>${row('這一輪要做什麼', intent, '#ff8a8a')}
       ${st.length ? '<h3>現在的狀態</h3>' + st.map(([k, v]) => row(k, v)).join('') : '<p class="muted">沒有特殊狀態。</p>'}
@@ -1466,7 +1466,7 @@ const TUT_STEPS = [
   ['輪到誰', '三位神魔輪流上場，每次只動一位。<b>腳下有金色光圈</b>的就是現在要出手的人，下方也會寫「輪到 誰」。'],
   ['選一招', '下方三個按鈕是他的三招，按鈕上寫著<b>畫法</b>（直線、衝刺、自由線、折線、畫圈、連點），選好後效果寫在按鈕下面。被動、天賦要按名字旁邊的<b>「說明」</b>。'],
   ['照畫法畫', '在戰場上用手指畫。第一次遇到某種畫法，戰場上會有<b>白色虛線的示範</b>，跟著畫就好；忘了就按左下的<b>「怎麼畫」</b>再看一次。畫完會預覽每個敵人受到多少傷害。'],
-  ['出招、看敵人', '滿意就按<b>出招</b>，不滿意按<b>重畫</b>。三位都出手後敵人才行動，敵人頭上寫著要打誰、打多少。<b>點一下角色或敵人</b>可以看詳細說明。'],
+  ['出招、看敵人', '滿意就按<b>出招</b>，不滿意按<b>重畫</b>。三位都出手後敵人才行動。被盯上的神魔旁邊有紅色驚嘆號，點一下敵人可以看他這一輪要打誰、打多少。<b>點一下角色或敵人</b>可以看詳細說明。'],
 ];
 function tutIntro() {
   if (tut.intro || run.floor !== 1) return;
@@ -1634,8 +1634,8 @@ function drawUnit(u, now) {
     const aimed = foes.some((e) => !e.dead && !e.frozen && !e.confused && e.intent && (e.intent.all || e.intent.target === u));
     if (aimed) { g.fillStyle = Math.floor(now / 250) % 2 ? '#ff4050' : '#ffb0b0'; g.fillRect(u.x - 52, top - 26, 6, 16); g.fillRect(u.x - 52, top - 7, 6, 5); }
   } else if (u.intent) {
-    const t = u.frozen ? '凍住，跳過' : u.stun ? '石像，跳過' : u.confused ? '會打同伴' : u.intent.seize ? `搶魂・${u.intent.seize.name}` : u.intent.all ? `${u.intent.label || '全隊'} ${u.intent.dmg}` : `打${u.intent.target.name} ${u.intent.dmg}${u.intent.twice ? '×2' : ''}${u.intent.carry ? ' 抓走' : ''}`;
-    g.fillStyle = u.frozen ? '#a0e0ff' : u.confused ? '#ff8ac0' : u.intent.seize ? '#d0b0ff' : '#ff8a8a'; g.fillText((u.intent.seize ? '✋ ' : '⚔ ') + t, u.x, top - 8);
+    // 頭上只寫名字；這一輪要打誰，點他看說明
+    g.fillStyle = u.boss ? '#ffb040' : u.elite ? '#ffd080' : '#ff8a8a'; g.fillText(u.name, u.x, top - 8);
   }
   if (u.side === 'enemy') {
     // 身上的狀態排成一列小字
@@ -1889,9 +1889,9 @@ function renderHelp() {
   <p><b>移動</b>：射程不夠打不到？出招前先按「移動」，再點戰場上要去的地方，神魔會走過去（每次輪到只能移動一次），走完再畫招。</p>
   <p>墨水條用完就不能再畫。標「近身」的招式神魔會自己跑過去打，其他招式站在原地放出去。</p>
   <p><b>天賦</b>：線穿過隊友，會發動那位隊友的天賦。<b>紅線交會</b>：同一回合隊友畫過的線會留在地上（淡淡的虛線，換回合就清掉），你的線跟它交叉，交叉點會炸開，附近敵人各受 6 傷害，也會發動那條線主人的天賦。有些招式還有<b>交會加成</b>（寫在招式說明裡），每交會一處效果再加一份，一招最多算 3 處。</p>
-  <p>神魔出招時會沿著你畫的線跑過去，最後停在線的終點，所以畫線也是在決定下一輪站哪裡。三位神魔各出一招之後，敵人才一起行動，會走到目標面前打。敵人頭上寫著這一輪要打誰、打多少，可以先凍住、先打死，或用護盾擋。</p>
+  <p>神魔出招時會沿著你畫的線跑過去，最後停在線的終點，所以畫線也是在決定下一輪站哪裡。三位神魔各出一招之後，敵人才一起行動，會走到目標面前打。點一下敵人可以看他這一輪要打誰、打多少，可以先凍住、先打死，或用護盾擋。</p>
   ${heroes.map((u) => { const H = HEROES[u.id]; return H.skills.map((s) => `<p><b>${H.name}・${s.name}</b>（${SHAPES[s.shape]}${s.melee ? '・近身' : ''}${s.cd ? `，冷卻 ${s.cd} 輪` : ''}）：${s.desc}</p>`).join('') + `<p><b>${H.name}・被動・${H.passive.n}</b>：${H.passive.d}</p><p><b>${H.name}・天賦・${H.talent.n}</b>：${H.talent.d}</p>`; }).join('')}
-  <p><b>靈魂</b>：神魔倒下會變成發藍光的靈魂，頭上寫還剩幾輪。其他隊友的線穿過靈魂（畫圈圈住也算），出招就救回來、回一半生命；倒數完沒人救就魂散，這一層不能再上場。頭上寫「搶魂」的敵人會去把靈魂抓走封印，2 輪內打倒他就放出來，沒打倒他會帶著靈魂逃走，那位神魔這一世都不能再上場。</p>
+  <p><b>靈魂</b>：神魔倒下會變成發藍光的靈魂，頭上寫還剩幾輪。其他隊友的線穿過靈魂（畫圈圈住也算），出招就救回來、回一半生命；倒數完沒人救就魂散，這一層不能再上場。會搶魂的敵人會去把靈魂抓走封印（靈魂下面會寫「有怪要來搶！」），2 輪內打倒他就放出來，沒打倒他會帶著靈魂逃走，那位神魔這一世都不能再上場。</p>
   <p><b>因果債</b>：斬殺、吞掉這類直接把敵人帶走的招，每帶走一個欠 1 點債。債太多，追債人會找上門。</p>
   <p><b>精英、魔王</b>的特性寫在每層開場，也可以點他們看。典獄長的鎖鏈（灰色粗線）會剪斷直線和自由線，畫圈不受影響。</p>
   <p><b>裝備</b>：每位神魔有兵器、法寶兩格。神族只能用神器，魔族只能用邪物，專屬兵器只有本人能用。精英層打完可以從三件裡選一件，魔王層有機會掉專屬兵器（試玩版第 1 層也會掉一件）。裝備會改變線的畫法，名字上面的小方塊就是身上的裝備。</p>
