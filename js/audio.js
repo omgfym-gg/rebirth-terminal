@@ -8,7 +8,7 @@ const Snd = (() => {
 const FILES = {
   // Stable Audio Open 生成，原檔留在小黑電腦的下載資料夾（git 歷史裡也有）；已去尾端靜音、頭尾交叉淡化成可無縫循環
   title: 'assets/audio/title.mp3?v=1',
-  floor: ['assets/audio/floor.mp3?v=1'],
+  floor: ['assets/audio/floor.mp3?v=1', 'assets/audio/floor-2.mp3?v=1', 'assets/audio/floor-3.mp3?v=1'],
   boss: 'assets/audio/boss.mp3?v=1',
 };
 const pos = {};
