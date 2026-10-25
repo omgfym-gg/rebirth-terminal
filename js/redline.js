@@ -1634,7 +1634,7 @@ function drawUnit(u, now) {
     const aimed = foes.some((e) => !e.dead && !e.frozen && !e.confused && e.intent && (e.intent.all || e.intent.target === u));
     if (aimed) { g.fillStyle = Math.floor(now / 250) % 2 ? '#ff4050' : '#ffb0b0'; g.fillRect(u.x - 52, top - 26, 6, 16); g.fillRect(u.x - 52, top - 7, 6, 5); }
   } else if (u.intent) {
-    const t = u.frozen ? '凍住，跳過' : u.stun ? '石像，跳過' : u.confused ? '會打同伴' : u.intent.seize ? `搶魂・${u.intent.seize.name}` : u.intent.all ? `${u.intent.label || '全隊'} ${u.intent.dmg}` : `${u.intent.target.name} ${u.intent.dmg}${u.intent.twice ? '×2' : ''}${u.intent.carry ? ' 抓走' : ''}`;
+    const t = u.frozen ? '凍住，跳過' : u.stun ? '石像，跳過' : u.confused ? '會打同伴' : u.intent.seize ? `搶魂・${u.intent.seize.name}` : u.intent.all ? `${u.intent.label || '全隊'} ${u.intent.dmg}` : `打${u.intent.target.name} ${u.intent.dmg}${u.intent.twice ? '×2' : ''}${u.intent.carry ? ' 抓走' : ''}`;
     g.fillStyle = u.frozen ? '#a0e0ff' : u.confused ? '#ff8ac0' : u.intent.seize ? '#d0b0ff' : '#ff8a8a'; g.fillText((u.intent.seize ? '✋ ' : '⚔ ') + t, u.x, top - 8);
   }
   if (u.side === 'enemy') {
