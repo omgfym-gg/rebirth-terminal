@@ -245,17 +245,17 @@ const FOES = {
   printer: { name: '卡紙印表機', sprite: 'printer', hp: 24, atk: 9, exp: 6, d: '一直吐出寫著你名字的紙，會衝過來用紙割人。' },
   mirror:  { name: '鏡中人', sprite: 'mirror', hp: 28, atk: 12, exp: 8, d: '鏡子裡的你，比你本人更想活下去。攻擊比較痛。' },
   hunter:  { name: '追殺者', sprite: 'hunter', hp: 80, atk: 10, exp: 25, elite: true, twice: true, d: '精英。專挑生命最少的神魔，一次連砍兩下。不會被嘲諷。' },
-  warden:  { name: '無臉典獄長', sprite: 'boss', hp: 110, atk: 17, exp: 25, elite: true, chains: 2, gaze: 0.4, d: '精英。會拉出鎖鏈（灰色粗線），直線和自由線碰到就被剪斷，畫圈不受影響。有四成機率改用凝視打全隊（傷害六成）。不會被嘲諷。' },
+  warden:  { name: '無臉典獄長', sprite: 'boss', hp: 110, atk: 17, exp: 25, elite: true, chains: 2, gaze: 0.4, d: '精英。每次行動完會甩出兩條鎖鏈擋在戰場中間，直線和自由線碰到就被剪斷，畫圈不受影響。有四成機率改用凝視打全隊（傷害六成）。不會被嘲諷。' },
   judge:   { name: '考績審判官', sprite: 'judge', hp: 170, atk: 16, exp: 50, elite: true, boss: true, armor: 3, judge: true, d: '魔王。穿著硬殼，每一下傷害少 3。每行動 3 次就審判一次全隊（傷害八成）。不會被嘲諷。' },
-  wardenX: { name: '典獄長本尊', sprite: 'boss', hp: 230, atk: 18, exp: 60, elite: true, boss: true, chains: 3, gaze: 0.4, d: '魔王。拉出三條鎖鏈，直線和自由線碰到就被剪斷，畫圈不受影響。有四成機率改用凝視打全隊（傷害六成）。不會被嘲諷。' },
+  wardenX: { name: '典獄長本尊', sprite: 'boss', hp: 230, atk: 18, exp: 60, elite: true, boss: true, chains: 3, gaze: 0.4, d: '魔王。每次行動完甩出三條鎖鏈，直線和自由線碰到就被剪斷，畫圈不受影響。有四成機率改用凝視打全隊（傷害六成）。不會被嘲諷。' },
   // 下面這批的圖臉朝左（faceL）。sp：一般敵人的特性，開場框會寫出來
   jinmenken:   { name: '人面犬', sprite: 'jinmenken', faceL: true, hp: 18, atk: 8, exp: 5, dodge: true, sp: '第一下一定會閃開。', d: '長著大叔臉的狗，半夜在路邊跟你說「別管我」。第一下一定會閃開。' },
-  mizuki:      { name: '水鬼', sprite: 'mizuki', faceL: true, hp: 30, atk: 10, exp: 7, chains: 1, chainKind: 'water', d: '在水邊等人替死的鬼。會留下水窪（藍色），近身招式的線碰到就被剪斷。' },
+  mizuki:      { name: '水鬼', sprite: 'mizuki', faceL: true, hp: 30, atk: 10, exp: 7, chains: 1, chainKind: 'water', d: '在水邊等人替死的鬼。每次行動完潑出一灘水窪（藍色），近身招式的線碰到就被剪斷。' },
   gaki:        { name: '餓鬼', sprite: 'gaki', faceL: true, hp: 34, atk: 9, exp: 7, noStatus: true, sp: '綁不上紅線、凍不住，也吸不到他的血。', d: '肚子永遠填不飽的鬼。綁不上紅線、不會疊冰霜也凍不住，吸血也吸不到他。' },
   diaoxigui:   { name: '吊死鬼', sprite: 'diaoxigui', faceL: true, hp: 24, atk: 11, exp: 7, high: true, sp: '吊在半空，近身招式打不到，要用遠程。', d: '吊在半空晃來晃去的鬼。近身招式打不到他，要用遠程的招。' },
   jerseydevil: { name: '澤西惡魔', sprite: 'jerseydevil', faceL: true, hp: 26, atk: 11, exp: 8, blink: true, sp: '每輪瞬間移動，冰地、雪地、火路都踩不到他。', d: '新澤西松林裡的飛天怪物。每輪會瞬間移動，冰地、雪地、火路都困不住他。' },
   amanojaku:   { name: '天邪鬼', sprite: 'amanojaku', faceL: true, hp: 26, atk: 10, exp: 7, rtl: true, sp: '專唱反調：線要從右往左穿過他才是全傷害，不然只有一半。', d: '專門唱反調的小鬼。線要從右往左穿過他才打得全，其他方向只有一半傷害。' },
-  lintoujie:   { name: '林投姐', sprite: 'lintoujie', faceL: true, hp: 95, atk: 14, exp: 25, elite: true, chains: 2, chainKind: 'tree', d: '精英。林投樹下的女鬼。長出兩條林投樹根（綠色），直線和自由線碰到就被剪斷，畫圈不受影響。不會被嘲諷。' },
+  lintoujie:   { name: '林投姐', sprite: 'lintoujie', faceL: true, hp: 95, atk: 14, exp: 25, elite: true, chains: 2, chainKind: 'tree', d: '精英。林投樹下的女鬼。每次行動完長出兩條林投樹根（綠色），直線和自由線碰到就被剪斷，畫圈不受影響。不會被嘲諷。' },
   tengu:       { name: '天狗', sprite: 'tengu', faceL: true, hp: 90, atk: 13, exp: 25, elite: true, gust: true, d: '精英。山裡的天狗。每隔一次行動就搧起狂風打全隊（傷害六成），把大家吹得到處都是。不會被嘲諷。' },
   mothman:     { name: '莫斯曼', sprite: 'mothman', faceL: true, hp: 85, atk: 15, exp: 25, elite: true, curse: true, d: '精英。紅眼的蛾人。每隔一次行動就瞪紅眼打全隊（傷害五成），下一輪大家的墨水都只剩一半。不會被嘲諷。' },
   guhuoniao:   { name: '姑獲鳥', sprite: 'guhuoniao', faceL: true, hp: 160, atk: 15, exp: 50, elite: true, boss: true, circleOnly: true, carry: true, seize: true, d: '魔王。會搶魂。披著羽毛的鳥女。只有畫圈打得全，其他招式傷害減半。每行動 3 次就抓走一位神魔，那位下一輪不能出招。不會被嘲諷。' },
@@ -298,9 +298,9 @@ function start(c) {
     ${c.note || ''}
     ${boss || elite ? `<p>${(boss || elite).d}</p>` : '<p>三位神魔輪流上場。輪到誰，就從下面選他的一招，照那招的畫法在戰場上畫，畫好按出招。</p>'}
     ${sps.map((t) => `<p class="muted">${t}</p>`).join('')}
-    ${kinds.includes('chain') ? '<p class="muted">直線和自由線碰到<b>鎖鏈</b>就會被剪斷，畫圈不受影響。</p>' : ''}
-    ${kinds.includes('tree') ? '<p class="muted">直線和自由線碰到<b>樹根</b>（咖啡色、長葉子）就會被剪斷，畫圈不受影響。</p>' : ''}
-    ${kinds.includes('water') ? '<p class="muted">近身招式的線碰到<b>水窪</b>（藍色一灘水）就會被剪斷，遠程招不受影響。</p>' : ''}
+    ${kinds.includes('chain') ? '<p class="muted">典獄長每次行動完會<b>甩出鎖鏈</b>擋在戰場中間。直線和自由線碰到鎖鏈就會被剪斷，畫圈不受影響；典獄長倒下，鎖鏈就消失。</p>' : ''}
+    ${kinds.includes('tree') ? '<p class="muted">林投姐每次行動完會長出樹根。直線和自由線碰到<b>樹根</b>（咖啡色、長葉子）就會被剪斷，畫圈不受影響。</p>' : ''}
+    ${kinds.includes('water') ? '<p class="muted">水鬼每次行動完會潑出水窪。近身招式的線碰到<b>水窪</b>（藍色一灘水）就會被剪斷，遠程招不受影響。</p>' : ''}
     <button class="btn primary wide ok">開始</button>`);
   $('.box .ok').onclick = hideBox;
   tutIntro();
@@ -346,7 +346,7 @@ async function nextHero() {
   h.cds = h.cds.map((c) => Math.max(0, c - 1));
   h.moved = false; moving = false;
   skillIdx = 0;
-  if (fresh) { for (const e of foes) if (!e.dead) setIntent(e); makeChains(); }
+  if (fresh) for (const e of foes) if (!e.dead) setIntent(e);
   clearPath(); renderSkills();
 }
 
@@ -390,12 +390,29 @@ function setIntent(e) {
   e.intent = { target: e.twice || e.rip ? low : (!e.elite && tank) || pick(a), dmg: e.atk, twice: e.twice };
 }
 
-function makeChains() {
-  chains = [];
-  for (const w of foes) if (w.chains && !w.dead) for (let i = 0; i < w.chains; i++) { let x, y, n = 0; do { x = rnd(220, 330); y = rnd(300, 640); } while (n++ < 12 && chains.some((o) => Math.hypot((o.x1 + o.x2) / 2 - x, (o.y1 + o.y2) / 2 - y) < 110)); const a = rnd(-1.3, 1.3), L = w.chainKind === 'water' ? 0 : 160; if (L === 0) { chains.push({ x1: x, y1: y, x2: x, y2: y, cx: x, cy: y, rx: 50, ry: 38, kind: 'water' }); continue; } chains.push({ x1: x - Math.cos(a) * L / 2, y1: y - Math.sin(a) * L / 2, x2: x + Math.cos(a) * L / 2, y2: y + Math.sin(a) * L / 2, kind: w.chainKind || 'chain' }); }
+// 典獄長、水鬼、林投姐在自己的回合把障礙物甩到戰場中間：舊的收回、換新的，死掉就全部消失
+const THROW = { chain: ['甩出鎖鏈！', '#c8c4d8'], water: ['潑出水窪！', '#6ab0e8'], tree: ['長出樹根！', '#7fbf5a'] };
+function makeChains(w) {
+  chains = chains.filter((c) => c.owner !== w);
+  const kind = w.chainKind || 'chain', born = performance.now();
+  for (let i = 0; i < w.chains; i++) {
+    let x, y, n = 0;
+    do { x = rnd(220, 330); y = rnd(300, 640); } while (n++ < 12 && chains.some((o) => Math.hypot((o.x1 + o.x2) / 2 - x, (o.y1 + o.y2) / 2 - y) < 110));
+    const a = rnd(-1.3, 1.3), L = 160, from = { x: w.x - 20, y: w.y - 50 };
+    if (kind === 'water') chains.push({ x1: x, y1: y, x2: x, y2: y, cx: x, cy: y, rx: 50, ry: 38, kind, owner: w, born, from, edge: Array.from({ length: 24 }, () => rnd(-0.06, 0.06)) });
+    else chains.push({ x1: x - Math.cos(a) * L / 2, y1: y - Math.sin(a) * L / 2, x2: x + Math.cos(a) * L / 2, y2: y + Math.sin(a) * L / 2, kind, owner: w, born, from });
+  }
 }
+async function throwChains(w) {
+  if (!w.chains || w.dead) return;
+  const [t, col] = THROW[w.chainKind || 'chain'];
+  w.lunge = performance.now(); float(w, t, col, 20); sfx('snap');
+  makeChains(w);
+  await wait(700);
+}
+const CHAIN_FLY = 500;
 // 這一招的線會被哪些東西剪斷（水窪只剪近身招）
-const cutters = () => (hero().noCut ? [] : chains.filter((c) => c.kind !== 'water' || skill().melee));
+const cutters = () => (hero().noCut ? [] : chains.filter((c) => !c.owner.dead && (c.kind !== 'water' || skill().melee)));
 
 const hero = () => heroes && heroes[who];
 const skill = () => hero().skills[skillIdx];
@@ -888,6 +905,8 @@ async function enemyTurn() {
     }
     if (e.frozen) { e.frozen = false; float(e, '凍住，跳過', '#a0e0ff'); await wait(380); continue; }
     if (e.stun) { e.stun = false; float(e, '石像，跳過', '#c0c0c0'); await wait(380); continue; }
+    // 先在原地把障礙物甩出來，再去攻擊
+    await throwChains(e);
     // 恐懼：這次攻擊減半
     const scare = e.fear; e.fear = false;
     const hit = (n) => (scare ? Math.ceil(n / 2) : n);
@@ -1797,7 +1816,12 @@ function render(now) {
     gearDrawZones(now);
     // 移動範圍
     if (moving && hero()) { const h = hero(); g.strokeStyle = 'rgba(255,224,112,0.8)'; g.fillStyle = 'rgba(255,224,112,0.08)'; g.lineWidth = 3; g.setLineDash([12, 8]); g.beginPath(); g.ellipse(h.x, h.y, MOVE_R, MOVE_R, 0, 0, Math.PI * 2); g.fill(); g.stroke(); g.setLineDash([]); }
-    for (const c of chains) {
+    for (const c0 of chains) {
+      if (c0.owner.dead) continue;
+      // 剛甩出來：從敵人手上飛到定點
+      const k = Math.min(1, (now - c0.born) / CHAIN_FLY), q = 1 - (1 - k) ** 3, f = c0.from, lerp = (a, b) => a + (b - a) * q;
+      const c = k >= 1 ? c0 : { ...c0, x1: lerp(f.x, c0.x1), y1: lerp(f.y, c0.y1), x2: lerp(f.x, c0.x2), y2: lerp(f.y, c0.y2), cx: lerp(f.x, c0.cx), cy: lerp(f.y, c0.cy), rx: c0.rx * q + 1, ry: c0.ry * q + 1, edge: c0.edge };
+      if (k >= 1 && !c0.landed) { c0.landed = true; fxPush({ type: 'burst', x: (c0.x1 + c0.x2) / 2, y: (c0.y1 + c0.y2) / 2, color: CUT[c0.kind][2], dur: 400, seed: 4 }); }
       const [name, c1, c2] = CUT[c.kind || 'chain'];
       const L = Math.hypot(c.x2 - c.x1, c.y2 - c.y1), ux = (c.x2 - c.x1) / L, uy = (c.y2 - c.y1) / L, mx = (c.x1 + c.x2) / 2, my = (c.y1 + c.y2) / 2;
       if (c.kind === 'water') {
@@ -2006,7 +2030,7 @@ function renderHelp() {
   ${heroes.map((u) => { const H = HEROES[u.id]; return H.skills.map((s) => `<p><b>${H.name}・${s.name}</b>（${SHAPES[s.shape]}${s.melee ? '・近身' : ''}${s.cd ? `，冷卻 ${s.cd} 輪` : ''}）：${s.desc}</p>`).join('') + `<p><b>${H.name}・被動・${H.passive.n}</b>：${H.passive.d}</p><p><b>${H.name}・天賦・${H.talent.n}</b>：${H.talent.d}</p>`; }).join('')}
   <p><b>靈魂</b>：神魔倒下會變成發藍光的靈魂，頭上寫還剩幾輪。其他隊友的線穿過靈魂（畫圈圈住也算），出招就救回來、回一半生命；倒數完沒人救就魂散，這一層不能再上場。會搶魂的敵人會去把靈魂抓走封印（靈魂下面會寫「有怪要來搶！」），2 輪內打倒他就放出來，沒打倒他會帶著靈魂逃走，那位神魔這一世都不能再上場。</p>
   <p><b>因果債</b>：斬殺、吞掉這類直接把敵人帶走的招，每帶走一個欠 1 點債。債太多，追債人會找上門。</p>
-  <p><b>精英、魔王</b>的特性寫在每層開場，也可以點他們看。典獄長的鎖鏈（灰色粗線）會剪斷直線和自由線，畫圈不受影響。</p>
+  <p><b>精英、魔王</b>的特性寫在每層開場，也可以點他們看。典獄長每次行動完甩出的鎖鏈會剪斷直線和自由線，畫圈不受影響。</p>
   <p><b>裝備</b>：每位神魔有兵器、法寶兩格。神族只能用神器，魔族只能用邪物，專屬兵器只有本人能用。精英層打完可以從三件裡選一件，魔王層有機會掉專屬兵器（試玩版第 1 層也會掉一件）。裝備會改變線的畫法，名字上面的小方塊就是身上的裝備。</p>
   ${Object.values(GEAR).map((it) => `<p><b>${it.n}</b>（${it.kind}・${SLOT[it.slot]}${it.own ? `・${HEROES[it.own].name}專屬` : ''}）：${it.d}</p>`).join('')}`;
 }
