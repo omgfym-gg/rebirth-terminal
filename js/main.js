@@ -87,6 +87,8 @@ const Game = {
   get glitch() { return this.save.history.length; },
 
   lvOf(id) { return this.save.lv[id] || { lv: 1, exp: 0 }; },
+  // 這一世這條路給的神魔：本質偏得深的那條路多一位
+  offered(form) { return this.save.offer.paths[form].slice(0, natureBonus(form, this.save.nature).picks); },
   maxHpFor(id, lv, mul = 1) {
     const s = this.save, L = s.life;
     return Math.round((HEROES[id].hp + 4 * (lv - 1) + s.perm.hp * 3 + ((L && L.bonusHp) || 0)) * mul);
@@ -214,7 +216,7 @@ const Game = {
     const pick = { form: null, hero: null, shadows: [] };
     // 每一世只抽一次：每條路隨機三位神魔、派遣同事的順序，存進存檔，重新整理不會重抽
     if (!s.offer || s.offer.life !== this.lifeNo) {
-      const draw = (side) => shuffle(Redline.ALL_IDS.filter((id) => !side || HEROES[id].faith === side)).slice(0, 3);
+      const draw = (side) => shuffle(Redline.ALL_IDS.filter((id) => !side || HEROES[id].faith === side)).slice(0, 4);
       s.offer = { life: this.lifeNo, paths: {}, crew: shuffle(Redline.ALL_IDS) };
       for (const id of PATH_ORDER) s.offer.paths[id] = draw(FORMS[id].side);
       this.persist();
@@ -236,8 +238,9 @@ const Game = {
     const render = () => {
       root.innerHTML = '';
       root.append(el('h2', {}, `第 ${this.lifeNo} 世・轉生櫃台`));
-      root.append(el('p', { class: 'muted' }, `靈魂本質：${natureLabel(s.nature)}（${s.nature}）　因果債：${s.debt}`));
-      root.append(el('p', { class: 'muted small-note' }, '靈魂本質越偏混沌越難升仙，越偏秩序越難入魔。擔任神族會往秩序走，魔族會往混沌走。'));
+      root.append(natureBar(s.nature));
+      root.append(el('p', { class: 'muted' }, `因果債：${s.debt}${s.debt >= 10 ? '（追債人會在第 4、7 層等你）' : s.debt >= 5 ? '（追債人會在第 4 層等你）' : ''}`));
+      root.append(el('p', { class: 'muted small-note' }, '靈魂本質看你做過的好事和壞事：偏混沌超過 20 不能升仙，偏秩序超過 20 不能入魔。'));
 
       root.append(el('h3', {}, '① 升仙・入魔・為人'));
       const forms = el('div', { class: 'cards' });
@@ -247,23 +250,27 @@ const Game = {
         forms.append(el('button', { class: 'card' + (pick.form === id ? ' selected' : '') + (ok ? '' : ' locked'), onclick: () => {
           if (!ok) return;
           // 換路的時候，原本選的神魔如果不在這條路上就清掉
-          if (pick.hero && !s.offer.paths[id].includes(pick.hero)) { pick.hero = null; pick.shadows = []; }
+          if (pick.hero && !this.offered(id).includes(pick.hero)) { pick.hero = null; pick.shadows = []; }
           if (pick.form !== id) pick.shadows = []; // 能帶的前世之影跟著路變
           pick.form = id; render();
         } },
           spriteImg(f.sprite),
           el('b', {}, f.path),
           el('small', {}, f.pathDesc),
-          el('small', { class: 'muted' }, ok ? f.innate : f.lockText)));
+          el('small', { class: 'muted' }, ok ? f.innate : f.lockText),
+          ok && natureBonus(id, s.nature).text ? el('small', { class: 'bonus' }, natureBonus(id, s.nature).text) : ''));
       }
       root.append(forms);
+      if (PATH_ORDER.some((id) => !FORMS[id].allowed(s.nature))) Tutorial.tip('locked');
+      if (s.nature) Tutorial.tip('nature');
+      if (s.debt) Tutorial.tip('debt');
 
       root.append(el('h3', {}, '② 今世的你'));
       if (!pick.form) root.append(el('p', { class: 'muted' }, '先選升仙、入魔或為人。'));
       else {
-        root.append(el('p', { class: 'muted' }, '這一世櫃台隨機給你三位，請選擇一位。等級跟著每位神魔永久保留。'));
+        root.append(el('p', { class: 'muted' }, `這一世櫃台隨機給你${this.offered(pick.form).length === 4 ? '四' : '三'}位，請選擇一位。等級跟著每位神魔永久保留。`));
         const box = el('div', { class: 'cards two' });
-        for (const id of s.offer.paths[pick.form]) {
+        for (const id of this.offered(pick.form)) {
           box.append(el('button', { class: 'card job' + (pick.hero === id ? ' selected' : ''), onclick: () => { pick.hero = id; pick.shadows = []; render(); } },
             ...heroCard(id, this.lvOf(id).lv)));
         }
@@ -312,8 +319,13 @@ const Game = {
       const v = s.lv[hero] = s.lv[hero] || { lv: 1, exp: 0 };
       if (v.lv < LV_MAX) { v.lv++; lines.push(`阿凱送來的包裹裡裝著一份經驗。${HEROES[hero].name}升到 Lv.${v.lv}。`); }
     }
+    const nb = natureBonus(form, s.nature);
+    if (nb.text) lines.push(`靈魂本質的加成：${nb.text}。`);
+    // 因果債太多，追債人會在第 4 層（債 10 以上還有第 7 層）等你
+    const debtFloors = s.debt >= 10 ? [4, 7] : s.debt >= 5 ? [4] : [];
+    if (debtFloors.length) lines.push(`你的因果債已經 ${s.debt} 點了。有人拿著帳本，在第 ${debtFloors.join('、')} 層等你。`);
     s.life = {
-      form, hero, party, floor: 0, kills: 0, hp: {}, maxHp: {},
+      form, hero, party, floor: 0, kills: 0, hp: {}, maxHp: {}, sealed: [], debtFloors, dmgMul: nb.dmgMul || 1,
       up: { dmg: s.perm.dmg, ink: 1 + 0.1 * s.perm.ink },
       bonusHp: s.boons.soulExtra ? 6 : 0, alive: true,
     };
@@ -321,7 +333,7 @@ const Game = {
     s.boons.soulExtra = 0;
     for (const m of party) {
       const lv = m.tag === TAGS.shadow ? m.level : this.lvOf(m.id).lv;
-      s.life.maxHp[m.id] = s.life.hp[m.id] = this.maxHpFor(m.id, lv, m.tag === TAGS.now ? FORMS[form].hpMul : 1);
+      s.life.maxHp[m.id] = s.life.hp[m.id] = this.maxHpFor(m.id, lv, m.tag === TAGS.now ? nb.hpMul || FORMS[form].hpMul : 1);
     }
     this.persist();
     const H = HEROES[hero];
@@ -339,7 +351,7 @@ const Game = {
   // 出戰的三位：都穿這一世拿到的裝備（前世之影也是空手來的）
   battleParty() {
     const L = this.save.life;
-    return L.party.map((m) => ({ id: m.id, tag: m.tag, hp: L.hp[m.id], maxHp: L.maxHp[m.id], gear: this.eqOf(m.id), res: (L.res || {})[m.id] || 0 }));
+    return L.party.filter((m) => !(L.sealed || []).includes(m.id)).map((m) => ({ id: m.id, tag: m.tag, hp: L.hp[m.id], maxHp: L.maxHp[m.id], gear: this.eqOf(m.id), res: (L.res || {})[m.id] || 0, dmgMul: m.tag === TAGS.now ? L.dmgMul || 1 : 1 }));
   },
 
   floorFoes(f) {
@@ -357,14 +369,15 @@ const Game = {
     const s = this.save, L = s.life;
     const f = L.floor + 1, kind = floorKind(f);
     // 中途離開再回來：同一層重打，敵人重抽
-    const foes = this.floorFoes(f);
-    this.battleMusic = kind === 'boss' ? 'boss' : 'floor';
+    const debtor = (L.debtFloors || []).includes(f);
+    const foes = debtor ? ['debtor', ...this.floorFoes(f).slice(0, 2)] : this.floorFoes(f);
+    this.battleMusic = kind === 'boss' || debtor ? 'boss' : 'floor';
     this.show('battle');
     Redline.start({
       floor: f,
-      title: `第 ${f} 層${kind === 'boss' ? '・魔王' : kind === 'elite' ? '・精英' : ''}`,
-      note: `<p class="muted">第 ${this.lifeNo} 世・一世共 ${LIFE_FLOORS} 層</p>`,
-      foes, scale: 1 + 0.12 * (f - 1) + 0.1 * (this.lifeNo - 1), up: L.up,
+      title: `第 ${f} 層${debtor ? '・追債人' : kind === 'boss' ? '・魔王' : kind === 'elite' ? '・精英' : ''}`,
+      note: `<p class="muted">第 ${this.lifeNo} 世・一世共 ${LIFE_FLOORS} 層</p>${debtor ? `<p>你的因果債 ${s.debt} 點，追債人找上門了。打倒他，債 -5，還會掉一件裝備。</p>` : ''}`,
+      foes, scale: 1 + 0.12 * (f - 1) + 0.1 * (this.lifeNo - 1), up: L.up, debt: s.debt,
       party: this.battleParty(),
       gearButton: () => Redline.gearBox(this.gearStore(), () => this.fight(), '開始'),
       onEnd: (r) => this.afterFloor(f, r),
@@ -379,15 +392,24 @@ const Game = {
   afterFloor(f, r) {
     const s = this.save, L = s.life;
     L.kills += r.kills;
+    const karma = [];
+    // 直接帶走敵人：欠因果債，靈魂偏向混沌
+    if (r.executes) { s.debt += r.executes; s.nature = clampNature(s.nature + r.executes); karma.push(`直接帶走了 ${r.executes} 個敵人：因果債 +${r.executes}，靈魂偏向混沌。`); }
     if (!r.win) {
+      this.persist();
       for (const id in L.hp) L.hp[id] = 0;
       return this.die('faded', `第 ${f} 層`);
     }
     Object.assign(L.hp, r.hp);
+    // 被封印的這一世都不能再上場
+    for (const id of r.sealed || []) if (!L.sealed.includes(id)) { L.sealed.push(id); karma.push(`${HEROES[id].name}的靈魂被封印了，這一世不能再上場。`); }
+    // 身上穿著邪物過一層，因果債 +1
+    if (this.battleParty().some((m) => m.gear.some((g) => GEAR[g].kind === '邪物'))) { s.debt += 1; karma.push('隊上有人穿著邪物：因果債 +1。'); }
+    if (r.debtorKilled) { s.debt = Math.max(0, s.debt - 5); karma.push('追債人倒下了，帳本燒掉了一半：因果債 -5。'); }
     // 元寶、飽足這類資源一整世累積，到下一層還在
     L.res = Object.assign(L.res || {}, r.res);
     L.floor = f;
-    const lines = [`第 ${f} 層　突破！（擊倒 ${r.kills}、經驗 ${r.exp}）`];
+    const lines = [`第 ${f} 層　突破！（擊倒 ${r.kills}、經驗 ${r.exp}）`, ...karma];
     // 經驗給今世和派遣同事；前世之影停在死前的等級
     for (const m of L.party) {
       if (m.tag === TAGS.shadow) continue;
@@ -406,8 +428,8 @@ const Game = {
       lines.push('往上的樓梯分成了兩條路。');
       this.story(lines, null, { speaker: '塔', choices: two.map((k) => ({ label: `${EVENTS[k].name}：${EVENTS[k].desc}`, action: () => this.runEvent(k) })) });
     };
-    if (kind === 'normal') return next();
-    this.drop(kind, next);
+    if (kind === 'normal' && !r.debtorKilled) return next();
+    this.drop(kind === 'normal' ? 'elite' : kind, next);
   },
 
   // 精英、魔王掉裝備：三選一。只掉今世穿得了的（神族掉神器、魔族掉邪物，為人兩種都掉）；魔王優先掉今世的專屬兵器
@@ -455,7 +477,7 @@ const Game = {
         choices: [
           { label: '幫忙：帶他到樓梯口', action: () => { s.nature = clampNature(s.nature - 5); s.fragments += 3; go(['他說謝謝，然後慢慢消失在樓梯上。', '（靈魂碎片 +3，靈魂偏向秩序）']); } },
           { label: '保留：繞過他', action: () => go(['你繞了過去。身後一直傳來找東西的聲音。']) },
-          { label: '利用：把他吸收掉', cls: 'danger', action: () => { s.debt += 1; s.nature = clampNature(s.nature + 5); each((hp, max) => max); go(['他還來不及喊，就變成了你們的一部分。', '（全隊生命全滿，因果債 +1）']); } },
+          { label: '利用：把他吸收掉', cls: 'danger', action: () => { s.debt += 1; s.nature = clampNature(s.nature + 5); each((hp, max) => max); go(['他還來不及喊，就變成了你們的一部分。', '（全隊生命全滿，因果債 +1，靈魂偏向混沌）']); } },
         ],
       });
     }
@@ -487,8 +509,9 @@ const Game = {
     let frag = L.floor * 3 + L.kills;
     if (outcome === 'victory') frag += 15;
     s.fragments += frag;
-    // 靈魂本質跟著這一世站在哪一邊走：神族往秩序、魔族往混沌
-    s.nature = clampNature(s.nature + (H.faith === '神' ? -5 : 5));
+    // 壽終正寢：因果債 -3（靈魂本質只看做過的事，不再跟著這一世當神當魔自動移動）
+    const paid = outcome === 'victory' ? Math.min(3, s.debt) : 0;
+    s.debt -= paid;
     this.persist();
 
     const n = record.life;
@@ -499,6 +522,7 @@ const Game = {
       cause ? `倒在：${cause}` : '死因：天年已盡',
       outcome === 'victory' ? '你壽終正寢。' : '全隊倒下，你的靈魂被吸回了終端。',
       `獲得靈魂碎片 ${frag}。`,
+      ...(paid ? [`壽終正寢，因果債 -${paid}。`] : []),
       `${H.name}會以「前世之影」的身分，在之後的轉生陪著你。`,
     ];
     this.story(lines, () => this.afterDeath(), { speaker: '靈魂結算終端', glitch: this.glitch - 1 });
@@ -544,6 +568,7 @@ const Game = {
       if (e.boon === 'parcel') tail.push('（下一世今世的神魔先升 1 級。）');
       if (e.frag) tail.push(`（靈魂碎片 +${e.frag}）`);
       if (e.debt) tail.push(`（因果債 +${e.debt}）`);
+      if (e.nature) tail.push(`（靈魂偏向${e.nature < 0 ? '秩序' : '混沌'}）`);
       this.story([c.result, ...tail], next, { speaker: R.name, sprite: R.sprite, glitch: this.glitch });
     };
     this.story([`── ${R.place} ──`, ...act.lines], null, {
@@ -588,6 +613,14 @@ const Game = {
       el('div', {}, `靈魂本質：${natureLabel(s.nature)}（${s.nature}）`),
       el('div', {}, `因果債：${s.debt}`)));
 
+    if (s.debt > 0) {
+      // 還債：每點 5 碎片，靈魂往秩序 1
+      root.append(el('div', { class: 'shop-row' },
+        el('div', {}, el('b', {}, `還因果債（剩 ${s.debt} 點）`), el('div', { class: 'muted' }, '每還 1 點債花 5 碎片，靈魂往秩序 1。債到 5 點，追債人會在塔裡等你。')),
+        el('button', { class: 'btn small', disabled: s.fragments >= DEBT_PRICE ? null : 'disabled', onclick: () => { s.fragments -= DEBT_PRICE; s.debt--; s.nature = clampNature(s.nature - 1); this.persist(); this.showTerminal(); } }, `${DEBT_PRICE} 碎片`)));
+    }
+    if (s.nature) Tutorial.tip('nature');
+    if (s.debt) Tutorial.tip('debt');
     root.append(el('h3', {}, '靈魂商店'));
     for (const item of SHOP) {
       const owned = s.perm[item.id];
@@ -619,6 +652,23 @@ const Game = {
 };
 
 function clampNature(n) { return Math.max(-100, Math.min(100, n)); }
+const DEBT_PRICE = 5;
+// 靈魂本質偏得深的好處：秩序 -30 以下升仙多一位可選、生命 +10%；混沌 30 以上入魔多一位可選、傷害 +10%；中立（-9～9）為人生命只少半成
+function natureBonus(form, n) {
+  if (form === 'angel' && n <= -30) return { picks: 4, hpMul: 1.1, text: '秩序：多一位可選，今世生命 +10%' };
+  if (form === 'demon' && n >= 30) return { picks: 4, dmgMul: 1.1, text: '混沌：多一位可選，今世傷害 +10%' };
+  if (form === 'human' && Math.abs(n) <= 9) return { picks: 3, hpMul: 0.95, text: '中立：生命只少半成' };
+  return { picks: 3 };
+}
+// 轉生櫃台的本質條：左邊秩序、右邊混沌，標出鎖路和加成的位置
+function natureBar(n) {
+  const pos = (v) => `${(v + 100) / 2}%`;
+  const mark = (v) => el('i', { style: `left:${pos(v)}` });
+  return el('div', { class: 'nature' },
+    el('div', { class: 'nature-head' }, el('span', {}, '秩序'), el('b', {}, `靈魂本質：${natureLabel(n)}（${n}）`), el('span', {}, '混沌')),
+    el('div', { class: 'nature-bar' }, mark(-30), mark(-20), mark(20), mark(30), el('u', { style: `left:${pos(n)}` })),
+    el('div', { class: 'muted small-note' }, '細線：±20 鎖路、±30 有加成'));
+}
 function natureLabel(n) { return n <= -30 ? '秩序' : n >= 30 ? '混沌' : n < 0 ? '偏秩序' : n > 0 ? '偏混沌' : '中立'; }
 function outcomeLabel(o) { return { faded: '全隊倒下', victory: '壽終正寢' }[o] || o; }
 

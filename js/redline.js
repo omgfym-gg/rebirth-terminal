@@ -240,8 +240,8 @@ const ALL_IDS = Object.keys(HEROES);
 const FOES = {
   zombie:  { name: '夜行殭屍', sprite: 'zombie', hp: 30, atk: 11, exp: 8, d: '半夜還抱著公文在走廊遊蕩的殭屍。會走到目標面前咬一口。' },
   wisp:    { name: '鬼火', sprite: 'wisp', hp: 16, atk: 8, exp: 5, d: '飄忽不定的藍色火焰，生命不多，會飄到目標身邊燒一下。' },
-  shade:   { name: '影子怪', sprite: 'shade', hp: 22, atk: 9, exp: 6, d: '從燈照不到的角落爬出來的影子，會貼到目標身上咬一口。' },
-  husk:    { name: '空殼職員', sprite: 'husk', hp: 38, atk: 10, exp: 9, d: '靈魂早就被抽走、只剩身體還在上班的職員。很耐打。' },
+  shade:   { name: '影子怪', sprite: 'shade', hp: 22, atk: 9, exp: 6, seize: true, sp: '會搶魂：場上有倒下隊友的靈魂，會先去把靈魂抓走。', d: '從燈照不到的角落爬出來的影子，會貼到目標身上咬一口。' },
+  husk:    { name: '空殼職員', sprite: 'husk', hp: 38, atk: 10, exp: 9, seize: true, sp: '會搶魂：自己的靈魂沒了，看到別人的就想搶。', d: '靈魂早就被抽走、只剩身體還在上班的職員。很耐打。' },
   printer: { name: '卡紙印表機', sprite: 'printer', hp: 24, atk: 9, exp: 6, d: '一直吐出寫著你名字的紙，會衝過來用紙割人。' },
   mirror:  { name: '鏡中人', sprite: 'mirror', hp: 28, atk: 12, exp: 8, d: '鏡子裡的你，比你本人更想活下去。攻擊比較痛。' },
   hunter:  { name: '追殺者', sprite: 'hunter', hp: 80, atk: 10, exp: 25, elite: true, twice: true, d: '精英。專挑生命最少的神魔，一次連砍兩下。不會被嘲諷。' },
@@ -258,8 +258,10 @@ const FOES = {
   lintoujie:   { name: '林投姐', sprite: 'lintoujie', faceL: true, hp: 95, atk: 14, exp: 25, elite: true, chains: 2, chainKind: 'tree', d: '精英。林投樹下的女鬼。長出兩條林投樹根（綠色），直線和自由線碰到就被剪斷，畫圈不受影響。不會被嘲諷。' },
   tengu:       { name: '天狗', sprite: 'tengu', faceL: true, hp: 90, atk: 13, exp: 25, elite: true, gust: true, d: '精英。山裡的天狗。每隔一次行動就搧起狂風打全隊（傷害六成），把大家吹得到處都是。不會被嘲諷。' },
   mothman:     { name: '莫斯曼', sprite: 'mothman', faceL: true, hp: 85, atk: 15, exp: 25, elite: true, curse: true, d: '精英。紅眼的蛾人。每隔一次行動就瞪紅眼打全隊（傷害五成），下一輪大家的墨水都只剩一半。不會被嘲諷。' },
-  guhuoniao:   { name: '姑獲鳥', sprite: 'guhuoniao', faceL: true, hp: 160, atk: 15, exp: 50, elite: true, boss: true, circleOnly: true, carry: true, d: '魔王。披著羽毛的鳥女。只有畫圈打得全，其他招式傷害減半。每行動 3 次就抓走一位神魔，那位下一輪不能出招。不會被嘲諷。' },
+  guhuoniao:   { name: '姑獲鳥', sprite: 'guhuoniao', faceL: true, hp: 160, atk: 15, exp: 50, elite: true, boss: true, circleOnly: true, carry: true, seize: true, d: '魔王。會搶魂。披著羽毛的鳥女。只有畫圈打得全，其他招式傷害減半。每行動 3 次就抓走一位神魔，那位下一輪不能出招。不會被嘲諷。' },
   dullahan:    { name: '杜拉漢', sprite: 'dullahan', faceL: true, hp: 230, atk: 18, exp: 60, elite: true, boss: true, head: true, d: '魔王。無頭騎士，頭顱飄在別的地方（白色骷髏）。線要同時經過頭顱才是全傷害，不然只有一半。不會被嘲諷。' },
+  // 追債人：因果債太多才會出現，借追殺者的圖染成紅黑色
+  debtor:      { name: '追債人', sprite: 'hunter', tint: true, hp: 85, atk: 10, exp: 30, elite: true, seize: true, rip: true, d: '精英。因果債欠太多才會找上門的討債者。專挑生命最少的神魔，打到生命不到三成的，直接把魂抽走封印。倒下隊友的靈魂他也會搶。打倒他，被他封印的靈魂就會放出來。不會被嘲諷。' },
   wendigo:     { name: '溫迪戈', sprite: 'wendigo', faceL: true, hp: 200, atk: 14, exp: 60, elite: true, boss: true, devour: true, d: '魔王。永遠飢餓的雪原巨怪。輪到牠時會吃掉這輪大家畫過的線，每條讓牠攻擊 +2（一直累積）。不會被嘲諷。' },
 };
 // 會剪斷線的東西：名字、外框色、內線色
@@ -278,10 +280,12 @@ let trails = [], bolts = [], zz = new Map();
 function start(c) {
   gen++;
   cfg = c;
-  run = { floor: c.floor, up: { dmg: 0, ink: 1, ...(c.up || {}) } };
-  heroes = c.party.map((p) => ({ ...HEROES[p.id], id: p.id, tag: p.tag || '', side: 'ally', art: (p.gear || []).includes('ex_' + p.id) && ART[p.id + '-ex'] ? p.id + '-ex' : p.id, gear: p.gear || [], maxHp: p.maxHp, hp: Math.max(0, Math.min(p.maxHp, p.hp)), dead: p.hp <= 0, x: 0, y: 0, shield: 0, flash: 0, cds: [0, 0, 0], anim: null, taunt: false, res: p.res || 0, wine: 0 }));
+  run = { floor: c.floor, up: { dmg: 0, ink: 1, ...(c.up || {}) }, executes: 0 };
+  heroes = c.party.map((p) => ({ ...HEROES[p.id], id: p.id, tag: p.tag || '', side: 'ally', art: (p.gear || []).includes('ex_' + p.id) && ART[p.id + '-ex'] ? p.id + '-ex' : p.id, gear: p.gear || [], maxHp: p.maxHp, hp: Math.max(0, Math.min(p.maxHp, p.hp)), dead: p.hp <= 0, soul: 0, sealed: false, faded: p.hp <= 0, dmgMul: p.dmgMul || 1, x: 0, y: 0, shield: 0, flash: 0, cds: [0, 0, 0], anim: null, taunt: false, res: p.res || 0, wine: 0 }));
   const k = c.scale || 1;
-  foes = c.foes.map((key) => ({ key, ...FOES[key], side: 'enemy', maxHp: Math.round(FOES[key].hp * k), hp: Math.round(FOES[key].hp * k), atk: Math.round(FOES[key].atk * k), dead: false, frozen: false, confused: false, frost: 0, red: false, burn: 0, fear: false, mark: false, stone: 0, stun: false, lost: 0, flash: 0, x: 0, y: 0, acts: 0, dodged: false, headAt: null }));
+  // 追債人：債越多越強（債 5 以上每多 1 點，生命攻擊再 +6%）
+  const kk = (key) => k * (key === 'debtor' ? 1 + 0.06 * Math.max(0, (c.debt || 0) - 5) : 1);
+  foes = c.foes.map((key) => ({ key, ...FOES[key], side: 'enemy', maxHp: Math.round(FOES[key].hp * kk(key)), hp: Math.round(FOES[key].hp * kk(key)), atk: Math.round(FOES[key].atk * kk(key)), dead: false, frozen: false, confused: false, frost: 0, red: false, burn: 0, fear: false, mark: false, stone: 0, stun: false, lost: 0, flash: 0, x: 0, y: 0, acts: 0, dodged: false, headAt: null }));
   place(true);
   effects = []; trails = []; bolts = []; shards = []; zones = []; chains = []; turn = 0; who = -1; busy = false; demo = null; curse = 1; gearNewRound(true);
   renderHelp();
@@ -300,6 +304,7 @@ function start(c) {
     <button class="btn primary wide ok">開始</button>`);
   $('.box .ok').onclick = hideBox;
   tutIntro();
+  if (foes.some((e) => e.key === 'debtor')) lesson('debtor');
   if (c.gearButton) {
     const b = Object.assign(document.createElement('button'), { className: 'btn wide', textContent: '整理裝備' });
     b.style.marginTop = '8px';
@@ -330,7 +335,7 @@ async function nextHero() {
   let n = who, fresh = who < 0;
   for (;;) {
     n = (n + 1) % heroes.length;
-    if (n === 0 && !fresh) { await newRound(); fresh = true; }
+    if (n === 0 && !fresh) { await newRound(); fresh = true; if (foes.every((e) => e.dead)) return winFloor(); }
     const x = heroes[n];
     if (x.dead) continue;
     if (x.carried) { x.carried = false; float(x, '被抓走了，跳過', '#d0b0ff', 18); await wait(500); continue; }
@@ -349,9 +354,13 @@ async function newRound() {
   gearNewRound();
   trails = [];
   for (const h of heroes) { h.taunt = false; if (h.round) h.round(h); }
+  // 靈魂只撐幾輪，沒人救就魂散
+  for (const h of heroes) if (h.dead && h.soul > 0 && --h.soul === 0) { h.faded = true; float(h, '魂散', '#9fb0c0', 20); lesson('faded'); }
   for (const e of foes) { e.frost = Math.max(0, e.frost - 1); e.red = false; }
   // 燃燒：每輪開始燒 3
   for (const e of foes) if (!e.dead && e.burn) { e.burn--; tickDmg(e, 3, '#ff8a30'); fxPush({ type: 'burst', x: e.x, y: e.y - 46, color: '#ff8a30', dur: 450, seed: 2 }); }
+  freeSouls();
+  fleeCheck();
   spawnShards();
   // 新的一輪：敵人退回右邊重整隊形，神魔留在上一手停下的位置
   await Promise.all(foes.filter((e) => !e.dead).map((e) => e.x < 330 || (e.high && e.y > 420) ? moveTo(e, { x: rnd(340, 545), y: e.high ? rnd(300, 400) : e.y }, 0.8).then(() => { e.face = -1; }) : null));
@@ -362,6 +371,11 @@ async function newRound() {
 
 function setIntent(e) {
   const a = heroes.filter((h) => !h.dead);
+  // 搶魂：場上有還沒人去抓的靈魂，先去抓
+  if (e.seize) {
+    const s = heroes.find((h) => h.dead && h.soul > 0 && !foes.some((o) => o !== e && !o.dead && o.intent && o.intent.seize === h));
+    if (s) { e.intent = { seize: s, dmg: 0 }; lesson('seize'); return; }
+  }
   const tank = a.find((h) => h.taunt);
   if (tank && !e.elite) { e.intent = { target: tank, dmg: e.atk }; return; }
   e.acts++;
@@ -373,7 +387,7 @@ function setIntent(e) {
   if (e.judge && e.acts % 3 === 0) { e.intent = { all: true, dmg: Math.round(e.atk * 0.8), judge: true }; return; }
   if (e.gaze && Math.random() < e.gaze) { e.intent = { all: true, dmg: Math.round(e.atk * 0.6) }; return; }
   const low = a.slice().sort((x, y) => x.hp - y.hp)[0];
-  e.intent = { target: e.twice ? low : (!e.elite && tank) || pick(a), dmg: e.atk, twice: e.twice };
+  e.intent = { target: e.twice || e.rip ? low : (!e.elite && tank) || pick(a), dmg: e.atk, twice: e.twice };
 }
 
 function makeChains() {
@@ -553,6 +567,7 @@ function results() {
   if (xn && skill().xc) res = skill().xc.fx(res, xn, h, en, al);
   res = gearResults(h, res);
   res = res.map(foeMod);
+  if (h.dmgMul !== 1) res = res.map((s) => (s.dmg && s.u.side === 'enemy' ? { ...s, dmg: Math.round(s.dmg * h.dmgMul) } : s));
   // 硬殼：每一下少受幾點傷害（最少 1）
   res = res.map((s) => (s.dmg && s.u.armor ? { ...s, dmg: Math.max(1, s.dmg - s.u.armor) } : s));
   // 紅線交會：交叉點附近的敵人各受 6 傷害
@@ -615,8 +630,8 @@ function fireTalents(list, h) {
 
 // ───── 出招 ─────
 async function go() {
-  if (busy || !hits.length) return;
-  const h = hero(), sk = skill(), steps = results(), tal = talentsHit(), cx = crossings();
+  if (busy || (!hits.length && !soulHits().length)) return;
+  const h = hero(), sk = skill(), steps = results(), tal = talentsHit(), cx = crossings(), saves = soulHits();
   busy = true; casting = true; updateUi(); renderSkills();
   gearLink(h);
   h.cds[skillIdx] = (sk.cd || 0) + 1;
@@ -675,6 +690,9 @@ async function go() {
     await wait(250);
   }
   for (const st of self) apply(st);
+  // 救魂：線穿過倒下隊友的靈魂，救回一半生命
+  for (const u of saves) if (u.dead && u.soul > 0) { revive(u, Math.ceil(u.maxHp / 2), '救回來了'); await wait(200); }
+  freeSouls();
   casting = false;
   h.moving = false;
   // 同一回合畫過的線都留著，換回合才清掉
@@ -780,9 +798,9 @@ function apply(s) {
     float(u, String(s.dmg), s.dmg >= 15 ? '#ffe070' : '#fff'); sfx(s.dmg >= 15 ? 'crit' : 'hit');
     fxPush({ type: 'burst', x: u.x, y: u.y - 46, color: hero().color, dur: 450, seed: Math.random() * 6 });
     skillFx(u);
-    if (u.hp <= 0) { u.hp = 0; u.dead = true; u.deadAt = performance.now(); sfx(u.side === 'enemy' ? 'kill' : 'fall'); }
+    if (u.hp <= 0) { if (u.side === 'ally') fall(u); else { u.hp = 0; u.dead = true; u.deadAt = performance.now(); sfx('kill'); } }
   }
-  if (s.execute && !u.dead) { u.hp = 0; u.dead = true; u.deadAt = performance.now(); sfx('kill'); float(u, s.execute + '！', '#ffe070'); fxPush({ type: 'burst', x: u.x, y: u.y - 46, color: '#ffe070', dur: 600, seed: 3 }); return; }
+  if (s.execute && !u.dead) { u.hp = 0; u.dead = true; u.deadAt = performance.now(); sfx('kill'); float(u, s.execute + '！', '#ffe070'); owe(u); fxPush({ type: 'burst', x: u.x, y: u.y - 46, color: '#ffe070', dur: 600, seed: 3 }); return; }
   if (s.killHeal && u.dead) for (const a of heroes) if (!a.dead) apply({ u: a, heal: s.killHeal });
   if (s.burn && !u.dead) addBurn(u, s.burn);
   if (s.fear && !u.dead && !u.fear) { u.fear = true; setTimeout(() => float(u, '恐懼', '#d0b0ff', 18), 200); }
@@ -872,6 +890,15 @@ async function enemyTurn() {
         o.hp -= hit(e.atk); o.flash = performance.now() + 200; sfx('hit'); float(o, String(hit(e.atk)), '#ff5c8d');
         if (o.hp <= 0) { o.hp = 0; o.dead = true; o.deadAt = performance.now(); }
       } else float(e, '發呆', '#ff5c8d');
+    } else if (e.intent.seize) {
+      const s = e.intent.seize;
+      if (s.dead && s.soul > 0) {
+        if (await approach(e, s)) { e.lunge = performance.now(); await wait(180); if (s.dead && s.soul > 0) seal(s, e); }
+      } else {
+        // 靈魂已經被救回去了：改打活著的人
+        const t = s.dead ? pick(alive) : s;
+        if (t && await approach(e, t)) { e.lunge = performance.now(); await wait(180); hurt(t, hit(e.atk)); }
+      }
     } else if (e.intent.all) {
       // 全隊攻擊：典獄長原地放出凝視、審判官審判
       e.lunge = performance.now(); fxPush({ type: 'gaze', x: e.x, y: e.y - 60, dur: 600 }); float(e, e.intent.label || (e.intent.judge ? '審判' : '凝視'), '#ff8a8a', 22); await wait(250);
@@ -884,9 +911,12 @@ async function enemyTurn() {
         e.lunge = performance.now(); await wait(180); hurt(t, hit(e.intent.dmg));
         if (e.intent.twice && !t.dead) { await wait(260); e.lunge = performance.now(); await wait(180); hurt(t, hit(e.intent.dmg)); }
         if (e.intent.carry && !t.dead) { t.carried = true; float(t, '被抓走', '#d0b0ff', 20); }
+        // 追債人：生命不到三成直接把魂抽走
+        if (e.rip && !t.dead && t.hp < t.maxHp * 0.3) { await wait(200); t.hp = 0; t.dead = true; t.deadAt = performance.now(); sfx('fall'); float(t, '魂被抽走', '#c080ff', 20); seal(t, e); }
       }
     }
     await wait(380);
+    freeSouls();
     if (heroes.every((h) => h.dead)) return lose();
   }
   if (foes.every((e) => e.dead)) return winFloor();
@@ -925,16 +955,68 @@ function hurt(h, d) {
   h.hp -= d; h.flash = performance.now() + 200; sfx('hurt');
   const a = artAnim(h.art, 'hurt'); if (a) h.anim = { a, t0: performance.now() };
   setTimeout(() => float(h, String(d), '#ff7070'), blocked ? 250 : 0);
-  if (h.hp <= 0) { h.hp = 0; h.dead = true; sfx('fall'); }
+  if (h.hp <= 0) fall(h);
+}
+
+// ───── 靈魂：倒下的神魔變成靈魂，線穿過就救回；會搶魂的敵人會去抓 ─────
+const SOUL_ROUNDS = 3, FLEE_ROUNDS = 2;
+const lesson = (id) => { if (typeof Tutorial !== 'undefined') Tutorial.tip(id); };
+function fall(u) {
+  u.hp = 0; u.dead = true; u.deadAt = performance.now(); sfx('fall');
+  if (u.sealed) return;
+  u.soul = SOUL_ROUNDS; u.faded = false;
+  setTimeout(() => float(u, '靈魂出竅', '#9fd8ff', 20), 250);
+  lesson('soul');
+}
+function revive(u, hp, text) {
+  u.dead = false; u.soul = 0; u.faded = false; u.sealed = false; u.sealedBy = null;
+  u.hp = Math.max(1, Math.min(u.maxHp, hp));
+  float(u, text, '#9fd8ff', 20); sfx('heal');
+  fxPush({ type: 'ring', x: u.x, y: u.y - 46, color: '#9fd8ff', dur: 700 });
+}
+function seal(u, e) {
+  u.soul = 0; u.sealed = true; u.sealedBy = e;
+  // 抓到靈魂的敵人過 2 輪就帶著靈魂逃走
+  if (!e.fleeIn) e.fleeIn = FLEE_ROUNDS;
+  fxPush({ type: 'ring', x: u.x, y: u.y - 46, color: '#c080ff', dur: 700 });
+  float(e, '封印 ' + u.name, '#d0b0ff', 20);
+  lesson('sealed');
+}
+// 封印他們的敵人倒下，靈魂就放出來（回三成生命）
+function freeSouls() {
+  for (const u of heroes || []) if (u.sealed && u.sealedBy && u.sealedBy.dead && !u.sealedBy.fled) revive(u, Math.round(u.maxHp * 0.3), '靈魂放出來了');
+}
+// 抓著靈魂的敵人倒數完就逃走：靈魂跟著被帶走，這一世都回不來
+function fleeCheck() {
+  for (const e of foes) {
+    if (e.dead || !e.fleeIn || !heroes.some((h) => h.sealed && h.sealedBy === e)) continue;
+    if (--e.fleeIn > 0) continue;
+    e.dead = true; e.fled = true; e.deadAt = performance.now();
+    float(e, '帶著靈魂逃走了', '#d0b0ff', 20);
+    fxPush({ type: 'ring', x: e.x, y: e.y - 46, color: '#c080ff', dur: 700 });
+  }
+}
+// 斬殺、吞噬這類直接帶走敵人的招式：欠一點因果債
+function owe(u) {
+  run.executes++;
+  setTimeout(() => float(u, '因果債 +1', '#c080ff', 18), 450);
+  lesson('debt');
+}
+// 這一筆會救到誰：線經過倒下隊友的靈魂（畫圈的話圈住也算）
+function soulHits() {
+  if (!heroes || path.length < 2) return [];
+  return heroes.filter((u) => u.dead && u.soul > 0 && (path.some((p, i) => i && segHitsCircle(path[i - 1], p, center(u), HIT_R)) || (skill().shape === 'circle' && closed && inPoly(center(u), path))));
 }
 
 // ───── 打完一層 ─────
 // 倒下的神魔過層後回三成生命，站著的回 6
 function endResult(win) {
   const hp = {}, res = {};
-  for (const h of heroes) { hp[h.id] = !win ? 0 : h.dead ? Math.round(h.maxHp * 0.3) : Math.min(h.maxHp, h.hp + 6); res[h.id] = h.res; }
-  const dead = foes.filter((e) => e.dead);
-  return { win, hp, res, kills: dead.length, exp: dead.reduce((a, e) => a + (e.exp || 0), 0), turns: turn };
+  for (const h of heroes) { hp[h.id] = !win || h.sealed ? 0 : h.dead ? Math.round(h.maxHp * 0.3) : Math.min(h.maxHp, h.hp + 6); res[h.id] = h.res; }
+  const dead = foes.filter((e) => e.dead && !e.fled);
+  // sealed：被封印、這一世不能再上場的；executes：直接帶走幾個（欠的因果債）
+  return { win, hp, res, kills: dead.length, exp: dead.reduce((a, e) => a + (e.exp || 0), 0), turns: turn,
+    sealed: heroes.filter((h) => h.sealed).map((h) => h.id), executes: run.executes, debtorKilled: foes.some((e) => e.key === 'debtor' && e.dead && !e.fled) };
 }
 function winFloor() {
   busy = true; sfx('win');
@@ -1096,7 +1178,7 @@ function gearOnApply(s) {
     if (wears(h, 'ex_anubis') && !u.dead && !u.elite && u.hp <= u.maxHp / 4) {
       setTimeout(() => {
         if (u.dead) return;
-        u.hp = 0; u.dead = true; u.deadAt = performance.now(); float(u, '秤心：吞掉', '#f0c040', 20);
+        u.hp = 0; u.dead = true; u.deadAt = performance.now(); float(u, '秤心：吞掉', '#f0c040', 20); owe(u);
         fxPush({ type: 'ring', x: u.x, y: u.y - 46, color: '#f0c040', dur: 600 });
         if (h.hp > 2) { h.hp -= 2; float(h, '天秤 -2', '#f0c040', 18); }
       }, 260);
@@ -1367,7 +1449,7 @@ function showInfo(u) {
       ${gearOf(u).length ? '<h3>裝備</h3>' + gearOf(u).map((id) => row(GEAR[id].n, GEAR[id].d, GEAR[id].color)).join('') : ''}`;
   } else {
     const F = FOES[u.key], it = u.intent;
-    const intent = u.frozen ? '凍住了，這一輪不會行動。' : u.confused ? '被亂點鴛鴦，下一次會打自己的同伴。' : !it ? '還沒決定。' : it.all ? `${it.judge ? '審判' : '凝視'}全隊，每人 ${it.dmg} 傷害。` : `走到${it.target.name}面前打 ${it.dmg}${it.twice ? '，連砍兩下' : ''}。`;
+    const intent = u.frozen ? '凍住了，這一輪不會行動。' : u.confused ? '被亂點鴛鴦，下一次會打自己的同伴。' : u.stun ? '變成石像，這一輪不會行動。' : !it ? '還沒決定。' : it.seize ? `走去把${it.seize.name}的靈魂抓走封印。` : it.all ? `${it.label || (it.judge ? '審判' : '凝視')}全隊，每人 ${it.dmg} 傷害。` : `走到${it.target.name}面前打 ${it.dmg}${it.twice ? '，連砍兩下' : ''}${it.carry ? '，然後把他抓走' : ''}。`;
     html = `<h2 style="color:#ff8a8a">${u.name}</h2><p class="muted">${F.boss ? '魔王' : F.elite ? '精英敵人' : '敵人'}</p>
       <p>生命 ${u.hp}/${u.maxHp}・攻擊 ${u.atk}</p>${row('這一輪要做什麼', intent, '#ff8a8a')}
       ${st.length ? '<h3>現在的狀態</h3>' + st.map(([k, v]) => row(k, v)).join('') : '<p class="muted">沒有特殊狀態。</p>'}
@@ -1386,7 +1468,7 @@ const TUT_STEPS = [
   ['輪到誰', '三位神魔輪流上場，每次只動一位。<b>腳下有金色光圈</b>的就是現在要出手的人，下方也會寫「輪到 誰」。'],
   ['選一招', '下方三個按鈕是他的三招，按鈕上寫著<b>畫法</b>（直線、衝刺、自由線、折線、畫圈、連點），選好後效果寫在按鈕下面。被動、天賦要按名字旁邊的<b>「說明」</b>。'],
   ['照畫法畫', '在戰場上用手指畫。第一次遇到某種畫法，戰場上會有<b>白色虛線的示範</b>，跟著畫就好；忘了就按左下的<b>「怎麼畫」</b>再看一次。畫完會預覽每個敵人受到多少傷害。'],
-  ['出招、看敵人', '滿意就按<b>出招</b>，不滿意按<b>重畫</b>。三位都出手後敵人才行動，敵人頭上寫著要打誰、打多少。<b>點一下角色或敵人</b>可以看詳細說明。'],
+  ['出招、看敵人', '滿意就按<b>出招</b>，不滿意按<b>重畫</b>。三位都出手後敵人才行動。被盯上的神魔旁邊有紅色驚嘆號，點一下敵人可以看他這一輪要打誰、打多少。<b>點一下角色或敵人</b>可以看詳細說明。'],
 ];
 function tutIntro() {
   if (tut.intro || run.floor !== 1) return;
@@ -1519,7 +1601,7 @@ function heroFrame(h, now) {
 
 function drawUnit(u, now) {
   if (u.dead && u.side === 'enemy') { const k = (now - u.deadAt) / 600; if (k >= 1) return; g.globalAlpha = 1 - k; }
-  if (u.dead && u.side === 'ally') g.globalAlpha = 0.3;
+  if (u.dead && u.side === 'ally') return drawSoul(u, now);
   const white = u.flash > now && Math.floor((u.flash - now) / 60) % 2 === 0;
   let ox = 0, oy = 0;
   if (u.side === 'ally' && u.lunge) { const k = (now - u.lunge.t0) / u.lunge.ms; if (k < 1) { const s = k < 0.25 ? k / 0.25 : k < 0.75 ? 1 : (1 - k) / 0.25; ox = u.lunge.dx * s; oy = u.lunge.dy * s; } else u.lunge = null; }
@@ -1534,6 +1616,7 @@ function drawUnit(u, now) {
     const lx = lunging ? -30 * Math.sin((now - u.lunge) / 360 * Math.PI) : 0;
     const pose = u.flash > now ? 2 : lunging ? 1 : 0;
     if (u.frozen) g.filter = 'saturate(0.3) brightness(1.3) hue-rotate(160deg)';
+    else if (u.tint) g.filter = 'sepia(1) saturate(6) hue-rotate(-50deg) brightness(0.7) contrast(1.3)';
     const bob = u.moving ? Math.abs(Math.sin(now / 90)) * 5 : 0;
     drawArt(g, 'u:' + u.sprite, 'pose', pose, x + lx * (u.face === 1 ? -1 : 1), y - bob, 1, { flip: u.faceL ? u.face === 1 : u.face !== 1, white });
     g.filter = 'none';
@@ -1554,16 +1637,38 @@ function drawUnit(u, now) {
     if (aimed) { g.fillStyle = Math.floor(now / 250) % 2 ? '#ff4050' : '#ffb0b0'; g.fillRect(u.x - 52, top - 26, 6, 16); g.fillRect(u.x - 52, top - 7, 6, 5); }
   } else {
     // 敵人頭上只放本名，要打誰看「說明」
-    g.fillStyle = '#ff8a8a'; g.fillText(u.name, u.x, top - 8);
+    g.fillStyle = u.boss ? '#ffb040' : u.elite ? '#ffd080' : '#ff8a8a'; g.fillText(u.name, u.x, top - 8);
   }
   if (u.side === 'enemy') {
     // 身上的狀態排成一列小字
-    const tags = [[u.frost, '霜' + u.frost, '#a0e0ff'], [u.red, '緣', '#ff5c8d'], [u.burn, '燒' + u.burn, '#ff8a30'], [u.fear, '懼', '#d0b0ff'], [u.mark, '標', '#e8e8ff'], [u.stone, '石' + u.stone, '#c0c0c0'], [u.lost, '迷' + u.lost, '#ff4050']].filter((t) => t[0]);
+    const held = heroes.filter((h) => h.sealed && h.sealedBy === u).length;
+    const tags = [[held, '魂' + held, '#d0b0ff'], [held && u.fleeIn, `${u.fleeIn}輪後逃走`, '#d0b0ff'], [u.frost, '霜' + u.frost, '#a0e0ff'], [u.red, '緣', '#ff5c8d'], [u.burn, '燒' + u.burn, '#ff8a30'], [u.fear, '懼', '#d0b0ff'], [u.mark, '標', '#e8e8ff'], [u.stone, '石' + u.stone, '#c0c0c0'], [u.lost, '迷' + u.lost, '#ff4050']].filter((t) => t[0]);
     g.font = 'bold 13px sans-serif'; g.textAlign = 'left';
     let tx = u.x - tags.reduce((a, t) => a + t[1].length * 14 + 4, 0) / 2;
     for (const [, t, c] of tags) { g.fillStyle = '#000'; g.fillRect(tx - 1, top + 9, t.length * 14 + 2, 16); g.fillStyle = c; g.fillText(t, tx, top + 22); tx += t.length * 14 + 4; }
     g.textAlign = 'center';
   }
+}
+
+// 倒下的神魔：還有靈魂就畫成飄著的藍色半透明身影，頭上寫還剩幾輪；被封印的不畫，魂散的只剩淡淡的影子
+function drawSoul(u, now) {
+  if (u.sealed) return;
+  if (u.faded || !u.soul) { g.globalAlpha = 0.15; drawArt(g, u.art, 'pose', 0, u.x, u.y, 1, { flip: u.face === -1 }); g.globalAlpha = 1; return; }
+  const bob = Math.sin(now / 300) * 6, x = u.x, y = u.y - 14 + bob, saved = soulHits().includes(u);
+  g.fillStyle = saved ? 'rgba(127,224,127,0.35)' : 'rgba(120,200,255,0.25)';
+  g.beginPath(); g.ellipse(x, y - 46, 46, 60, 0, 0, Math.PI * 2); g.fill();
+  g.strokeStyle = saved ? '#7fe07f' : 'rgba(159,216,255,0.9)'; g.lineWidth = 3; g.setLineDash([8, 6]);
+  g.beginPath(); g.ellipse(x, y - 46, 46, 60, 0, 0, Math.PI * 2); g.stroke(); g.setLineDash([]);
+  g.globalAlpha = 0.55; g.filter = 'saturate(0.2) brightness(1.5) hue-rotate(180deg)';
+  drawArt(g, u.art, 'pose', 0, x, y, 1, { flip: u.face === -1 });
+  g.filter = 'none'; g.globalAlpha = 1;
+  const grab = foes.some((e) => !e.dead && e.intent && e.intent.seize === u);
+  g.font = 'bold 15px sans-serif'; g.textAlign = 'center';
+  const label = `${u.name}的靈魂・剩 ${u.soul} 輪`;
+  g.fillStyle = '#000'; g.fillRect(x - label.length * 8 - 4, y - 132, label.length * 16 + 8, 20);
+  g.fillStyle = saved ? '#7fe07f' : '#9fd8ff'; g.fillText(label, x, y - 116);
+  if (grab) { g.fillStyle = Math.floor(now / 250) % 2 ? '#d0b0ff' : '#fff'; g.fillText('有怪要來搶！', x, y + 22); }
+  else if (saved) { g.fillStyle = '#7fe07f'; g.fillText('出招就救回', x, y + 22); }
 }
 
 function render(now) {
@@ -1752,7 +1857,8 @@ function updateUi() {
   const sk = skill(), used = sk.shape === 'tap' ? inkMax() * hits.length / sk.max : Math.min(inkMax(), pathLen());
   $('.ink div').style.width = Math.max(0, 100 - used / inkMax() * 100) + '%';
   $('.ink div').style.background = hero().color;
-  $('.go').disabled = !flying && (busy || !hits.length || drawing);
+  const saves = soulHits();
+  $('.go').disabled = !flying && (busy || (!hits.length && !saves.length) || drawing);
   $('.redo').disabled = busy || !path.length;
   const mv = $('.move');
   if (mv) { mv.disabled = !!flying || busy || hero().moved; mv.textContent = moving ? '取消' : hero().moved ? '已移動' : '移動'; }
@@ -1763,8 +1869,9 @@ function updateUi() {
   else if (!path.length) demo || tip(`<b>${sk.name}</b>（${SHAPES[sk.shape]}）${sk.desc}`);
   else if (hits.length) {
     const tal = talentsHit(), cx = crossings();
-    tip(`「${sk.name}」會打 ${results().filter((x) => x.u.side === 'enemy' && x.dmg && !x.cross).length} 下（${new Set(hits.filter((u) => u.side === 'enemy')).size} 個敵人）${tal.length ? `，觸發天賦 <b>${tal.map((t) => t.name + '・' + t.talent.n).join('、')}</b>` : ''}${cx.length ? `，<b>紅線交會 ${cx.length} 處</b>${sk.xc ? `（交會加成 ×${cx.length}：${sk.xc.d}）` : ''}` : ''}。${sk.shape === 'tap' && hits.length < sk.max ? '可以繼續點，' : ''}滿意就按出招，不滿意按重畫。`);
+    tip(`「${sk.name}」會打 ${results().filter((x) => x.u.side === 'enemy' && x.dmg && !x.cross).length} 下（${new Set(hits.filter((u) => u.side === 'enemy')).size} 個敵人）${tal.length ? `，觸發天賦 <b>${tal.map((t) => t.name + '・' + t.talent.n).join('、')}</b>` : ''}${cx.length ? `，<b>紅線交會 ${cx.length} 處</b>${sk.xc ? `（交會加成 ×${cx.length}：${sk.xc.d}）` : ''}` : ''}。${sk.shape === 'tap' && hits.length < sk.max ? '可以繼續點，' : ''}${saves.length ? `，<b>救回 ${saves.map((u) => u.name).join('、')}</b>` : ''}。滿意就按出招，不滿意按重畫。`);
   }
+  else if (saves.length) tip(`這一筆會<b>救回 ${saves.map((u) => u.name).join('、')}</b>（回一半生命）。按出招就救。`);
   else tip(`這條線沒有碰到目標，按重畫再來。`);
 }
 
@@ -1785,13 +1892,17 @@ function renderHelp() {
   <p><b>移動</b>：射程不夠打不到？出招前先按「移動」，再點戰場上要去的地方，神魔會走過去（每次輪到只能移動一次），走完再畫招。</p>
   <p>墨水條用完就不能再畫。標「近身」的招式神魔會自己跑過去打，其他招式站在原地放出去。</p>
   <p><b>天賦</b>：線穿過隊友，會發動那位隊友的天賦。<b>紅線交會</b>：同一回合隊友畫過的線會留在地上（淡淡的虛線，換回合就清掉），你的線跟它交叉，交叉點會炸開，附近敵人各受 6 傷害，也會發動那條線主人的天賦。有些招式還有<b>交會加成</b>（寫在招式說明裡），每交會一處效果再加一份，一招最多算 3 處。</p>
-  <p>神魔出招時會沿著你畫的線跑過去，最後停在線的終點，所以畫線也是在決定下一輪站哪裡。三位神魔各出一招之後，敵人才一起行動，會走到目標面前打。敵人頭上寫著這一輪要打誰、打多少，可以先凍住、先打死，或用護盾擋。</p>
+  <p>神魔出招時會沿著你畫的線跑過去，最後停在線的終點，所以畫線也是在決定下一輪站哪裡。三位神魔各出一招之後，敵人才一起行動，會走到目標面前打。點一下敵人可以看他這一輪要打誰、打多少，可以先凍住、先打死，或用護盾擋。</p>
   ${heroes.map((u) => { const H = HEROES[u.id]; return H.skills.map((s) => `<p><b>${H.name}・${s.name}</b>（${SHAPES[s.shape]}${s.melee ? '・近身' : ''}${s.cd ? `，冷卻 ${s.cd} 輪` : ''}）：${s.desc}</p>`).join('') + `<p><b>${H.name}・被動・${H.passive.n}</b>：${H.passive.d}</p><p><b>${H.name}・天賦・${H.talent.n}</b>：${H.talent.d}</p>`; }).join('')}
+  <p><b>靈魂</b>：神魔倒下會變成發藍光的靈魂，頭上寫還剩幾輪。其他隊友的線穿過靈魂（畫圈圈住也算），出招就救回來、回一半生命；倒數完沒人救就魂散，這一層不能再上場。會搶魂的敵人會去把靈魂抓走封印（靈魂下面會寫「有怪要來搶！」），2 輪內打倒他就放出來，沒打倒他會帶著靈魂逃走，那位神魔這一世都不能再上場。</p>
+  <p><b>因果債</b>：斬殺、吞掉這類直接把敵人帶走的招，每帶走一個欠 1 點債。債太多，追債人會找上門。</p>
   <p><b>精英、魔王</b>的特性寫在每層開場，也可以點他們看。典獄長的鎖鏈（灰色粗線）會剪斷直線和自由線，畫圈不受影響。</p>
   <p><b>裝備</b>：每位神魔有兵器、法寶兩格。神族只能用神器，魔族只能用邪物，專屬兵器只有本人能用。精英層打完可以從三件裡選一件，魔王層有機會掉專屬兵器（試玩版第 1 層也會掉一件）。裝備會改變線的畫法，名字上面的小方塊就是身上的裝備。</p>
   ${Object.values(GEAR).map((it) => `<p><b>${it.n}</b>（${it.kind}・${SLOT[it.slot]}${it.own ? `・${HEROES[it.own].name}專屬` : ''}）：${it.d}</p>`).join('')}`;
 }
 window.__s = () => ({ run, heroes, foes, hits, path, chains, who, skillIdx, busy });
+// 測試用：直接觸發倒下、敵人行動、出招
+window.__rl = { fall, setIntent, enemyTurn, newRound, go, apply, freeSouls, soulHits, winFloor, setPath: (pts) => { path = pts; } };
 requestAnimationFrame(render);
 return { HEROES, FOES, GEAR, SLOT, SIDE, ALL_IDS, start, stop, canUse, gearBox, gearOffer, showBox, hideBox, artImg: (id, h) => artImg(id, h) };
 })();

@@ -8,13 +8,13 @@ const PATH_ORDER = ['angel', 'demon', 'human'];
 const FORMS = {
   angel: {
     name: '神使', path: '升仙', pathDesc: '成為神使，擔任神族', side: '神', sprite: 'angel', hpMul: 1,
-    innate: '只能選神族。靈魂會往秩序走。',
+    innate: '只能選神族。',
     allowed: (nature) => nature <= 20,
     lockText: '靈魂太偏混沌',
   },
   demon: {
     name: '惡魔', path: '入魔', pathDesc: '墮為惡魔，擔任魔族', side: '魔', sprite: 'demon', hpMul: 1,
-    innate: '只能選魔族。靈魂會往混沌走。',
+    innate: '只能選魔族。',
     allowed: (nature) => nature >= -20,
     lockText: '靈魂太偏秩序',
   },

@@ -191,3 +191,14 @@ details p { margin: 4px 0; }
 /* 聲音開關：戰鬥畫面放在上方列，其他畫面放右上角 */
 .sound.corner { position: fixed; top: 8px; right: 8px; z-index: 4; padding: 4px 8px; font-size: 16px; border-bottom-width: 2px; opacity: 0.8; }
 body:has(#battle.active) .sound.corner { display: none; }
+
+/* 轉生櫃台的靈魂本質條：左秩序、右混沌 */
+.nature { margin: 6px 0 4px; }
+.nature-head { display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; }
+.nature-head span { color: var(--muted, #9aa); }
+.nature-head b { font-size: 14px; }
+.nature-bar { position: relative; height: 14px; margin: 6px 0 22px; border: 2px solid var(--line); background: linear-gradient(90deg, #4a7fd0, #9a9aa8 50%, #d04a5a); }
+.nature-bar i { position: absolute; top: -4px; width: 2px; height: 18px; margin-left: -1px; background: rgba(255,255,255,0.75); }
+.nature-bar u { position: absolute; top: -5px; width: 8px; height: 20px; margin-left: -4px; background: #ffe070; border: 2px solid #000; }
+.card .bonus { color: #ffe070; }
+.nature-bar u::after { content: '你'; position: absolute; top: 20px; left: 50%; transform: translateX(-50%); font-size: 11px; color: #ffe070; text-decoration: none; }
