@@ -139,3 +139,55 @@ canvas.art { image-rendering: pixelated; width: auto; align-self: center; }
   93% { transform: translate(2px, -1px); opacity: 0.8; }
   96% { transform: translate(-1px, 0) scaleY(0.6); opacity: 0.3; }
 }
+
+/* 一筆紅線戰鬥（js/redline.js，主遊戲和 redline.html 共用） */
+/* 整個戰鬥畫面塞進一個手機畫面：戰場吃掉剩下的高度 */
+.rl { display: flex; flex-direction: column; gap: 4px; height: calc(100vh - 12px); height: calc(100dvh - 12px); }
+body:has(#battle.active) #app { padding: 6px 8px; }
+#battle.screen.active { display: flex; }
+#battle.screen:not(.active) { display: none; }
+.stage-wrap { flex: 1 1 auto; min-height: 120px; display: flex; justify-content: center; align-items: center; overflow: hidden; }
+.stage { width: 100%; border: 2px solid var(--line); background: #0b0a12; touch-action: none; image-rendering: auto; }
+.top { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.top .floor { flex: 1; color: var(--gold); font-weight: bold; }
+.top .btn { padding: 2px 8px; font-size: 13px; border-bottom-width: 2px; }
+.ink { flex: none; height: 6px; background: #000; border: 1px solid var(--line); }
+.ink div { height: 100%; width: 100%; }
+.who { flex: none; display: flex; align-items: center; gap: 6px; font-size: 14px; min-height: 30px; }
+.who canvas { height: 30px; }
+.who b { font-size: 15px; }
+.who .who-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.skills { flex: none; display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
+.sk { padding: 4px; font-size: 11px; line-height: 1.3; text-align: left; }
+.sk b { display: block; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sk .shape { color: var(--gold); }
+.sk.on { border-color: var(--gold); background: #3a3420; }
+.traits { display: none; }
+.tip { flex: none; height: 4.5em; overflow-y: auto; font-size: 12px; line-height: 1.5; color: var(--muted); }
+.tip b { color: #ff8aa0; }
+.acts { flex: none; display: grid; grid-template-columns: 0.8fr 0.8fr 1fr 1fr; gap: 6px; }
+.acts .move { color: #9fe0ff; }
+.acts .how { color: var(--gold); }
+.tut { font-size: 15px; line-height: 1.6; }
+.tut .step { color: var(--muted); font-size: 13px; }
+.acts .btn { padding: 9px 4px; font-size: 16px; }
+.overlay { position: fixed; inset: 0; background: rgba(5,4,10,0.86); display: none; align-items: center; justify-content: center; padding: 16px; z-index: 5; }
+.overlay.show { display: flex; }
+.box { background: var(--panel); border: 2px solid var(--line); max-width: 440px; width: 100%; padding: 14px; max-height: 92vh; overflow-y: auto; }
+.box h2 { margin-top: 0; }
+.box p { font-size: 14px; line-height: 1.55; margin: 6px 0; }
+.opt { display: block; width: 100%; text-align: left; margin-top: 8px; padding: 10px; font-size: 14px; line-height: 1.45; }
+.opt b { color: var(--gold); }
+.pk { display: flow-root; }
+.pk.on { border-color: var(--gold); background: #3a3420; }
+.pk-art { float: left; height: 44px; margin-right: 8px; }
+.gear-chip { flex: none; padding: 2px 7px; font-size: 12px; border-width: 2px; }
+.gear-hero { margin-top: 10px; }
+.gear-hero .opt { margin-top: 5px; }
+details { margin-top: 10px; font-size: 13px; line-height: 1.55; }
+details summary { color: var(--accent); }
+details p { margin: 4px 0; }
+
+/* 聲音開關：戰鬥畫面放在上方列，其他畫面放右上角 */
+.sound.corner { position: fixed; top: 8px; right: 8px; z-index: 4; padding: 4px 8px; font-size: 16px; border-bottom-width: 2px; opacity: 0.8; }
+body:has(#battle.active) .sound.corner { display: none; }

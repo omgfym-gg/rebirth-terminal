@@ -398,7 +398,7 @@ for (const [id, j] of Object.entries(JOB_ART)) {
 }
 
 // 戰鬥角色（敵人、引魂犬）：每張 3 格，待機、攻擊、被打，都面向右邊；登記成 ART['u:名字']
-const UNIT_ART = {"dog": [52, 50], "shade": [69, 70], "wisp": [74, 54], "husk": [81, 74], "redgirl": [55, 62], "mirror": [57, 78], "hunter": [117, 76], "boss": [142, 104], "horus": [138, 100], "zombie": [82, 78], "printer": [81, 64], "judge": [87, 123]};
+const UNIT_ART = {"dog": [52, 50], "shade": [69, 70], "wisp": [74, 54], "husk": [81, 74], "redgirl": [55, 62], "mirror": [57, 78], "hunter": [117, 76], "boss": [142, 104], "horus": [138, 100], "zombie": [82, 78], "printer": [81, 64], "judge": [87, 123], "dullahan": [165, 114], "wendigo": [97, 118], "guhuoniao": [94, 110], "lintoujie": [96, 94], "tengu": [101, 94], "mothman": [98, 98], "jinmenken": [68, 58], "mizuki": [59, 78], "gaki": [64, 76], "diaoxigui": [66, 82], "jerseydevil": [81, 82], "amanojaku": [59, 66]};
 for (const [k, [w, h]] of Object.entries(UNIT_ART)) ART['u:' + k] = { dir: 'assets/units/', sheets: { pose: [k + '.png', w, h] } };
 
 // 動作：用哪張、每格停多久（毫秒）
