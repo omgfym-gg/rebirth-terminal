@@ -157,11 +157,12 @@ body:has(#battle.active) #app { padding: 6px 8px; }
 .who canvas { height: 30px; }
 .who b { font-size: 15px; }
 .who .who-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.skills { flex: none; display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
+.skills { flex: none; display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
 .sk { padding: 4px; font-size: 11px; line-height: 1.3; text-align: left; }
-.sk b { display: block; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sk b { display: block; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sk .shape { color: var(--gold); }
 .sk.on { border-color: var(--gold); background: #3a3420; }
+.sk.locked { opacity: 0.45; }
 .traits { display: none; }
 .tip { flex: none; height: 4.5em; overflow-y: auto; font-size: 12px; line-height: 1.5; color: var(--muted); }
 .tip b { color: #ff8aa0; }

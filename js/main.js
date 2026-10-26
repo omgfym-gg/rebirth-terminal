@@ -351,7 +351,7 @@ const Game = {
   // 出戰的三位：都穿這一世拿到的裝備（前世之影也是空手來的）
   battleParty() {
     const L = this.save.life;
-    return L.party.filter((m) => !(L.sealed || []).includes(m.id)).map((m) => ({ id: m.id, tag: m.tag, hp: L.hp[m.id], maxHp: L.maxHp[m.id], gear: this.eqOf(m.id), res: (L.res || {})[m.id] || 0, dmgMul: m.tag === TAGS.now ? L.dmgMul || 1 : 1 }));
+    return L.party.filter((m) => !(L.sealed || []).includes(m.id)).map((m) => ({ id: m.id, tag: m.tag, hp: L.hp[m.id], maxHp: L.maxHp[m.id], gear: this.eqOf(m.id), res: (L.res || {})[m.id] || 0, dmgMul: m.tag === TAGS.now ? L.dmgMul || 1 : 1, lv: m.tag === TAGS.shadow ? m.level : this.lvOf(m.id).lv, picks: this.lvOf(m.id).pick }));
   },
 
   floorFoes(f) {
@@ -416,7 +416,13 @@ const Game = {
       const ups = this.addExp(m.id, r.exp);
       if (!ups) continue;
       L.maxHp[m.id] += 4 * ups; L.hp[m.id] += 4 * ups;
-      lines.push(`${HEROES[m.id].name}升到 Lv.${this.lvOf(m.id).lv}（生命上限 +${4 * ups}）。`);
+      const lv = this.lvOf(m.id).lv;
+      lines.push(`${HEROES[m.id].name}升到 Lv.${lv}（生命上限 +${4 * ups}）。`);
+      for (let l = lv - ups + 1; l <= lv; l++) {
+        const i = Redline.SKILL_LV.indexOf(l);
+        if (i > 0) lines.push(`${HEROES[m.id].name}學會新招「${HEROES[m.id].skills[i].name}」。`);
+        if (l === Redline.TALENT_LV) lines.push(`${HEROES[m.id].name}的天賦「${HEROES[m.id].talent.n}」解鎖了。`);
+      }
     }
     this.persist();
     const kind = floorKind(f);
@@ -428,8 +434,25 @@ const Game = {
       lines.push('往上的樓梯分成了兩條路。');
       this.story(lines, null, { speaker: '塔', choices: two.map((k) => ({ label: `${EVENTS[k].name}：${EVENTS[k].desc}`, action: () => this.runEvent(k) })) });
     };
-    if (kind === 'normal' && !r.debtorKilled) return next();
-    this.drop(kind === 'normal' ? 'elite' : kind, next);
+    const go = () => (kind === 'normal' && !r.debtorKilled ? next() : this.drop(kind === 'normal' ? 'elite' : kind, next));
+    this.pickPerks(go);
+  },
+
+  // Lv3、6、8 的強化二選一：隊上還沒選的一個一個補選（前世之影不能升級，不用選）
+  pickPerks(done) {
+    const s = this.save, L = s.life;
+    for (const m of L.party) {
+      if (m.tag === TAGS.shadow || (L.sealed || []).includes(m.id) || !Redline.GROWTH[m.id]) continue;
+      const v = s.lv[m.id]; if (!v) continue;
+      const l = Redline.PICK_LV.find((x) => v.lv >= x && (v.pick || {})[x] == null);
+      if (!l) continue;
+      const H = HEROES[m.id], two = Redline.GROWTH[m.id][l];
+      Redline.showBox(`<h2 style="color:${H.color}">${H.name} Lv.${l} 強化</h2><p class="muted">二選一，選了就永久生效。</p>
+        ${two.map((p, i) => `<button class="btn wide perk" data-i="${i}" style="text-align:left;margin-top:8px"><b>${p.n}</b><br><span class="muted">${p.d}</span></button>`).join('')}`);
+      for (const b of document.querySelectorAll('.box .perk')) b.onclick = () => { v.pick = { ...(v.pick || {}), [l]: +b.dataset.i }; this.persist(); this.pickPerks(done); };
+      return;
+    }
+    done();
   },
 
   // 精英、魔王掉裝備：三選一。只掉今世穿得了的（神族掉神器、魔族掉邪物，為人兩種都掉）；魔王優先掉今世的專屬兵器
@@ -674,6 +697,12 @@ function outcomeLabel(o) { return { faded: '全隊倒下', victory: '壽終正�
 
 const SHAPE_NAMES = { line: '直線', dash: '衝刺', free: '自由線', zigzag: '折線', circle: '畫圈', tap: '連點' };
 // 轉生櫃台的神魔卡片：出處、被動、天賦、三招的畫法
+const lockNote = (lv, need) => (lv < need ? `（Lv${need} 解鎖）` : '');
+// 已經選過的強化（存檔裡的選擇）
+function perkNames(id, lv) {
+  const G = Redline.GROWTH[id], pick = (Game.save.lv[id] || {}).pick || {};
+  return G ? Redline.PICK_LV.filter((l) => lv >= l && pick[l] != null).map((l) => G[l][pick[l]]) : [];
+}
 function heroCard(id, lv, tag) {
   const H = HEROES[id];
   return [
@@ -682,8 +711,9 @@ function heroCard(id, lv, tag) {
     el('small', { class: 'muted' }, `${H.faith}族・${H.role}・生命 ${H.hp}`),
     ORIGINS[id] ? el('small', { class: 'origin' }, el('span', { class: 'tag origin' }, ORIGINS[id][0]), ORIGINS[id][1]) : null,
     el('small', {}, el('span', { class: 'tag' }, '被動'), `「${H.passive.n}」${H.passive.d}`),
-    el('small', {}, el('span', { class: 'tag' }, '天賦'), `「${H.talent.n}」${H.talent.d}`),
-    ...H.skills.map((sk, i) => el('small', {}, el('span', { class: 'tag' + (i === 2 ? ' ult' : '') }, SHAPE_NAMES[sk.shape]), `「${sk.name}」`, el('span', { html: sk.desc }))),
+    el('small', { class: lv < Redline.TALENT_LV ? 'muted' : '' }, el('span', { class: 'tag' }, '天賦'), `「${H.talent.n}」${lockNote(lv, Redline.TALENT_LV)}${H.talent.d}`),
+    ...H.skills.map((sk, i) => el('small', { class: lv < Redline.SKILL_LV[i] ? 'muted' : '' }, el('span', { class: 'tag' + (i === 2 ? ' ult' : '') }, SHAPE_NAMES[sk.shape]), `「${sk.name}」${lockNote(lv, Redline.SKILL_LV[i])}`, el('span', { html: sk.desc }))),
+    ...perkNames(id, lv).map((p) => el('small', {}, el('span', { class: 'tag' }, '強化'), `「${p.n}」${p.d}`)),
   ];
 }
 // 隊友的小卡片（前世之影、派遣同事）
@@ -694,8 +724,8 @@ function shadowCard(o, crew) {
     Redline.artImg(o.id, 56),
     el('b', { style: `color:${H.color}` }, `${H.name}　Lv.${o.level}${crew ? '' : `（第 ${o.life} 世的你）`}`),
     el('small', { class: 'muted' }, `${crew || '前世之影'}・${H.faith}族・${H.role}`),
-    el('small', {}, `招式：${H.skills.map((k) => `${k.name}（${SHAPE_NAMES[k.shape]}）`).join('、')}`),
-    el('small', {}, `天賦「${H.talent.n}」：${H.talent.d}`),
+    el('small', {}, `招式：${H.skills.filter((k, i) => o.level >= Redline.SKILL_LV[i]).map((k) => `${k.name}（${SHAPE_NAMES[k.shape]}）`).join('、')}`),
+    o.level >= Redline.TALENT_LV ? el('small', {}, `天賦「${H.talent.n}」：${H.talent.d}`) : el('small', { class: 'muted' }, `天賦「${H.talent.n}」Lv${Redline.TALENT_LV} 解鎖`),
     el('small', { class: 'muted' }, gear.length ? `裝備：${gear.join('、')}` : '沒有裝備'),
   ];
 }
