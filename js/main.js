@@ -45,7 +45,7 @@ const SHOP = [
 
 // 每位神魔各自的等級，永久保留、死了也不掉。升一級生命 +4（之後再加解鎖新招、被動二選一）
 const LV_MAX = 30;
-const needExp = (lv) => 20 + 10 * (lv - 1);
+const needExp = (lv) => 10 + 5 * (lv - 1);
 const TAGS = { now: '今世', shadow: '前世之影', crew: '派遣同事' };
 
 const Game = {

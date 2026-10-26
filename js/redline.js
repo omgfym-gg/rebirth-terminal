@@ -233,10 +233,10 @@ const HEROES = {
   },
 };
 // ───── 升級成長 ─────
-// Lv1 第一招＋被動、Lv2 第二招、Lv4 天賦、Lv5 大招、Lv7 第四招；Lv3/6/8 強化二選一（選了永久生效）
+// Lv1 第一招＋被動、Lv2 第二招、Lv3 大招、Lv4 天賦、Lv7 第四招；Lv3/6/8 強化二選一（選了永久生效）
 // 強化欄位：setup(h) 開打時改自己（招式已經複製一份，可以直接改）、mod(h, s, i) 改自己第 i 招打出的每一下、
 // aura(s) 改全隊任何人打出的每一下、round(h) 每輪開始、talent(t, c) 天賦多做的事
-const SKILL_LV = [1, 2, 5, 7], TALENT_LV = 4, PICK_LV = [3, 6, 8];
+const SKILL_LV = [1, 2, 3, 7], TALENT_LV = 4, PICK_LV = [3, 6, 8];
 const atSk = (i, f) => (h, s, k) => (k === i ? f(s, h) : s);
 const plus = (i, n) => atSk(i, (s) => (s.dmg && s.u.side === 'enemy' ? { ...s, dmg: s.dmg + n } : s));
 const skSet = (i, f) => (h) => f(h.skills[i]);
