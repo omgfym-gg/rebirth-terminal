@@ -107,11 +107,15 @@ def clean(a):
     return a[ys.min():ys.max() + 1, xs.min():xs.max() + 1]
 
 
-def main(src, out, fw=None, fh=None, merge_small=False, flip=(), height=None, holes=False):
+def main(src, out, fw=None, fh=None, merge_small=False, flip=(), height=None, holes=False, cols=0):
     img = np.asarray(Image.open(src).convert('RGB')).astype(float)
     gray = img.mean(axis=2)
     fg = flood_background(img, holes)
     lab, boxes = components(fg)
+    if cols:  # 圖是等寬排好的格子：每一欄裡的東西（角色加特效）全部算同一格
+        W = fg.shape[1]
+        lab = np.where(fg, np.arange(W)[None, :] * cols // W + 1, 0)
+        boxes = [(k + 1, int(np.nonzero((lab == k + 1).any(axis=0))[0].min()), int((lab == k + 1).sum())) for k in range(cols) if (lab == k + 1).any()]
     if height:
         return main_scaled(img, fg, lab, boxes, out, fw, fh, merge_small, flip, height)
     # 用最大的角色來量像素格
@@ -230,7 +234,8 @@ if __name__ == '__main__':
     ap.add_argument('--merge-small', action='store_true', help='小碎片併進最近的角色，不當成獨立小物件')
     ap.add_argument('--height', type=int, help='不偵測像素格，改成等比例縮到最高的一格剛好這麼高（AI 圖格子不整齊時用）')
     ap.add_argument('--flip', type=int, nargs='*', default=[], help='要左右翻轉的格子（從 0 數）')
+    ap.add_argument('--cols', type=int, default=0, help='圖是等寬的幾欄：每欄整個算一格（特效把角色切碎時用）')
     ap.add_argument('--holes', action='store_true', help='被線圈圍起來的純白空洞也去背（甩紅線那種圖才用）')
     o = ap.parse_args()
     fw, fh = o.frame or (None, None)
-    main(o.src, o.out, fw, fh, o.merge_small, set(o.flip), o.height, o.holes)
+    main(o.src, o.out, fw, fh, o.merge_small, set(o.flip), o.height, o.holes, o.cols)

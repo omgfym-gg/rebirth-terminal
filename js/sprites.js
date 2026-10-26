@@ -379,6 +379,20 @@ const JOB_ART = {
   hachi: { mark: 'hat', atk: 's1', melee: false, color: '#e8e8ff', h: 94, w: { idle: 66, walk: 64, hurt: 80, s1: 117, s2: 101, ult: 113 } },
   yukionna: { mark: 'snow', atk: 's1', melee: false, color: '#a0e0ff', h: 82, w: { idle: 81, walk: 70, hurt: 96, s1: 156, s2: 112, ult: 144 } },
   medusa: { mark: 'snake', atk: 's2', melee: true, color: '#70d060', h: 82, w: { idle: 68, walk: 64, hurt: 81, s1: 130, s2: 68, ult: 105 } },
+  // 拿專屬兵器的樣子（裝備專屬兵器時換這套）
+  'yuelao-ex': { mark: 'heart', atk: 's1', melee: false, color: '#ff5c8d', h: 82, w: { idle: 48, walk: 60, hurt: 85, s1: 84, s2: 74, ult: 86 } },
+  'guangong-ex': { mark: 'crescent', atk: 's1', melee: true, color: '#40d070', h: 82, w: { idle: 100, walk: 103, hurt: 114, s1: 125, s2: 92, ult: 150 } },
+  'brigid-ex': { mark: 'flame', atk: 's2', melee: true, color: '#ff8a30', h: 82, w: { idle: 77, walk: 78, hurt: 78, s1: 83, s2: 74, ult: 78 } },
+  'tudigong-ex': { mark: 'ingot', atk: 's2', melee: false, color: '#ffc830', h: 82, w: { idle: 62, walk: 58, hurt: 87, s1: 82, s2: 98, ult: 108 } },
+  'hermes-ex': { mark: 'wing', atk: 's2', melee: true, color: '#f0d070', h: 82, w: { idle: 75, walk: 84, hurt: 91, s1: 92, s2: 110, ult: 139 } },
+  'dagda-ex': { mark: 'pot', atk: 's2', melee: true, color: '#d8a060', h: 82, w: { idle: 86, walk: 89, hurt: 84, s1: 116, s2: 101, ult: 144 } },
+  'horusshadow-ex': { mark: 'eye', atk: 's1', melee: false, color: '#e0b850', h: 82, w: { idle: 62, walk: 64, hurt: 75, s1: 110, s2: 83, ult: 111 } },
+  'redgirl-ex': { mark: 'fog', atk: 's1', melee: true, color: '#ff4050', h: 82, w: { idle: 74, walk: 70, hurt: 69, s1: 141, s2: 92, ult: 151 } },
+  'hanako-ex': { mark: 'wisp', atk: 's2', melee: true, color: '#b060e0', h: 82, w: { idle: 97, walk: 103, hurt: 106, s1: 140, s2: 122, ult: 100 } },
+  'anubis-ex': { mark: 'ankh', atk: 's1', melee: true, color: '#f0c040', h: 82, w: { idle: 95, walk: 95, hurt: 95, s1: 135, s2: 107, ult: 152 } },
+  'hachi-ex': { mark: 'hat', atk: 's1', melee: false, color: '#e8e8ff', h: 82, w: { idle: 60, walk: 66, hurt: 78, s1: 100, s2: 81, ult: 142 } },
+  'yukionna-ex': { mark: 'snow', atk: 's1', melee: false, color: '#a0e0ff', h: 82, w: { idle: 83, walk: 91, hurt: 93, s1: 112, s2: 87, ult: 103 } },
+  'medusa-ex': { mark: 'snake', atk: 's2', melee: true, color: '#70d060', h: 82, w: { idle: 77, walk: 77, hurt: 86, s1: 109, s2: 92, ult: 112 } },
 };
 for (const [id, j] of Object.entries(JOB_ART)) {
   const sheet = (n) => [n + '.png', j.w[n], j.h];
@@ -416,7 +430,7 @@ function artAnim(job, name) {
 }
 
 // 圖檔更新時改這個，手機才不會一直用快取的舊圖
-const ASSET_V = '20261023k';
+const ASSET_V = '20261026a';
 const ArtImages = {};
 function artSheet(job, sheet) {
   const a = ART[job], spec = a && a.sheets[sheet];
