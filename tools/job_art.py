@@ -61,6 +61,11 @@ for name in ['idle', 'walk', 'hurt', 's1', 's2', 'ult']:
     tmp = tempfile.mkdtemp()
     subprocess.run([sys.executable, os.path.join(ROOT, 'tools/sprite_pipeline.py'), f, tmp, '--merge-small', '--height', height], check=True, stdout=subprocess.DEVNULL)
     meta = json.load(open(os.path.join(tmp, 'meta.json')))
+    if name in ('s1', 's2', 'ult') or meta['frames'] != 3:
+        # 技能特效常把角色切碎或把兩格連在一起：圖是三等分排的，每一欄整個算一格
+        tmp = tempfile.mkdtemp()
+        subprocess.run([sys.executable, os.path.join(ROOT, 'tools/sprite_pipeline.py'), f, tmp, '--merge-small', '--height', height, '--cols', '3'], check=True, stdout=subprocess.DEVNULL)
+        meta = json.load(open(os.path.join(tmp, 'meta.json')))
     if meta['frames'] != 3: print(f'注意：{name} 切出 {meta["frames"]} 格（應該是 3 格）', file=sys.stderr)
     shutil.copy(os.path.join(tmp, 'sheet.png'), os.path.join(out, name + '.png'))
     w[name] = meta['frameW']; h = max(h, meta['frameH'])

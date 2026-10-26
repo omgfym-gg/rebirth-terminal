@@ -279,7 +279,7 @@ function start(c) {
   gen++;
   cfg = c;
   run = { floor: c.floor, up: { dmg: 0, ink: 1, ...(c.up || {}) } };
-  heroes = c.party.map((p) => ({ ...HEROES[p.id], id: p.id, tag: p.tag || '', side: 'ally', art: p.id, gear: p.gear || [], maxHp: p.maxHp, hp: Math.max(0, Math.min(p.maxHp, p.hp)), dead: p.hp <= 0, x: 0, y: 0, shield: 0, flash: 0, cds: [0, 0, 0], anim: null, taunt: false, res: p.res || 0, wine: 0 }));
+  heroes = c.party.map((p) => ({ ...HEROES[p.id], id: p.id, tag: p.tag || '', side: 'ally', art: (p.gear || []).includes('ex_' + p.id) && ART[p.id + '-ex'] ? p.id + '-ex' : p.id, gear: p.gear || [], maxHp: p.maxHp, hp: Math.max(0, Math.min(p.maxHp, p.hp)), dead: p.hp <= 0, x: 0, y: 0, shield: 0, flash: 0, cds: [0, 0, 0], anim: null, taunt: false, res: p.res || 0, wine: 0 }));
   const k = c.scale || 1;
   foes = c.foes.map((key) => ({ key, ...FOES[key], side: 'enemy', maxHp: Math.round(FOES[key].hp * k), hp: Math.round(FOES[key].hp * k), atk: Math.round(FOES[key].atk * k), dead: false, frozen: false, confused: false, frost: 0, red: false, burn: 0, fear: false, mark: false, stone: 0, stun: false, lost: 0, flash: 0, x: 0, y: 0, acts: 0, dodged: false, headAt: null }));
   place(true);
@@ -742,7 +742,9 @@ async function windUp(h, sk) {
 
 // 播技能動作，等到出手那一格
 async function skillAnim(h, sk, part = 0.6) {
-  const a = artAnim(h.art, sk.anim) || artAnim(h.art, 'punch');
+  // 拿專屬兵器的圖只有 s1/s2/ult：月老這種舊圖用 punch/cast 的角色，照第幾招換
+  const name = h.art.endsWith('-ex') && !/^(s1|s2|ult)$/.test(sk.anim) ? ['s1', 's2', 'ult'][h.skills.indexOf(sk)] || 's1' : sk.anim;
+  const a = artAnim(h.art, name) || artAnim(h.art, 'punch');
   const total = a ? a.ms.reduce((x, y) => x + y, 0) : 500;
   h.moving = false;
   h.anim = { a, t0: performance.now() };
