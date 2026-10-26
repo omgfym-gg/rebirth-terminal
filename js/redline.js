@@ -392,7 +392,7 @@ function setIntent(e) {
 
 function makeChains() {
   chains = [];
-  for (const w of foes) if (w.chains && !w.dead) for (let i = 0; i < w.chains; i++) { const x = rnd(220, 330), y = rnd(300, 640), a = rnd(-1.3, 1.3), L = w.chainKind === 'water' ? 130 : 160; chains.push({ x1: x - Math.cos(a) * L / 2, y1: y - Math.sin(a) * L / 2, x2: x + Math.cos(a) * L / 2, y2: y + Math.sin(a) * L / 2, kind: w.chainKind || 'chain' }); }
+  for (const w of foes) if (w.chains && !w.dead) for (let i = 0; i < w.chains; i++) { let x, y, n = 0; do { x = rnd(220, 330); y = rnd(300, 640); } while (n++ < 12 && chains.some((o) => Math.hypot((o.x1 + o.x2) / 2 - x, (o.y1 + o.y2) / 2 - y) < 110)); const a = rnd(-1.3, 1.3), L = w.chainKind === 'water' ? 0 : 160; if (L === 0) { chains.push({ x1: x, y1: y, x2: x, y2: y, cx: x, cy: y, rx: 50, ry: 38, kind: 'water' }); continue; } chains.push({ x1: x - Math.cos(a) * L / 2, y1: y - Math.sin(a) * L / 2, x2: x + Math.cos(a) * L / 2, y2: y + Math.sin(a) * L / 2, kind: w.chainKind || 'chain' }); }
 }
 // 這一招的線會被哪些東西剪斷（水窪只剪近身招）
 const cutters = () => (hero().noCut ? [] : chains.filter((c) => c.kind !== 'water' || skill().melee));
@@ -414,6 +414,18 @@ function segHitsCircle(a, b, c, r) {
 function segCross(a, b, c, d) {
   const o = (p, q, r) => (q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x);
   return o(a, b, c) * o(a, b, d) < 0 && o(c, d, a) * o(c, d, b) < 0;
+}
+// 線 a→b 碰到障礙物的話，回傳被剪斷的那一點；沒碰到回傳 null。水窪是一灘圓的，線從外面走進去就斷
+function cutHit(a, b, c) {
+  if (c.kind === 'water') {
+    const q = (p) => ({ x: (p.x - c.cx) / c.rx, y: (p.y - c.cy) / c.ry }), A = q(a), B = q(b);
+    if (A.x * A.x + A.y * A.y <= 1) return null;
+    const dx = B.x - A.x, dy = B.y - A.y, aa = dx * dx + dy * dy, bb = 2 * (A.x * dx + A.y * dy), cc = A.x * A.x + A.y * A.y - 1, D = bb * bb - 4 * aa * cc;
+    if (!aa || D < 0) return null;
+    const t = (-bb - Math.sqrt(D)) / (2 * aa);
+    return t >= 0 && t <= 1 ? { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t } : null;
+  }
+  return segCross(a, b, { x: c.x1, y: c.y1 }, { x: c.x2, y: c.y2 }) ? cutAt(a, b, c) : null;
 }
 function cutAt(a, b, c) {
   // 線和鎖鏈的交點
@@ -499,7 +511,7 @@ cv.addEventListener('pointermove', (ev) => {
   const used = pathLen(), max = inkMax();
   if (used + d > max) { const k = (max - used) / d; p.x = last.x + (p.x - last.x) * k; p.y = last.y + (p.y - last.y) * k; }
   if (freeShape(sk)) {
-    for (const c of cutters()) if (segCross(last, p, { x: c.x1, y: c.y1 }, { x: c.x2, y: c.y2 })) { path.push(cutAt(last, p, c)); fxPush({ type: 'snap', x: p.x, y: p.y, dur: 600 }); sfx('snap'); drawing = false; updateUi(); tip(`紅線被<b>${CUT[c.kind][0]}</b>剪斷了。`); return; }
+    for (const c of cutters()) { const cut = cutHit(last, p, c); if (!cut) continue; path.push(cut); fxPush({ type: 'snap', x: p.x, y: p.y, dur: 600 }); sfx('snap'); drawing = false; updateUi(); tip(`紅線被<b>${CUT[c.kind][0]}</b>剪斷了。`); return; }
     path.push(p);
     if (sk.shape === 'zigzag') zigzagStep(last, p);
     // 線每「穿進」敵人一次就多打一下；隊友只算一次
@@ -1115,7 +1127,7 @@ function rayPath(s, dir, L, extra = 0) {
   // 鎖鏈把線剪斷
   for (let i = 1; i < pts.length; i++) for (const c of cutters()) {
     const a = pts[i - 1], b = pts[i];
-    if (segCross(a, b, { x: c.x1, y: c.y1 }, { x: c.x2, y: c.y2 })) { pts[i] = cutAt(a, b, c); pts.length = i + 1; }
+    const cut = cutHit(a, b, c); if (cut) { pts[i] = cut; pts.length = i + 1; }
   }
   return pts;
 }
@@ -1574,20 +1586,125 @@ function skillFx(u) {
 }
 function float(u, text, color, size = 22) { fxPush({ type: 'text', x: u.x, y: u.y - 112, text, color, size, dur: 1000 }); }
 
-function drawBg(now) {
-  g.fillStyle = '#1b1826'; g.fillRect(0, 0, W, FLOOR);
-  for (let i = 0; i < 5; i++) {
-    const x = 14 + i * 120;
-    g.fillStyle = '#141120'; g.fillRect(x, 60, 84, FLOOR - 60);
-    g.fillStyle = '#2c2740'; g.fillRect(x - 6, 54, 96, 6); g.fillRect(x - 6, 54, 6, FLOOR - 54); g.fillRect(x + 84, 54, 6, FLOOR - 54);
-    const fl = 0.6 + 0.4 * Math.sin(now / 300 + i * 1.7);
-    g.fillStyle = `rgba(120,200,255,${0.5 * fl})`; g.fillRect(x + 38, 80, 8, 12);
+// 戰場背景：先在 1/4 大小的小畫布上一格一格點出像素，再放大貼上（只算一次）。
+// 後面是石磚牆加鐵窗，前面是透視的石板地，中間亮、四周暗
+const PX = 4, bgCv = document.createElement('canvas');
+let bgReady = false;
+const hash = (x, y) => { let h = (x * 374761393 + y * 668265263) | 0; h = (h ^ (h >>> 13)) * 1274126177; return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
+function buildBg() {
+  const w = W / PX, h = H / PX, fy = FLOOR / PX;
+  bgCv.width = w; bgCv.height = h;
+  const c = bgCv.getContext('2d'), img = c.createImageData(w, h), d = img.data;
+  const hex = (s) => [1, 3, 5].map((i) => parseInt(s.slice(i, i + 2), 16));
+  const put = (x, y, col, k = 1) => { const i = (y * w + x) * 4; d[i] = col[0] * k; d[i + 1] = col[1] * k; d[i + 2] = col[2] * k; d[i + 3] = 255; };
+  const brick = hex('#2b2540'), brickHi = hex('#3a3354'), mortar = hex('#17131f'), win = hex('#0b0914'), bar = hex('#565070'), barHi = hex('#8a84a6'), sill = hex('#423a5c');
+  const tileA = hex('#2c283a'), tileB = hex('#282436'), seam = hex('#16131e'), tileHi = hex('#3a3550'), moss = hex('#2a3a34'), crack = hex('#1a1724');
+  const wins = [18, 56, 94, 132];
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    if (y < fy) {
+      // 石磚牆：一排 4 格高、磚 9 格寬，上下排錯開
+      const row = Math.floor(y / 4), bx = x + (row % 2) * 4, edge = y % 4 === 3 || bx % 9 === 0;
+      let col = edge ? mortar : (y % 4 === 0 ? brickHi : brick), k = 0.85 + hash(Math.floor(bx / 9), row) * 0.3;
+      // 鐵窗：上面切掉看不到，只露出下半截，裡面透一點藍光
+      for (const wx of wins) {
+        const dx = x - wx;
+        if (Math.abs(dx) <= 7 && y >= fy - 15 && y <= fy - 5) {
+          if (y === fy - 5 || y === fy - 6) { col = y === fy - 6 ? barHi : sill; k = 1; }
+          else if (Math.abs(dx) === 7) { col = mortar; k = 1; }
+          else if (dx % 3 === 0) { col = (dx + 7) % 6 === 1 ? barHi : bar; k = 1; }
+          else { col = win; k = 1 + 2.2 * Math.max(0, 1 - Math.abs(dx) / 7) * ((y - (fy - 15)) / 10); col = [col[0] + 6, col[1] + 14, col[2] + 30]; }
+        }
+      }
+      if (y >= fy - 2) { col = y === fy - 2 ? brickHi : sill; k = 1; }
+      put(x, y, col, Math.min(k, 3));
+    } else {
+      // 石板地：越前面磚越大（透視），每塊磚顏色略不同，偶爾有裂縫或青苔
+      const z = (y - fy) / (h - fy), sc = 0.45 + 0.75 * z, u = (x - w / 2) / sc;
+      const rowF = Math.sqrt(z) * 7, row = Math.floor(rowF), col0 = Math.floor((u + (row % 2) * 7) / 14), fu = ((u + (row % 2) * 7) % 14 + 14) % 14, fv = rowF - row;
+      const r = hash(col0, row);
+      let col = (col0 + row) % 2 ? tileA : tileB, k = 0.88 + r * 0.24;
+      if (fu < 1 / sc || fv < 0.06 + 0.04 * (1 - z)) col = seam;
+      else if (fv < 0.13 + 0.06 * (1 - z)) col = tileHi;
+      else if (r > 0.86 && Math.abs(fu - 7 - (fv - 0.5) * 6) < 0.6 / sc) col = crack;
+      else if (r < 0.08 && hash(x, y) < 0.35) col = moss;
+      else if (hash(x, y) < 0.04) k *= 0.82;
+      // 光：從鐵窗照下來的光和中央亮一點，四角暗
+      const cx = (x - w / 2) / (w / 2), cy = (y - (fy + 40)) / (h - fy);
+      k *= 1.15 - 0.45 * Math.min(1, cx * cx * 0.8 + cy * cy * 0.9);
+      if (y - fy < 6) k *= 0.7 + (y - fy) * 0.05;
+      put(x, y, col, k);
+    }
   }
-  g.fillStyle = '#332d48'; g.fillRect(0, FLOOR - 6, W, 6);
-  g.fillStyle = '#24202e'; g.fillRect(0, FLOOR, W, H - FLOOR);
-  g.strokeStyle = '#1d1a26'; g.lineWidth = 2;
-  for (let y = FLOOR + 30; y < H; y += 60) { g.beginPath(); g.moveTo(0, y); g.lineTo(W, y); g.stroke(); }
-  for (let x = -600; x < W + 600; x += 90) { g.beginPath(); g.moveTo(W / 2 + (x - W / 2) * 0.4, FLOOR); g.lineTo(x, H); g.stroke(); }
+  // 地上靠牆一排陰影
+  c.putImageData(img, 0, 0);
+  c.fillStyle = 'rgba(0,0,0,0.35)'; c.fillRect(0, fy, w, 2);
+  bgReady = true;
+}
+function drawBg(now) {
+  if (!bgReady) buildBg();
+  g.imageSmoothingEnabled = false;
+  g.drawImage(bgCv, 0, 0, W, H);
+  // 鐵窗之間的藍色魂火，一閃一閃
+  for (let i = 0; i < 3; i++) {
+    const x = (37 + i * 38) * PX, y = FLOOR - 13 * PX, fl = Math.sin(now / 160 + i * 2.1);
+    g.fillStyle = '#3e3656'; g.fillRect(x - 6, y + 8, 12, 8); g.fillStyle = '#5a5278'; g.fillRect(x - 6, y + 8, 12, 4);
+    g.fillStyle = 'rgba(120,200,255,0.12)'; g.fillRect(x - 24, y - 24, 48, 40);
+    g.fillStyle = '#4aa8ff'; g.fillRect(x - 6, y - 4, 12, 12);
+    g.fillStyle = '#9fe0ff'; g.fillRect(x - 4, y - 8 - (fl > 0 ? 4 : 0), 8, 12);
+    g.fillStyle = '#ffffff'; g.fillRect(x - 2, y, 4, 4);
+  }
+}
+// 鎖鏈：一節一節的鐵環，兩頭釘在地上的鐵樁，底下有影子
+function drawChain(c) {
+  const L = Math.hypot(c.x2 - c.x1, c.y2 - c.y1), ang = Math.atan2(c.y2 - c.y1, c.x2 - c.x1), n = Math.max(2, Math.round(L / 15)), step = L / n;
+  g.save(); g.translate(c.x1, c.y1); g.rotate(ang);
+  g.fillStyle = 'rgba(0,0,0,0.35)'; g.fillRect(0, 4, L, 8);
+  for (let i = 0; i < n; i++) {
+    const x = i * step + step / 2;
+    if (i % 2 === 0) {
+      // 正面的環：看得到中間的洞
+      g.fillStyle = '#15121c'; g.fillRect(x - 11, -8, 22, 16);
+      g.fillStyle = '#6e6a84'; g.fillRect(x - 9, -6, 18, 12);
+      g.fillStyle = '#b8b4cc'; g.fillRect(x - 9, -6, 18, 3);
+      g.fillStyle = '#15121c'; g.fillRect(x - 5, -2, 10, 4);
+    } else {
+      // 側面的環：一條扁扁的鐵
+      g.fillStyle = '#15121c'; g.fillRect(x - 11, -4, 22, 8);
+      g.fillStyle = '#8a86a2'; g.fillRect(x - 9, -2, 18, 4);
+      g.fillStyle = '#d8d4ec'; g.fillRect(x - 7, -2, 8, 2);
+    }
+  }
+  g.restore();
+  for (const [x, y] of [[c.x1, c.y1], [c.x2, c.y2]]) {
+    g.fillStyle = 'rgba(0,0,0,0.4)'; g.fillRect(x - 12, y + 4, 24, 10);
+    g.fillStyle = '#15121c'; g.fillRect(x - 10, y - 12, 20, 22);
+    g.fillStyle = '#4a4560'; g.fillRect(x - 8, y - 10, 16, 18);
+    g.fillStyle = '#7a7494'; g.fillRect(x - 8, y - 10, 16, 4);
+    g.fillStyle = '#c8c4d8'; g.fillRect(x - 2, y - 4, 4, 4);
+  }
+}
+// 水窪：一灘圓的水，邊緣一格一格像素，水面有波紋往外擴
+function drawWater(c, now) {
+  const cell = 4, rx = c.rx, ry = c.ry;
+  if (!c.edge) c.edge = Array.from({ length: 24 }, () => rnd(-0.06, 0.06));
+  const r = (x, y) => { const a = Math.atan2(y / ry, x / rx), j = c.edge[Math.floor(((a + Math.PI) / (Math.PI * 2)) * 24) % 24]; return (x * x) / (rx * rx) + (y * y) / (ry * ry) - (1 + j) ** 2; };
+  for (let y = -ry - cell * 2; y <= ry + cell * 2; y += cell) for (let x = -rx - cell * 2; x <= rx + cell * 2; x += cell) {
+    const v = r(x + cell / 2, y + cell / 2);
+    if (v > 0.18) continue;
+    const X = Math.round(c.cx + x), Y = Math.round(c.cy + y);
+    if (v > 0) g.fillStyle = '#16141f';
+    else if (v > -0.16) g.fillStyle = y < 0 ? '#6ab0e8' : '#2e6a9e';
+    else g.fillStyle = y < -ry * 0.45 ? '#2a5c8c' : (x + y) % (cell * 6) === 0 && y > 0 ? '#1d4a74' : '#204f7c';
+    g.fillRect(X, Y, cell, cell);
+  }
+  // 反光
+  g.fillStyle = '#a8dcff'; g.fillRect(c.cx - rx * 0.45, c.cy - ry * 0.45, 12, 4); g.fillRect(c.cx - rx * 0.45 + 16, c.cy - ry * 0.45, 4, 4);
+  // 波紋
+  for (let k = 0; k < 2; k++) {
+    const t = (now / 1800 + k / 2) % 1, R = 0.35 + t * 0.55, m = Math.round(16 + 30 * R);
+    g.fillStyle = `rgba(150,210,255,${0.45 * (1 - t)})`;
+    for (let i = 0; i < m; i++) { const a = (i / m) * Math.PI * 2; g.fillRect(Math.round((c.cx + Math.cos(a) * rx * R) / cell) * cell, Math.round((c.cy + Math.sin(a) * ry * R) / cell) * cell, cell, cell); }
+  }
 }
 
 function heroFrame(h, now) {
@@ -1684,13 +1801,7 @@ function render(now) {
       const [name, c1, c2] = CUT[c.kind || 'chain'];
       const L = Math.hypot(c.x2 - c.x1, c.y2 - c.y1), ux = (c.x2 - c.x1) / L, uy = (c.y2 - c.y1) / L, mx = (c.x1 + c.x2) / 2, my = (c.y1 + c.y2) / 2;
       if (c.kind === 'water') {
-        // 水窪：一灘水，表面有波紋
-        g.save(); g.translate(mx, my); g.rotate(Math.atan2(uy, ux));
-        g.fillStyle = 'rgba(30,80,130,0.85)'; g.beginPath(); g.ellipse(0, 0, L / 2 + 8, 22, 0, 0, Math.PI * 2); g.fill();
-        g.strokeStyle = c2; g.lineWidth = 3; g.beginPath(); g.ellipse(0, 0, L / 2 + 8, 22, 0, 0, Math.PI * 2); g.stroke();
-        g.lineWidth = 2; g.globalAlpha = 0.7;
-        for (let k = 0; k < 3; k++) { const r = ((now / 900 + k / 3) % 1); g.beginPath(); g.ellipse(-L / 4 + k * L / 4, 0, 6 + r * 24, 2 + r * 8, 0, 0, Math.PI * 2); g.stroke(); }
-        g.globalAlpha = 1; g.restore();
+        drawWater(c, now);
       } else if (c.kind === 'tree') {
         // 樹根：彎彎曲曲的粗根，上面長葉子
         const pt = (t, w) => ({ x: c.x1 + ux * L * t - uy * w, y: c.y1 + uy * L * t + ux * w });
@@ -1700,11 +1811,10 @@ function render(now) {
         for (let t = 0.1; t < 1; t += 0.2) { const q = pt(t, Math.sin(t * 12) * 7 + 10); g.beginPath(); g.ellipse(q.x, q.y, 8, 4, Math.atan2(uy, ux) + 0.6, 0, Math.PI * 2); g.fill(); }
         g.lineCap = 'butt';
       } else {
-        g.strokeStyle = c1; g.lineWidth = 9; g.lineCap = 'round'; g.beginPath(); g.moveTo(c.x1, c.y1); g.lineTo(c.x2, c.y2); g.stroke(); g.lineCap = 'butt';
-        g.strokeStyle = c2; g.lineWidth = 3; g.setLineDash([10, 6]); g.beginPath(); g.moveTo(c.x1, c.y1); g.lineTo(c.x2, c.y2); g.stroke(); g.setLineDash([]);
+        drawChain(c);
       }
       // 標上名字，免得跟隊友的線搞混
-      g.font = 'bold 14px sans-serif'; g.textAlign = 'center'; g.fillStyle = '#000'; g.fillRect(mx - 18, my + 22, 36, 18); g.fillStyle = c2; g.fillText(name, mx, my + 36);
+      g.font = 'bold 14px sans-serif'; g.textAlign = 'center'; const ly = c.kind === 'water' ? c.cy + c.ry + 2 : my + 22; g.fillStyle = '#000'; g.fillRect(mx - 18, ly, 36, 18); g.fillStyle = c2; g.fillText(name, mx, ly + 14);
     }
     // 杜拉漢的頭顱
     for (const e of foes) if (e.head && e.headAt && !e.dead) {
