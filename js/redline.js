@@ -1550,9 +1550,9 @@ function drawUnit(u, now) {
     if (u.wine) { g.fillStyle = '#ffb040'; g.fillText('酒', u.x + 52, top + 22); }
     const aimed = foes.some((e) => !e.dead && !e.frozen && !e.confused && e.intent && (e.intent.all || e.intent.target === u));
     if (aimed) { g.fillStyle = Math.floor(now / 250) % 2 ? '#ff4050' : '#ffb0b0'; g.fillRect(u.x - 52, top - 26, 6, 16); g.fillRect(u.x - 52, top - 7, 6, 5); }
-  } else if (u.intent) {
-    const t = u.frozen ? '凍住，跳過' : u.stun ? '石像，跳過' : u.confused ? '會打同伴' : u.intent.all ? `${u.intent.label || '全隊'} ${u.intent.dmg}` : `${u.intent.target.name} ${u.intent.dmg}${u.intent.twice ? '×2' : ''}${u.intent.carry ? ' 抓走' : ''}`;
-    g.fillStyle = u.frozen ? '#a0e0ff' : u.confused ? '#ff8ac0' : '#ff8a8a'; g.fillText('⚔ ' + t, u.x, top - 8);
+  } else {
+    // 敵人頭上只放本名，要打誰看「說明」
+    g.fillStyle = '#ff8a8a'; g.fillText(u.name, u.x, top - 8);
   }
   if (u.side === 'enemy') {
     // 身上的狀態排成一列小字
@@ -1613,6 +1613,7 @@ function render(now) {
       g.fillStyle = '#e0b850'; g.beginPath(); g.ellipse(c.x, c.y + b, 13, 7, 0, 0, Math.PI * 2); g.fill();
       g.fillStyle = '#201000'; g.beginPath(); g.arc(c.x, c.y + b, 4, 0, Math.PI * 2); g.fill();
       g.strokeStyle = '#e0b850'; g.lineWidth = 2; g.beginPath(); g.moveTo(c.x - 4, c.y + b + 7); g.lineTo(c.x - 7, c.y + b + 15); g.stroke();
+      g.font = 'bold 12px sans-serif'; g.textAlign = 'center'; g.fillStyle = '#e0b850'; g.fillText('眼碎片', c.x, c.y + b + 30);
     }
     // 這回合隊友留下的線，畫線跟它交叉就是紅線交會
     for (const t of trails) {
