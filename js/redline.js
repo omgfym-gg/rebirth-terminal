@@ -281,7 +281,7 @@ function start(c) {
   gen++;
   cfg = c;
   run = { floor: c.floor, up: { dmg: 0, ink: 1, ...(c.up || {}) }, executes: 0 };
-  heroes = c.party.map((p) => ({ ...HEROES[p.id], id: p.id, tag: p.tag || '', side: 'ally', art: p.id, gear: p.gear || [], maxHp: p.maxHp, hp: Math.max(0, Math.min(p.maxHp, p.hp)), dead: p.hp <= 0, soul: 0, sealed: false, faded: p.hp <= 0, dmgMul: p.dmgMul || 1, x: 0, y: 0, shield: 0, flash: 0, cds: [0, 0, 0], anim: null, taunt: false, res: p.res || 0, wine: 0 }));
+  heroes = c.party.map((p) => ({ ...HEROES[p.id], id: p.id, tag: p.tag || '', side: 'ally', art: (p.gear || []).includes('ex_' + p.id) && ART[p.id + '-ex'] ? p.id + '-ex' : p.id, gear: p.gear || [], maxHp: p.maxHp, hp: Math.max(0, Math.min(p.maxHp, p.hp)), dead: p.hp <= 0, soul: 0, sealed: false, faded: p.hp <= 0, dmgMul: p.dmgMul || 1, x: 0, y: 0, shield: 0, flash: 0, cds: [0, 0, 0], anim: null, taunt: false, res: p.res || 0, wine: 0 }));
   const k = c.scale || 1;
   // 追債人：債越多越強（債 5 以上每多 1 點，生命攻擊再 +6%）
   const kk = (key) => k * (key === 'debtor' ? 1 + 0.06 * Math.max(0, (c.debt || 0) - 5) : 1);
@@ -760,7 +760,9 @@ async function windUp(h, sk) {
 
 // 播技能動作，等到出手那一格
 async function skillAnim(h, sk, part = 0.6) {
-  const a = artAnim(h.art, sk.anim) || artAnim(h.art, 'punch');
+  // 拿專屬兵器的圖只有 s1/s2/ult：月老這種舊圖用 punch/cast 的角色，照第幾招換
+  const name = h.art.endsWith('-ex') && !/^(s1|s2|ult)$/.test(sk.anim) ? ['s1', 's2', 'ult'][h.skills.indexOf(sk)] || 's1' : sk.anim;
+  const a = artAnim(h.art, name) || artAnim(h.art, 'punch');
   const total = a ? a.ms.reduce((x, y) => x + y, 0) : 500;
   h.moving = false;
   h.anim = { a, t0: performance.now() };
@@ -1633,8 +1635,8 @@ function drawUnit(u, now) {
     if (u.wine) { g.fillStyle = '#ffb040'; g.fillText('酒', u.x + 52, top + 22); }
     const aimed = foes.some((e) => !e.dead && !e.frozen && !e.confused && e.intent && (e.intent.all || e.intent.target === u));
     if (aimed) { g.fillStyle = Math.floor(now / 250) % 2 ? '#ff4050' : '#ffb0b0'; g.fillRect(u.x - 52, top - 26, 6, 16); g.fillRect(u.x - 52, top - 7, 6, 5); }
-  } else if (u.intent) {
-    // 頭上只寫名字；這一輪要打誰，點他看說明
+  } else {
+    // 敵人頭上只放本名，要打誰看「說明」
     g.fillStyle = u.boss ? '#ffb040' : u.elite ? '#ffd080' : '#ff8a8a'; g.fillText(u.name, u.x, top - 8);
   }
   if (u.side === 'enemy') {
@@ -1718,6 +1720,7 @@ function render(now) {
       g.fillStyle = '#e0b850'; g.beginPath(); g.ellipse(c.x, c.y + b, 13, 7, 0, 0, Math.PI * 2); g.fill();
       g.fillStyle = '#201000'; g.beginPath(); g.arc(c.x, c.y + b, 4, 0, Math.PI * 2); g.fill();
       g.strokeStyle = '#e0b850'; g.lineWidth = 2; g.beginPath(); g.moveTo(c.x - 4, c.y + b + 7); g.lineTo(c.x - 7, c.y + b + 15); g.stroke();
+      g.font = 'bold 12px sans-serif'; g.textAlign = 'center'; g.fillStyle = '#e0b850'; g.fillText('眼碎片', c.x, c.y + b + 30);
     }
     // 這回合隊友留下的線，畫線跟它交叉就是紅線交會
     for (const t of trails) {
