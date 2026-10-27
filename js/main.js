@@ -367,6 +367,13 @@ const Game = {
 
   fight() {
     const s = this.save, L = s.life;
+    // 測試用：網址加 ?ex，出戰的人一開始就拿著自己的專屬兵器
+    if (/[?&]ex\b/.test(location.search)) for (const m of L.party) {
+      const id = 'ex_' + m.id;
+      if (!GEAR[id]) continue;
+      if (!s.vault.includes(id)) s.vault.push(id);
+      s.eq[m.id] = s.eq[m.id] || {}; s.eq[m.id].weapon = id;
+    }
     const f = L.floor + 1, kind = floorKind(f);
     // 中途離開再回來：同一層重打，敵人重抽
     const debtor = (L.debtFloors || []).includes(f);
