@@ -379,6 +379,12 @@ const JOB_ART = {
   hachi: { mark: 'hat', atk: 's1', melee: false, color: '#e8e8ff', h: 94, w: { idle: 66, walk: 64, hurt: 80, s1: 117, s2: 101, ult: 113 } },
   yukionna: { mark: 'snow', atk: 's1', melee: false, color: '#a0e0ff', h: 82, w: { idle: 81, walk: 70, hurt: 96, s1: 156, s2: 112, ult: 144 } },
   medusa: { mark: 'snake', atk: 's2', melee: true, color: '#70d060', h: 82, w: { idle: 68, walk: 64, hurt: 81, s1: 130, s2: 68, ult: 105 } },
+  // 第二批
+  wukong: { mark: 'cloud', atk: 's1', melee: true, color: '#ffc040', h: 82, w: { idle: 94, walk: 95, hurt: 101, s1: 126, s2: 121, ult: 142 } },
+  houyi: { mark: 'sun', atk: 's1', melee: false, color: '#ff8040', h: 82, w: { idle: 81, walk: 91, hurt: 82, s1: 111, s2: 107, ult: 113 } },
+  mazu: { mark: 'wave', atk: 's1', melee: false, color: '#ff6a80', h: 82, w: { idle: 71, walk: 70, hurt: 99, s1: 126, s2: 110, ult: 121 } },
+  yama: { mark: 'book', atk: 's1', melee: false, color: '#8a70ff', h: 82, w: { idle: 91, walk: 90, hurt: 109, s1: 137, s2: 151, ult: 140 } },
+  kuchisake: { mark: 'scissors', atk: 's1', melee: true, color: '#f06070', h: 82, w: { idle: 91, walk: 92, hurt: 105, s1: 111, s2: 93, ult: 145 } },
   // 拿專屬兵器的樣子（裝備專屬兵器時換這套）
   'yuelao-ex': { mark: 'heart', atk: 's1', melee: false, color: '#ff5c8d', h: 82, w: { idle: 48, walk: 60, hurt: 85, s1: 84, s2: 74, ult: 86 } },
   'guangong-ex': { mark: 'crescent', atk: 's1', melee: true, color: '#40d070', h: 82, w: { idle: 100, walk: 103, hurt: 114, s1: 125, s2: 92, ult: 150 } },
@@ -479,6 +485,11 @@ const MARKS = {
   flame: { color: '#ffa020', light: '#fff0a0', rows: ['..x..', '..xx.', '.xxx.', '.xxxx', 'xxxxx', '.xxx.'] },
   fog: { color: '#d0404a', light: '#ffb0b0', rows: ['.xx...', 'xxxx.x', '.xxxxx', '..xx..'] },
   eye: { color: '#f0c040', light: '#3050c0', rows: ['.xxxx.', 'xx.xxx', '.xxxx.', '..x.x.', '.x...x'] },
+  cloud: { color: '#fff0c0', light: '#ffffff', rows: ['..xx..', '.xxxx.', 'xxxxxx', '.x..xx'] },
+  sun: { color: '#ff8040', light: '#fff0a0', rows: ['x.x.x', '.xxx.', 'xxxxx', '.xxx.', 'x.x.x'] },
+  wave: { color: '#60b0ff', light: '#e0f4ff', rows: ['.xx...', 'x..x..', '...xx.', 'xxxxxx'] },
+  book: { color: '#c03040', light: '#fff0d0', rows: ['xx.xx', 'xxxxx', 'xxxxx', 'xx.xx'] },
+  scissors: { color: '#c0c0c8', light: '#ffffff', rows: ['x...x', '.x.x.', '..x..', 'xx.xx', 'xx.xx'] },
 };
 function drawMark(g, name, x, y, s, alpha = 1) {
   const m = MARKS[name];
