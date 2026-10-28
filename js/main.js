@@ -466,8 +466,10 @@ const Game = {
   drop(kind, next) {
     const s = this.save, L = s.life;
     const general = shuffle(Object.keys(GEAR).filter((id) => !GEAR[id].own && !s.vault.includes(id) && Redline.canUse(L.hero, id, L.form === 'human')));
+    // 魔王：今世的專屬兵器優先，再隨機補一把隊友（不含前世之影）的專屬兵器
     const own = ['ex_' + L.hero].filter((id) => GEAR[id] && !s.vault.includes(id));
-    const ids = (kind === 'boss' ? [...own.slice(0, 2), ...general] : general).slice(0, 3);
+    const crew = shuffle(L.party.filter((m) => m.tag !== TAGS.shadow && m.id !== L.hero).map((m) => 'ex_' + m.id).filter((id) => GEAR[id] && !s.vault.includes(id)));
+    const ids = (kind === 'boss' ? [...own, ...crew.slice(0, 1), ...general] : general).slice(0, 3);
     if (!ids.length) {
       s.fragments += 5; this.persist();
       Redline.showBox('<h2>戰利品</h2><p>能拿的都拿過了。殘骸換成 5 個靈魂碎片。</p><button class="btn primary wide ok">繼續</button>');

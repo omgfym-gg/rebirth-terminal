@@ -697,7 +697,7 @@ const cutters = () => (hero().noCut ? [] : chains.filter((c) => !c.owner.dead &&
 
 const hero = () => heroes && heroes[who];
 const skill = () => hero().skills[skillIdx];
-const inkMax = () => Math.round(skill().len * run.up.ink * (hero().ink || 1) * (hero().inkBuff || 1) * (wears(hero(), 'ex_wukong') && lineShape(skill()) ? 1.5 : 1) * curse);
+const inkMax = () => Math.round(skill().len * run.up.ink * (hero().ink || 1) * (hero().inkBuff || 1) * (wears(hero(), 'ex_wukong') && lineShape(skill()) ? 1.5 : 1) * (wears(hero(), 'gungnir') ? 1.3 : 1) * (wears(hero(), 'faust') ? 1.4 : 1) * curse);
 function clearPath() { path = []; hits = []; hitAt = []; inside = new Set(); zz = new Map(); closed = false; drawing = false; crossMemo = null; updateUi(); }
 
 // ───── 畫線 ─────
@@ -1385,6 +1385,33 @@ const GEAR = {
     d: '穿上就能飛：出招後可以點戰場上任何地方飛過去，自己決定站哪。' },
   dracula: { n: '德古拉的斗篷', kind: '邪物', slot: 'charm', icon: '血', color: '#e04060', from: '吸血鬼傳說',
     d: '吸血鬼伯爵的披風：打出的傷害吸回 30% 生命。代價：每輪開始扣 1 生命（怕光）。', roundCost: 1 },
+  // 第二批通用裝備：讓每一世掉落的東西不會都一樣
+  mjolnir: { n: '雷神之鎚', kind: '神器', slot: 'weapon', icon: '鎚', color: '#80c0ff', from: '北歐神話',
+    d: '索爾的鎚子，丟出去一定命中：直線、衝刺招打中的第一個敵人多受 6 傷害。' },
+  kusanagi: { n: '草薙劍', kind: '神器', slot: 'weapon', icon: '劍', color: '#90e0a0', from: '日本三神器',
+    d: '日本武尊在火海裡用它割草開路：自由線、折線每一下 +2 傷害。' },
+  vajra: { n: '金剛杵', kind: '神器', slot: 'weapon', icon: '杵', color: '#ffd890', from: '佛教傳說',
+    d: '帝釋天打雷用的法器：畫圈、點選招每一下 +3 傷害。' },
+  gungnir: { n: '永恆之槍', kind: '神器', slot: 'weapon', icon: '槍', color: '#a0b0ff', from: '北歐神話',
+    d: '奧丁的槍岡格尼爾，擲出必中、還會自己飛回來：每一招的墨水 +30%。' },
+  aegis: { n: '埃癸斯神盾', kind: '神器', slot: 'charm', icon: '盾', color: '#e0e0a0', from: '希臘神話',
+    d: '雅典娜的神盾：每輪開始得 5 護盾。' },
+  peach: { n: '蟠桃', kind: '神器', slot: 'charm', icon: '桃', color: '#ff9cb0', from: '西遊記',
+    d: '王母娘娘的仙桃，吃了延年益壽：每輪開始回 3 生命。' },
+  tyrfing: { n: '魔劍提爾鋒', kind: '邪物', slot: 'weapon', icon: '魔', color: '#b04080', from: '北歐傳說',
+    d: '矮人被逼著打造、下了詛咒的劍，出鞘一定要見血：每一下 +3 傷害。代價：每輪開始扣 1 生命。', roundCost: 1 },
+  kitsunebi: { n: '九尾狐火', kind: '邪物', slot: 'weapon', icon: '狐', color: '#ff7040', from: '東亞妖怪傳說',
+    d: '九尾狐吐出的鬼火：打到的敵人燃燒 1 輪。代價：每輪開始扣 1 生命。', roundCost: 1 },
+  faust: { n: '浮士德的契約', kind: '邪物', slot: 'charm', icon: '契', color: '#d06040', from: '德國傳說',
+    d: '用靈魂跟惡魔梅菲斯特換來的力量：每一招的墨水 +40%。代價：每輪開始扣 1 生命。', roundCost: 1 },
+  wara: { n: '丑時參的稻草人', kind: '邪物', slot: 'charm', icon: '咒', color: '#c0a060', from: '日本詛咒',
+    d: '半夜把釘子釘進稻草人：每次受傷，隨機一個敵人也受 3 傷害。' },
+  pandora: { n: '潘朵拉的盒子', kind: '邪物', slot: 'charm', icon: '盒', color: '#a070d0', from: '希臘神話',
+    d: '打開就關不回去：每輪開始開一次盒，一半機率敵人全體各受 4 傷害，一半機率自己受 3。' },
+  monkeypaw: { n: '猴爪', kind: '邪物', slot: 'charm', icon: '爪', color: '#a08060', from: '英國怪談',
+    d: '能實現三個願望、代價卻很可怕的乾枯猴爪：每打倒一個敵人，全隊各回 3 生命。代價：每輪開始扣 1 生命。', roundCost: 1 },
+  gloryhand: { n: '光榮之手', kind: '邪物', slot: 'charm', icon: '手', color: '#f0e0a0', from: '歐洲傳說',
+    d: '用絞刑犯的手做的蠟燭台，點起來屋裡的人都睡死：每輪開始隨機一個一般敵人睡著（下次不能行動）。代價：每輪開始扣 1 生命。', roundCost: 1 },
   // 另外 10 位的專屬兵器
   ex_brigid: { n: '布麗姬的聖火', kind: '神器', slot: 'weapon', own: 'brigid', icon: '火', color: '#ff8a30', from: '凱爾特神話',
     d: '聖火之路：布麗姬直線、自由線畫過的地方燒一輪。敵人走過火路去攻擊，會燃燒 2 輪。' },
@@ -1492,6 +1519,13 @@ function gearResults(h, res) {
   if ((wears(h, 'ex_wukong') || wears(h, 'ex_houyi')) && lineShape(sk)) res = res.map((s) => (s.dmg && s.u.side === 'enemy' && !s.clone ? { ...s, dmg: s.dmg + 3 } : s));
   if (wears(h, 'ex_kuchisake') && sk.shape === 'dash') res = res.map((s) => (s.dmg && s.u.side === 'enemy' ? { ...s, dmg: s.dmg + (s.u.fear ? 6 : 3) } : s));
   if (wears(h, 'ex_mazu')) res = res.map((s) => (s.heal ? { ...s, heal: s.heal + 3 } : s));
+  const foeHit = (s) => s.dmg && s.u.side === 'enemy';
+  if (wears(h, 'mjolnir') && lineShape(sk)) { const i = res.findIndex(foeHit); if (i >= 0) res = res.map((s, k) => (k === i ? { ...s, dmg: s.dmg + 6 } : s)); }
+  if (wears(h, 'kusanagi') && freeShape(sk)) res = res.map((s) => (foeHit(s) ? { ...s, dmg: s.dmg + 2 } : s));
+  if (wears(h, 'vajra') && (sk.shape === 'circle' || sk.shape === 'tap')) res = res.map((s) => (foeHit(s) ? { ...s, dmg: s.dmg + 3 } : s));
+  if (wears(h, 'tyrfing')) res = res.map((s) => (foeHit(s) ? { ...s, dmg: s.dmg + 3 } : s));
+  if (wears(h, 'kitsunebi')) res = res.map((s) => (foeHit(s) ? { ...s, burn: Math.max(s.burn || 0, 1) } : s));
+  if (wears(h, 'monkeypaw')) res = res.map((s) => (foeHit(s) ? { ...s, killHeal: Math.max(s.killHeal || 0, 3) } : s));
   if (wears(h, 'muramasa') && freeShape(sk)) {
     const seen = new Map();
     res = res.map((s) => {
@@ -1564,7 +1598,20 @@ function gearNewRound(first) {
   zones = [];
   for (const e of foes || []) { e.link = null; e.trapped = false; }
   for (const h of heroes || []) h.rainUsed = false;
+  for (const h of heroes || []) if (!h.dead) {
+    if (wears(h, 'aegis')) apply({ u: h, shield: 5 });
+    if (wears(h, 'peach') && !first) apply({ u: h, heal: 3 });
+  }
   if (first) return;
+  for (const h of heroes) if (!h.dead) {
+    const live = foes.filter((e) => !e.dead);
+    if (wears(h, 'pandora') && live.length) {
+      if (Math.random() < 0.5) { float(h, '盒子：災厄飛向敵人', '#a070d0', 18); for (const e of live) tickDmg(e, 4, '#a070d0'); }
+      else if (h.hp > 1) { const v = Math.min(3, h.hp - 1); h.hp -= v; float(h, '盒子反噬 -' + v, '#a070d0', 18); }
+    }
+    const sleepy = live.filter((e) => !e.elite);
+    if (wears(h, 'gloryhand') && sleepy.length) { const e = sleepy[Math.floor(Math.random() * sleepy.length)]; e.stun = true; e.stunTxt = '睡死了'; float(e, '光榮之手：睡死了', '#f0e0a0', 18); }
+  }
   // 井中銅符：每輪開始全隊回 2
   for (const h of heroes) if (!h.dead && wears(h, 'ex_mazu')) for (const a of heroes) if (!a.dead) apply({ u: a, heal: 2 });
   // 邪物的代價：每輪開始扣生命（不會扣到倒下）
@@ -1575,6 +1622,7 @@ function gearNewRound(first) {
 }
 // 土地廟：附近的隊友受傷 -3
 function gearHurt(h, d) {
+  if (d > 0 && wears(h, 'wara')) { const live = foes.filter((e) => !e.dead); if (live.length) tickDmg(live[Math.floor(Math.random() * live.length)], 3, '#c0a060'); }
   const z = zones.find((z) => z.type === 'shrine' && dist(z, h) < 150);
   if (!z || d <= 0) return d;
   float(h, '土地廟 -3', '#ffc830', 16);
