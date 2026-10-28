@@ -1793,7 +1793,7 @@ function gearBox(store, done, doneText = '繼續', fixed = []) {
       return `<button class="btn opt gslot" data-h="${hid}" data-s="${sl}">${SLOT[sl]}：${it ? `<b style="color:${it.color}">${it.n}</b><br>${it.d}` : '<span class="muted">空的，點一下裝上</span>'}</button>`; }).join('')}</div>`).join('');
   const fix = fixed.map((f) => `<div class="gear-hero"><b style="color:${HEROES[f.id].color}">${HEROES[f.id].name}</b><span class="muted">（${f.tag || ''}・穿著原本的裝備，不能換）</span>
     ${f.gear.length ? f.gear.filter((id) => GEAR[id]).map((id) => `<p><b style="color:${GEAR[id].color}">${GEAR[id].n}</b>：${GEAR[id].d}</p>`).join('') : '<p class="muted">沒有裝備。</p>'}</div>`).join('');
-  showBox(`<h2>裝備</h2><p class="muted">背包 ${store.bag.length} 件。${store.note || ''}點欄位換裝。</p>${rows}${fix}<button class="btn primary wide gdone" style="margin-top:10px">${doneText}</button>`);
+  showBox(`<h2>裝備</h2><p class="muted">每人兩格：兵器加強出招，法寶護身（護盾、回血等），可以同時穿。背包 ${store.bag.length} 件。${store.note || ''}點欄位換裝。</p>${rows}${fix}<button class="btn primary wide gdone" style="margin-top:10px">${doneText}</button>`);
   document.querySelectorAll('.box .gslot').forEach((b) => b.onclick = () => gearPickFor(store, b.dataset.h, b.dataset.s, () => gearBox(store, done, doneText, fixed)));
   $('.box .gdone').onclick = () => { store.save(); done(); };
 }
@@ -1817,7 +1817,7 @@ function gearOffer(store, ids, title, next, nextText = '繼續') {
   if (!ids.length) return next();
   const forWho = (id) => GEAR[id].own ? HEROES[GEAR[id].own].name + '專屬' : GEAR[id].kind === '神器' ? '神族能用' : '魔族能用';
   showBox(`<h2>${title}</h2><p>選一件帶走：</p>
-    ${ids.map((id) => { const it = GEAR[id]; return `<button class="btn opt gget" data-id="${id}" style="border-color:${it.color}"><b style="color:${it.color}">${it.n}</b>（${it.rank}・${it.kind}・${SLOT[it.slot]}・${forWho(id)}）<br>${it.d}</button>`; }).join('')}`);
+    ${ids.map((id) => { const it = GEAR[id]; return `<button class="btn opt gget" data-id="${id}" style="border-color:${it.color}">【${SLOT[it.slot]}】<b style="color:${it.color}">${it.n}</b>（${it.rank}・${it.kind}・${forWho(id)}）<br>${it.d}</button>`; }).join('')}`);
   document.querySelectorAll('.box .gget').forEach((b) => b.onclick = () => {
     const id = b.dataset.id; store.bag.push(id);
     const hid = store.heroes.find((h) => canUse(h, id, store.anyKind && store.anyKind(h)) && !(store.eq[h] || {})[GEAR[id].slot]);

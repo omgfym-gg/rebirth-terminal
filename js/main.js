@@ -469,16 +469,19 @@ const Game = {
     const pool = Object.keys(GEAR).filter((id) => !GEAR[id].own && !s.vault.includes(id) && Redline.canUse(L.hero, id, L.form === 'human'));
     const weights = kind === 'boss' ? (f >= 10 ? [0, 5, 30, 45, 20] : [0, 20, 40, 30, 10]) : f >= 6 ? [15, 30, 35, 17, 3] : [40, 35, 20, 5, 0];
     const roll = () => { let r = Math.random() * 100; for (let t = 0; t < 5; t++) if ((r -= weights[t]) < 0) return t; return 0; };
+    // 三格固定至少一件兵器、一件法寶（法寶＝護身的寶物，跟兵器各佔一格，可以同時穿）
     const general = [];
-    for (let k = 0; k < 3; k++) {
-      const t = roll(), left = pool.filter((id) => !general.includes(id));
+    for (const sl of shuffle(['weapon', 'charm', Math.random() < 0.5 ? 'weapon' : 'charm'])) {
+      const t = roll(), left = pool.filter((id) => !general.includes(id) && GEAR[id].slot === sl);
       const order = [t, ...[0, 1, 2, 3, 4].filter((x) => x < t).reverse(), ...[0, 1, 2, 3, 4].filter((x) => x > t)];
       for (const x of order) { const c = shuffle(left.filter((id) => GEAR[id].tier === x)); if (c.length) { general.push(c[0]); break; } }
     }
     // 魔王：今世的專屬兵器優先，再隨機補一把隊友（不含前世之影）的專屬兵器
     const own = ['ex_' + L.hero].filter((id) => GEAR[id] && !s.vault.includes(id));
     const crew = shuffle(L.party.filter((m) => m.tag !== TAGS.shadow && m.id !== L.hero).map((m) => 'ex_' + m.id).filter((id) => GEAR[id] && !s.vault.includes(id)));
-    const ids = (kind === 'boss' ? [...own, ...crew.slice(0, 1), ...general] : general).slice(0, 3);
+    // 魔王那格一般裝備優先給法寶，免得三件都是兵器
+    const charmFirst = [...general.filter((id) => GEAR[id].slot === 'charm'), ...general.filter((id) => GEAR[id].slot !== 'charm')];
+    const ids = (kind === 'boss' ? [...own, ...crew.slice(0, 1), ...charmFirst] : general).slice(0, 3);
     if (!ids.length) {
       s.fragments += 5; this.persist();
       Redline.showBox('<h2>戰利品</h2><p>能拿的都拿過了。殘骸換成 5 個靈魂碎片。</p><button class="btn primary wide ok">繼續</button>');
