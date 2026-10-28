@@ -198,7 +198,7 @@ const HEROES = {
         run: (en) => en.map((u) => ({ u, dmg: 5 })) },
       { name: '石化凝視', xc: { d: '每個敵人多疊 1 層石化', fx: (res, n) => res.map((s) => (s.stone ? { ...s, stone: s.stone + n } : s)) }, shape: 'line', len: 600, cd: 1, anim: 's1', desc: '直線上的敵人各受 4 傷害、多疊 1 層石化。',
         run: (en) => en.map((u) => ({ u, dmg: 4, stone: 1 })) },
-      { name: '戈耳工之怒', shape: 'circle', len: 700, cd: 3, anim: 'ult', desc: '圈住的敵人各受 6 傷害、多疊 2 層石化；已經是石像的直接碎掉，改受 20。',
+      { name: '石像崩碎', shape: 'circle', len: 700, cd: 3, anim: 'ult', desc: '圈住的敵人各受 6 傷害、多疊 2 層石化；已經是石像的直接碎掉，改受 20。',
         run: (en) => en.map((u) => (u.stun ? { u, dmg: 20, unstun: true } : { u, dmg: 6, stone: 2 })) },
     ],
   },
@@ -426,7 +426,7 @@ const GROWTH = {
   medusa: {
     sk: { name: '生死之血', shape: 'tap', max: 2, any: true, len: 1, cd: 2, anim: 's1', fx: 0, desc: '右邊血管的血救人、左邊的血殺人：點最多 2 個目標，隊友回 10 生命，敵人受 8 傷害。',
       run: (en, al) => [...al.map((u) => ({ u, heal: 10 })), ...en.map((u) => ({ u, dmg: 8 }))] },
-    3: [{ n: '粉碎', d: '戈耳工之怒打碎石像改成 28 傷害（原本 20）。', mod: atSk(2, (s) => (s.unstun ? { ...s, dmg: s.dmg + 8 } : s)) },
+    3: [{ n: '粉碎', d: '石像崩碎打碎石像改成 28 傷害（原本 20）。', mod: atSk(2, (s) => (s.unstun ? { ...s, dmg: s.dmg + 8 } : s)) },
         { n: '毒牙', d: '萬蛇噬咬每一下 +2 傷害。', mod: plus(0, 2) }],
     6: [{ n: '一眼成石', d: '石化只要 2 層就變石像，全隊都算。', setup: () => { run.stoneAt = 2; } },
         { n: '冷眼', d: '石化凝視冷卻少 1 輪。', setup: cdDown(1) }],
@@ -1472,7 +1472,7 @@ const GEAR = {
   ex_anubis: { n: '冥界天秤', kind: '邪物', slot: 'weapon', own: 'anubis', icon: '秤', color: '#f0c040', from: '埃及神話',
     d: '秤心：阿努比斯打完，生命剩不到四分之一的一般敵人直接被吞掉（精英除外）。代價：每吞一個自己扣 2 生命。' },
   ex_hachi: { n: '白色寬簷帽', kind: '邪物', slot: 'weapon', own: 'hachi', icon: '帽', color: '#e8e8ff', from: '日本網路怪談',
-    d: '高處俯視：八尺大人的線打到的敵人被嚇得往後退一大段，要多走好遠才打得到人。代價：每輪開始扣 1 生命。', roundCost: 1 },
+    d: '從高處往下看：八尺大人每一下 +4 傷害，打恐懼中的敵人再 +4。代價：每輪開始扣 1 生命。', roundCost: 1 },
   ex_medusa: { n: '石化之眼', kind: '邪物', slot: 'weapon', own: 'medusa', icon: '蛇', color: '#70d060', from: '希臘神話',
     d: '最後一眼：美杜莎的線畫到哪裡停，那附近的敵人各疊 1 層石化。代價：每輪開始扣 1 生命。', roundCost: 1 },
   ex_horusshadow: { n: '碎裂的荷魯斯之眼', kind: '邪物', slot: 'weapon', own: 'horusshadow', icon: '瞳', color: '#e0b850', from: '埃及神話',
@@ -1568,6 +1568,7 @@ function gearResults(h, res) {
   if (wears(h, 'ex_guangong') && lineShape(sk)) res = res.map((s) => (s.dmg && s.u.side === 'enemy' ? { ...s, dmg: s.dmg + 3 } : s));
   if ((wears(h, 'ex_wukong') || wears(h, 'ex_houyi')) && lineShape(sk)) res = res.map((s) => (s.dmg && s.u.side === 'enemy' && !s.clone ? { ...s, dmg: s.dmg + 3 } : s));
   if (wears(h, 'ex_kuchisake') && sk.shape === 'dash') res = res.map((s) => (s.dmg && s.u.side === 'enemy' ? { ...s, dmg: s.dmg + (s.u.fear ? 6 : 3) } : s));
+  if (wears(h, 'ex_hachi')) res = res.map((s) => (s.dmg && s.u.side === 'enemy' ? { ...s, dmg: s.dmg + (s.u.fear ? 8 : 4) } : s));
   if (wears(h, 'ex_mazu')) res = res.map((s) => (s.heal ? { ...s, heal: s.heal + 3 } : s));
   const foeHit = (s) => s.dmg && s.u.side === 'enemy';
   const plus = gstat(h, 'dmg') + (freeShape(sk) && (wears(h, 'kusanagi') || wears(h, 'tsuchigumo')) ? 4 : 0) + ((sk.shape === 'circle' || sk.shape === 'tap') && wears(h, 'vajra') ? 5 : 0);
@@ -1630,7 +1631,6 @@ async function gearAfterMove(h, sk) {
   if (wears(h, 'ex_hanako')) for (const e of en) { e.trapped = true; float(e, '關進隔間', '#b060e0', 18); }
   if (wears(h, 'ex_horusshadow') && en.length) addRes(h, en.length);
   if (wears(h, 'ex_medusa') && path.length) { const end = path[path.length - 1]; for (const e of foes) if (!e.dead && dist(center(e), end) < 110) addStone(e, 1); fxPush({ type: 'ring', x: end.x, y: end.y, color: '#70d060', dur: 600 }); }
-  if (wears(h, 'ex_hachi') && en.length) await Promise.all(en.map((e) => { float(e, '嚇退', '#e8e8ff', 18); return moveTo(e, { x: Math.min(555, e.x + 110), y: e.y }, 0.9).then(() => { e.face = -1; }); }));
   if (wears(h, 'ex_yukionna') && sk.shape !== 'circle' && sk.shape !== 'tap' && path.length > 1) zones.push({ type: 'frost', pts: densify(path, 10).map((p) => ({ x: p.x, y: p.y + 46 })) });
   if (wears(h, 'qiankun') && sk.shape === 'circle' && closed) zones.push({ type: 'ring', poly: path.slice(), done: new Set() });
   if (!wears(h, 'hagoromo')) return;
@@ -1870,7 +1870,7 @@ function statusRows(u) {
     if (u.link && !u.link.dead) r.push(['姻緣簿', `和${u.link.name}綁在一起：其中一個受傷，另一個也受一半。`]);
     if (u.confused) r.push(['錯亂', '被亂點鴛鴦或迷路了：下一次行動改打自己的同伴。']);
     if (u.trapped) r.push(['關在隔間', '這一輪走不出去，只能打身邊很近的人。']);
-    if (u.stun) r.push(['石像', '被美杜莎石化：下一次輪到他時不能行動。戈耳工之怒打石像會碎掉重擊。']);
+    if (u.stun) r.push(['石像', '被美杜莎石化：下一次輪到他時不能行動。石像崩碎打石像會碎掉重擊。']);
     if (u.stone) r.push([`石化 ${u.stone}/3`, '疊到 3 層變成石像，下次不能行動。']);
     if (u.burn) r.push([`燃燒 ${u.burn} 輪`, '每輪開始受 3 傷害。布麗姬打燃燒中的敵人每一下多 4。']);
     if (u.fear) r.push(['恐懼', '下一次攻擊傷害減半。']);
