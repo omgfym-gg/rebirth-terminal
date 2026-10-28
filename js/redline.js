@@ -697,7 +697,7 @@ const cutters = () => (hero().noCut ? [] : chains.filter((c) => !c.owner.dead &&
 
 const hero = () => heroes && heroes[who];
 const skill = () => hero().skills[skillIdx];
-const inkMax = () => Math.round(skill().len * run.up.ink * (hero().ink || 1) * (hero().inkBuff || 1) * (wears(hero(), 'ex_wukong') && lineShape(skill()) ? 1.5 : 1) * (wears(hero(), 'gungnir') ? 1.3 : 1) * (wears(hero(), 'faust') ? 1.4 : 1) * curse);
+const inkMax = () => Math.round(skill().len * run.up.ink * (hero().ink || 1) * (hero().inkBuff || 1) * (wears(hero(), 'ex_wukong') && lineShape(skill()) ? 1.5 : 1) * (1 + gstat(hero(), 'ink')) * curse);
 function clearPath() { path = []; hits = []; hitAt = []; inside = new Set(); zz = new Map(); closed = false; drawing = false; crossMemo = null; updateUi(); }
 
 // ───── 畫線 ─────
@@ -1373,45 +1373,91 @@ const GEAR = {
     d: '一線牽：月老一招打到的敵人兩兩綁上紅線（到下一輪為止），其中一個受傷，另一個也受一半。' },
   ex_yukionna: { n: '冰之吐息', kind: '邪物', slot: 'weapon', own: 'yukionna', icon: '霜', color: '#a0e0ff', from: '日本妖怪',
     d: '雪地：雪女直線、自由線畫過的地方結冰一輪。第一個走過冰地去攻擊的敵人會被凍住、打不出來，冰也跟著碎掉。' },
-  yata: { n: '八咫鏡', kind: '神器', slot: 'weapon', icon: '鏡', color: '#ffe070', from: '日本三神器',
-    d: '照出天照大神的鏡子：直線碰到戰場邊緣會反射一次，剩下的墨水全部用來反彈。' },
-  ruyi: { n: '芭蕉扇', kind: '神器', slot: 'weapon', icon: '扇', color: '#ffb040', from: '西遊記',
-    d: '鐵扇公主的扇子，一搧就起狂風：線變粗 50%，比較容易掃到敵人。' },
-  qiankun: { n: '乾坤圈', kind: '神器', slot: 'weapon', icon: '圈', color: '#ffd060', from: '封神演義',
-    d: '哪吒的金圈：畫的圈會留在場上一輪，敵人走進圈裡攻擊時受 6 傷害。' },
-  muramasa: { n: '妖刀村正', kind: '邪物', slot: 'weapon', icon: '妖', color: '#c060ff', from: '日本妖刀傳說',
-    d: '出鞘必見血：自由線同一個敵人每多穿一次，那一下再 +3 傷害。代價：每多穿一次自己扣 1 生命。' },
-  hagoromo: { n: '天女的羽衣', kind: '神器', slot: 'charm', icon: '羽', color: '#c0f0ff', from: '日本傳說',
-    d: '穿上就能飛：出招後可以點戰場上任何地方飛過去，自己決定站哪。' },
-  dracula: { n: '德古拉的斗篷', kind: '邪物', slot: 'charm', icon: '血', color: '#e04060', from: '吸血鬼傳說',
+  // 通用裝備，分五個等級（tier 0 白・普通 → 4 橘・傳說）。st 是通用數值：dmg 每一下加傷害、ink 墨水加成、shield 每輪護盾、regen 每輪回血
+  // ── 神器・兵器 ──
+  peachwood: { n: '桃木劍', kind: '神器', slot: 'weapon', tier: 0, icon: '桃', from: '民間信仰', st: { dmg: 1 },
+    d: '道士驅邪用的桃木劍：每一下 +1 傷害。' },
+  coinsword: { n: '銅錢劍', kind: '神器', slot: 'weapon', tier: 0, icon: '錢', from: '民間信仰', st: { ink: 0.1 },
+    d: '銅錢串成的法劍：墨水 +10%。' },
+  bronze: { n: '青銅古劍', kind: '神器', slot: 'weapon', tier: 1, icon: '銅', from: '上古傳說', st: { dmg: 2 },
+    d: '祭祀天神用的古劍：每一下 +2 傷害。' },
+  zhaoyao: { n: '照妖鏡', kind: '神器', slot: 'weapon', tier: 1, icon: '照', from: '封神演義', st: { ink: 0.2 },
+    d: '照出妖怪原形的寶鏡：墨水 +20%。' },
+  ruyi: { n: '芭蕉扇', kind: '神器', slot: 'weapon', tier: 2, icon: '扇', from: '西遊記', st: { dmg: 1 },
+    d: '鐵扇公主的扇子，一搧就起狂風：線變粗 50%，比較容易掃到敵人；每一下 +1 傷害。' },
+  kusanagi: { n: '草薙劍', kind: '神器', slot: 'weapon', tier: 2, icon: '劍', from: '日本三神器',
+    d: '日本武尊在火海裡用它割草開路：自由線、折線每一下 +4 傷害。' },
+  vajra: { n: '金剛杵', kind: '神器', slot: 'weapon', tier: 2, icon: '杵', from: '佛教傳說',
+    d: '帝釋天打雷用的法器：畫圈、點選招每一下 +5 傷害。' },
+  yata: { n: '八咫鏡', kind: '神器', slot: 'weapon', tier: 3, icon: '鏡', from: '日本三神器', st: { dmg: 2 },
+    d: '照出天照大神的鏡子：直線碰到戰場邊緣會反射一次，剩下的墨水全部用來反彈；每一下 +2 傷害。' },
+  qiankun: { n: '乾坤圈', kind: '神器', slot: 'weapon', tier: 3, icon: '圈', from: '封神演義', st: { dmg: 2 },
+    d: '哪吒的金圈：畫的圈會留在場上一輪，敵人走進圈裡攻擊時受 10 傷害；每一下 +2 傷害。' },
+  mjolnir: { n: '雷神之鎚', kind: '神器', slot: 'weapon', tier: 3, icon: '鎚', from: '北歐神話',
+    d: '索爾的鎚子，丟出去一定命中：直線、衝刺招打中的第一個敵人多受 10 傷害。' },
+  gungnir: { n: '永恆之槍', kind: '神器', slot: 'weapon', tier: 3, icon: '槍', from: '北歐神話', st: { dmg: 2, ink: 0.3 },
+    d: '奧丁的槍岡格尼爾，擲出必中：墨水 +30%，每一下 +2 傷害。' },
+  xuanyuan: { n: '軒轅劍', kind: '神器', slot: 'weapon', tier: 4, icon: '軒', from: '中華上古傳說', st: { dmg: 5, ink: 0.2 },
+    d: '黃帝斬妖的聖道之劍：每一下 +5 傷害，墨水 +20%。' },
+  // ── 神器・法寶 ──
+  pingan: { n: '平安符', kind: '神器', slot: 'charm', tier: 0, icon: '符', from: '民間信仰', st: { shield: 2 },
+    d: '廟裡求來的平安符：每輪開始得 2 護盾。' },
+  incense: { n: '香火袋', kind: '神器', slot: 'charm', tier: 0, icon: '香', from: '民間信仰', st: { regen: 1 },
+    d: '裝著廟裡香灰的小袋子：每輪開始回 1 生命。' },
+  jadepei: { n: '護身玉珮', kind: '神器', slot: 'charm', tier: 1, icon: '玉', from: '民間信仰', st: { regen: 2 },
+    d: '戴久了會替主人擋災的玉：每輪開始回 2 生命。' },
+  bell: { n: '開光銅鈴', kind: '神器', slot: 'charm', tier: 1, icon: '鈴', from: '民間信仰', st: { shield: 3 },
+    d: '鈴聲讓邪祟不敢靠近：每輪開始得 3 護盾。' },
+  peach: { n: '蟠桃', kind: '神器', slot: 'charm', tier: 2, icon: '桃', from: '西遊記', st: { regen: 4 },
+    d: '王母娘娘的仙桃，吃了延年益壽：每輪開始回 4 生命。' },
+  goldbell: { n: '金鐘罩', kind: '神器', slot: 'charm', tier: 2, icon: '鐘', from: '少林傳說', st: { shield: 5 },
+    d: '刀槍不入的護體金鐘：每輪開始得 5 護盾。' },
+  aegis: { n: '埃癸斯神盾', kind: '神器', slot: 'charm', tier: 3, icon: '盾', from: '希臘神話', st: { shield: 8 },
+    d: '雅典娜的神盾：每輪開始得 8 護盾。' },
+  hagoromo: { n: '天女的羽衣', kind: '神器', slot: 'charm', tier: 3, icon: '羽', from: '日本傳說', st: { shield: 3 },
+    d: '穿上就能飛：出招後可以點戰場上任何地方飛過去，自己決定站哪；每輪開始得 3 護盾。' },
+  nuwa: { n: '女媧石', kind: '神器', slot: 'charm', tier: 4, icon: '媧', from: '中華上古傳說', st: { regen: 5, shield: 5 },
+    d: '女媧補天剩下的五色石：每輪開始回 5 生命、得 5 護盾。' },
+  // ── 邪物・兵器 ──
+  boneknife: { n: '骨刀', kind: '邪物', slot: 'weapon', tier: 0, icon: '骨', from: '民間怪談', st: { dmg: 1 },
+    d: '用不知道誰的骨頭磨成的刀：每一下 +1 傷害。' },
+  coffinnail: { n: '棺材釘', kind: '邪物', slot: 'weapon', tier: 0, icon: '釘', from: '民間怪談', st: { ink: 0.1 },
+    d: '從老棺材上拔下來的長釘：墨水 +10%。' },
+  soulscythe: { n: '噬魂鐮', kind: '邪物', slot: 'weapon', tier: 1, icon: '鐮', from: '死神傳說', st: { dmg: 2 },
+    d: '收割靈魂的鐮刀：每一下 +2 傷害。' },
+  lantern: { n: '鬼火燈籠', kind: '邪物', slot: 'weapon', tier: 1, icon: '燈', from: '日本妖怪傳說', st: { ink: 0.2 },
+    d: '提燈小僧手上那盞青色燈籠：墨水 +20%。' },
+  tsuchigumo: { n: '土蜘蛛毒絲', kind: '邪物', slot: 'weapon', tier: 2, icon: '蛛', from: '日本妖怪傳說',
+    d: '源賴光斬殺的巨大蜘蛛吐的絲：自由線、折線每一下 +4 傷害。' },
+  kitsunebi: { n: '九尾狐火', kind: '邪物', slot: 'weapon', tier: 2, icon: '狐', from: '東亞妖怪傳說', st: { dmg: 2 },
+    d: '九尾狐吐出的鬼火：每一下 +2 傷害，打到的敵人燃燒 1 輪。代價：每輪開始扣 1 生命。', roundCost: 1 },
+  muramasa: { n: '妖刀村正', kind: '邪物', slot: 'weapon', tier: 3, icon: '妖', from: '日本妖刀傳說', st: { dmg: 2 },
+    d: '出鞘必見血：每一下 +2 傷害；自由線同一個敵人每多穿一次，那一下再 +3。代價：每多穿一次自己扣 1 生命。' },
+  tyrfing: { n: '魔劍提爾鋒', kind: '邪物', slot: 'weapon', tier: 3, icon: '魔', from: '北歐傳說', st: { dmg: 5 },
+    d: '矮人被逼著打造、下了詛咒的劍，出鞘一定要見血：每一下 +5 傷害。代價：每輪開始扣 1 生命。', roundCost: 1 },
+  chiyou: { n: '蚩尤戰斧', kind: '邪物', slot: 'weapon', tier: 4, icon: '蚩', from: '中華上古傳說', st: { dmg: 6, ink: 0.2 },
+    d: '和黃帝大戰涿鹿的戰神之斧：每一下 +6 傷害，墨水 +20%。代價：每輪開始扣 1 生命。', roundCost: 1 },
+  // ── 邪物・法寶 ──
+  blackcat: { n: '黑貓鈴鐺', kind: '邪物', slot: 'charm', tier: 0, icon: '貓', from: '民間怪談', st: { shield: 2 },
+    d: '黑貓脖子上掉下來的鈴鐺：每輪開始得 2 護盾。' },
+  paperman: { n: '紙紮人', kind: '邪物', slot: 'charm', tier: 0, icon: '紙', from: '民間習俗', st: { regen: 1 },
+    d: '燒給死人的紙紮替身：每輪開始回 1 生命。' },
+  skullbeads: { n: '骷髏念珠', kind: '邪物', slot: 'charm', tier: 1, icon: '珠', from: '密教傳說', st: { shield: 3 },
+    d: '一顆顆骷髏串成的念珠：每輪開始得 3 護盾。' },
+  wara: { n: '丑時參的稻草人', kind: '邪物', slot: 'charm', tier: 1, icon: '咒', from: '日本詛咒',
+    d: '半夜把釘子釘進稻草人：每次受傷，隨機一個敵人受 3 傷害。' },
+  monkeypaw: { n: '猴爪', kind: '邪物', slot: 'charm', tier: 2, icon: '爪', from: '英國怪談',
+    d: '能實現三個願望、代價卻很可怕的乾枯猴爪：每打倒一個敵人，全隊各回 4 生命。代價：每輪開始扣 1 生命。', roundCost: 1 },
+  faust: { n: '浮士德的契約', kind: '邪物', slot: 'charm', tier: 2, icon: '契', from: '德國傳說', st: { ink: 0.4 },
+    d: '用靈魂跟惡魔梅菲斯特換來的力量：墨水 +40%。代價：每輪開始扣 1 生命。', roundCost: 1 },
+  dracula: { n: '德古拉的斗篷', kind: '邪物', slot: 'charm', tier: 3, icon: '血', from: '吸血鬼傳說',
     d: '吸血鬼伯爵的披風：打出的傷害吸回 30% 生命。代價：每輪開始扣 1 生命（怕光）。', roundCost: 1 },
-  // 第二批通用裝備：讓每一世掉落的東西不會都一樣
-  mjolnir: { n: '雷神之鎚', kind: '神器', slot: 'weapon', icon: '鎚', color: '#80c0ff', from: '北歐神話',
-    d: '索爾的鎚子，丟出去一定命中：直線、衝刺招打中的第一個敵人多受 6 傷害。' },
-  kusanagi: { n: '草薙劍', kind: '神器', slot: 'weapon', icon: '劍', color: '#90e0a0', from: '日本三神器',
-    d: '日本武尊在火海裡用它割草開路：自由線、折線每一下 +2 傷害。' },
-  vajra: { n: '金剛杵', kind: '神器', slot: 'weapon', icon: '杵', color: '#ffd890', from: '佛教傳說',
-    d: '帝釋天打雷用的法器：畫圈、點選招每一下 +3 傷害。' },
-  gungnir: { n: '永恆之槍', kind: '神器', slot: 'weapon', icon: '槍', color: '#a0b0ff', from: '北歐神話',
-    d: '奧丁的槍岡格尼爾，擲出必中、還會自己飛回來：每一招的墨水 +30%。' },
-  aegis: { n: '埃癸斯神盾', kind: '神器', slot: 'charm', icon: '盾', color: '#e0e0a0', from: '希臘神話',
-    d: '雅典娜的神盾：每輪開始得 5 護盾。' },
-  peach: { n: '蟠桃', kind: '神器', slot: 'charm', icon: '桃', color: '#ff9cb0', from: '西遊記',
-    d: '王母娘娘的仙桃，吃了延年益壽：每輪開始回 3 生命。' },
-  tyrfing: { n: '魔劍提爾鋒', kind: '邪物', slot: 'weapon', icon: '魔', color: '#b04080', from: '北歐傳說',
-    d: '矮人被逼著打造、下了詛咒的劍，出鞘一定要見血：每一下 +3 傷害。代價：每輪開始扣 1 生命。', roundCost: 1 },
-  kitsunebi: { n: '九尾狐火', kind: '邪物', slot: 'weapon', icon: '狐', color: '#ff7040', from: '東亞妖怪傳說',
-    d: '九尾狐吐出的鬼火：打到的敵人燃燒 1 輪。代價：每輪開始扣 1 生命。', roundCost: 1 },
-  faust: { n: '浮士德的契約', kind: '邪物', slot: 'charm', icon: '契', color: '#d06040', from: '德國傳說',
-    d: '用靈魂跟惡魔梅菲斯特換來的力量：每一招的墨水 +40%。代價：每輪開始扣 1 生命。', roundCost: 1 },
-  wara: { n: '丑時參的稻草人', kind: '邪物', slot: 'charm', icon: '咒', color: '#c0a060', from: '日本詛咒',
-    d: '半夜把釘子釘進稻草人：每次受傷，隨機一個敵人也受 3 傷害。' },
-  pandora: { n: '潘朵拉的盒子', kind: '邪物', slot: 'charm', icon: '盒', color: '#a070d0', from: '希臘神話',
-    d: '打開就關不回去：每輪開始開一次盒，一半機率敵人全體各受 4 傷害，一半機率自己受 3。' },
-  monkeypaw: { n: '猴爪', kind: '邪物', slot: 'charm', icon: '爪', color: '#a08060', from: '英國怪談',
-    d: '能實現三個願望、代價卻很可怕的乾枯猴爪：每打倒一個敵人，全隊各回 3 生命。代價：每輪開始扣 1 生命。', roundCost: 1 },
-  gloryhand: { n: '光榮之手', kind: '邪物', slot: 'charm', icon: '手', color: '#f0e0a0', from: '歐洲傳說',
+  pandora: { n: '潘朵拉的盒子', kind: '邪物', slot: 'charm', tier: 3, icon: '盒', from: '希臘神話',
+    d: '打開就關不回去：每輪開始開一次盒，一半機率敵人全體各受 6 傷害，一半機率自己受 3。' },
+  gloryhand: { n: '光榮之手', kind: '邪物', slot: 'charm', tier: 3, icon: '手', from: '歐洲傳說',
     d: '用絞刑犯的手做的蠟燭台，點起來屋裡的人都睡死：每輪開始隨機一個一般敵人睡著（下次不能行動）。代價：每輪開始扣 1 生命。', roundCost: 1 },
+  solomon: { n: '所羅門王的指環', kind: '邪物', slot: 'charm', tier: 4, icon: '環', from: '中東傳說', st: { shield: 5 },
+    d: '能使喚七十二柱魔神的指環：每輪開始得 5 護盾，並讓一個一般敵人錯亂（下次行動改打自己的同伴）。代價：每輪開始扣 1 生命。', roundCost: 1 },
   // 另外 10 位的專屬兵器
   ex_brigid: { n: '布麗姬的聖火', kind: '神器', slot: 'weapon', own: 'brigid', icon: '火', color: '#ff8a30', from: '凱爾特神話',
     d: '聖火之路：布麗姬直線、自由線畫過的地方燒一輪。敵人走過火路去攻擊，會燃燒 2 輪。' },
@@ -1444,9 +1490,13 @@ const GEAR = {
   ex_kuchisake: { n: '生鏽的裁縫剪', kind: '邪物', slot: 'weapon', own: 'kuchisake', icon: '剪', color: '#f06070', from: '日本都市傳說',
     d: '口罩下那道裂口就是它剪的：口裂女的衝刺招每一下 +3，打恐懼中的敵人再 +3。代價：每輪開始扣 1 生命。', roundCost: 1 },
 };
+// 等級：白・普通、綠・精良、藍・優良、紫・卓越、橘・傳說。專屬兵器都是傳說；color 改成等級的顏色，原本的顏色留給線（line）
+const TIER = [{ n: '普通', c: '#e6e6e6' }, { n: '精良', c: '#5ad16a' }, { n: '優良', c: '#4aa0ff' }, { n: '卓越', c: '#b673ff' }, { n: '傳說', c: '#ff9a30' }];
+for (const it of Object.values(GEAR)) { if (it.own) it.tier = 4; it.line = it.color; it.color = TIER[it.tier].c; it.rank = TIER[it.tier].n; }
 // 裝備清單：背包和誰身上穿什麼由呼叫的人存（試玩存在手機、主遊戲存在這一世的存檔），戰鬥裡每位神魔帶著 gear 陣列上場
 const gearOf = (h) => (h.gear || []).filter((id) => GEAR[id]);
 const wears = (h, id) => !!h && gearOf(h).includes(id);
+const gstat = (h, k) => (h ? gearOf(h).reduce((a, id) => a + ((GEAR[id].st || {})[k] || 0), 0) : 0);
 // anyKind：這一世為人，神器、邪物都能用（專屬兵器還是只有本人能用）
 const canUse = (heroId, id, anyKind) => { const it = GEAR[id]; return it.own ? it.own === heroId : anyKind || it.kind === (SIDE[heroId] === '神' ? '神器' : '邪物'); };
 const hitR = () => HIT_R * (wears(hero(), 'ruyi') ? 1.5 : 1) * (skill().wide ? 1.5 : 1);
@@ -1520,12 +1570,11 @@ function gearResults(h, res) {
   if (wears(h, 'ex_kuchisake') && sk.shape === 'dash') res = res.map((s) => (s.dmg && s.u.side === 'enemy' ? { ...s, dmg: s.dmg + (s.u.fear ? 6 : 3) } : s));
   if (wears(h, 'ex_mazu')) res = res.map((s) => (s.heal ? { ...s, heal: s.heal + 3 } : s));
   const foeHit = (s) => s.dmg && s.u.side === 'enemy';
-  if (wears(h, 'mjolnir') && lineShape(sk)) { const i = res.findIndex(foeHit); if (i >= 0) res = res.map((s, k) => (k === i ? { ...s, dmg: s.dmg + 6 } : s)); }
-  if (wears(h, 'kusanagi') && freeShape(sk)) res = res.map((s) => (foeHit(s) ? { ...s, dmg: s.dmg + 2 } : s));
-  if (wears(h, 'vajra') && (sk.shape === 'circle' || sk.shape === 'tap')) res = res.map((s) => (foeHit(s) ? { ...s, dmg: s.dmg + 3 } : s));
-  if (wears(h, 'tyrfing')) res = res.map((s) => (foeHit(s) ? { ...s, dmg: s.dmg + 3 } : s));
+  const plus = gstat(h, 'dmg') + (freeShape(sk) && (wears(h, 'kusanagi') || wears(h, 'tsuchigumo')) ? 4 : 0) + ((sk.shape === 'circle' || sk.shape === 'tap') && wears(h, 'vajra') ? 5 : 0);
+  if (plus) res = res.map((s) => (foeHit(s) && !s.clone ? { ...s, dmg: s.dmg + plus } : s));
+  if (wears(h, 'mjolnir') && lineShape(sk)) { const i = res.findIndex(foeHit); if (i >= 0) res = res.map((s, k) => (k === i ? { ...s, dmg: s.dmg + 10 } : s)); }
   if (wears(h, 'kitsunebi')) res = res.map((s) => (foeHit(s) ? { ...s, burn: Math.max(s.burn || 0, 1) } : s));
-  if (wears(h, 'monkeypaw')) res = res.map((s) => (foeHit(s) ? { ...s, killHeal: Math.max(s.killHeal || 0, 3) } : s));
+  if (wears(h, 'monkeypaw')) res = res.map((s) => (foeHit(s) ? { ...s, killHeal: Math.max(s.killHeal || 0, 4) } : s));
   if (wears(h, 'muramasa') && freeShape(sk)) {
     const seen = new Map();
     res = res.map((s) => {
@@ -1599,18 +1648,20 @@ function gearNewRound(first) {
   for (const e of foes || []) { e.link = null; e.trapped = false; }
   for (const h of heroes || []) h.rainUsed = false;
   for (const h of heroes || []) if (!h.dead) {
-    if (wears(h, 'aegis')) apply({ u: h, shield: 5 });
-    if (wears(h, 'peach') && !first) apply({ u: h, heal: 3 });
+    const sh = gstat(h, 'shield'), rg = gstat(h, 'regen');
+    if (sh) apply({ u: h, shield: sh });
+    if (rg && !first) apply({ u: h, heal: rg });
   }
   if (first) return;
   for (const h of heroes) if (!h.dead) {
-    const live = foes.filter((e) => !e.dead);
+    const live = foes.filter((e) => !e.dead), plain = live.filter((e) => !e.elite);
     if (wears(h, 'pandora') && live.length) {
-      if (Math.random() < 0.5) { float(h, '盒子：災厄飛向敵人', '#a070d0', 18); for (const e of live) tickDmg(e, 4, '#a070d0'); }
+      if (Math.random() < 0.5) { float(h, '盒子：災厄飛向敵人', '#a070d0', 18); for (const e of live) tickDmg(e, 6, '#a070d0'); }
       else if (h.hp > 1) { const v = Math.min(3, h.hp - 1); h.hp -= v; float(h, '盒子反噬 -' + v, '#a070d0', 18); }
     }
-    const sleepy = live.filter((e) => !e.elite);
-    if (wears(h, 'gloryhand') && sleepy.length) { const e = sleepy[Math.floor(Math.random() * sleepy.length)]; e.stun = true; e.stunTxt = '睡死了'; float(e, '光榮之手：睡死了', '#f0e0a0', 18); }
+    const pick = () => plain.filter((e) => !e.dead)[Math.floor(Math.random() * plain.filter((e) => !e.dead).length)];
+    if (wears(h, 'gloryhand') && pick()) { const e = pick(); e.stun = true; e.stunTxt = '睡死了'; float(e, '光榮之手：睡死了', '#f0e0a0', 18); }
+    if (wears(h, 'solomon') && pick()) { const e = pick(); e.confused = true; float(e, '指環：錯亂', '#ff9a30', 18); }
   }
   // 井中銅符：每輪開始全隊回 2
   for (const h of heroes) if (!h.dead && wears(h, 'ex_mazu')) for (const a of heroes) if (!a.dead) apply({ u: a, heal: 2 });
@@ -1660,7 +1711,7 @@ function ringHit(e) {
   for (const z of zones) {
     if (z.type !== 'ring' || z.done.has(e) || !inPoly(center(e), z.poly)) continue;
     z.done.add(e);
-    e.hp -= 6; e.flash = performance.now() + 200; float(e, '乾坤圈 6', '#ffd060');
+    e.hp -= 10; e.flash = performance.now() + 200; float(e, '乾坤圈 10', '#ffd060');
     fxPush({ type: 'ring', x: e.x, y: e.y - 46, color: '#ffd060', dur: 500 });
     if (e.hp <= 0) { e.hp = 0; e.dead = true; e.deadAt = performance.now(); return false; }
   }
@@ -1670,7 +1721,7 @@ function ringHit(e) {
 // ───── 裝備的畫面 ─────
 function gearLine(h) {
   const w = gearOf(h).find((id) => GEAR[id].slot === 'weapon');
-  const color = { muramasa: '#c060ff', ruyi: '#ffb040', yata: '#ffe070' }[w] || (w && GEAR[w].own ? GEAR[w].color : '#ff3048');
+  const color = { muramasa: '#c060ff', ruyi: '#ffb040', yata: '#ffe070' }[w] || (w && GEAR[w].own ? GEAR[w].line : '#ff3048');
   return { color, w: w === 'ruyi' ? 1.6 : 1 };
 }
 function gearDrawZones(now) {
@@ -1728,7 +1779,7 @@ function gearWho(h) {
   ids.forEach((id) => {
     const it = GEAR[id], b = document.createElement('button');
     b.className = 'btn gear-chip'; b.style.borderColor = it.color; b.innerHTML = `<span style="color:${it.color}">${it.icon}</span>`;
-    b.onclick = () => tip(`<b>${it.n}</b>：${it.d}`);
+    b.onclick = () => tip(`<b style="color:${it.color}">${it.n}</b>（${it.rank}）：${it.d}`);
     $('.who').appendChild(b);
   });
 }
@@ -1747,11 +1798,11 @@ function gearBox(store, done, doneText = '繼續', fixed = []) {
   $('.box .gdone').onclick = () => { store.save(); done(); };
 }
 function gearPickFor(store, hid, sl, back) {
-  const list = store.bag.filter((id) => GEAR[id] && GEAR[id].slot === sl && canUse(hid, id, store.anyKind && store.anyKind(hid)));
+  const list = store.bag.filter((id) => GEAR[id] && GEAR[id].slot === sl && canUse(hid, id, store.anyKind && store.anyKind(hid))).sort((a, b) => GEAR[b].tier - GEAR[a].tier);
   const holder = (id) => store.heroes.find((o) => (store.eq[o] || {})[sl] === id && o !== hid);
   showBox(`<h2>${HEROES[hid].name}・${SLOT[sl]}</h2>
     ${list.length ? list.map((id) => { const it = GEAR[id], o = holder(id);
-      return `<button class="btn opt gpick" data-id="${id}"><b style="color:${it.color}">${it.n}</b>（${it.kind}${it.from ? '・' + it.from : ''}）${o ? `<span class="muted">・現在在${HEROES[o].name}身上</span>` : ''}<br>${it.d}</button>`; }).join('') : '<p class="muted">倉庫裡沒有這一格能用的裝備。</p>'}
+      return `<button class="btn opt gpick" data-id="${id}" style="border-color:${it.color}"><b style="color:${it.color}">${it.n}</b>（${it.rank}・${it.kind}${it.from ? '・' + it.from : ''}）${o ? `<span class="muted">・現在在${HEROES[o].name}身上</span>` : ''}<br>${it.d}</button>`; }).join('') : '<p class="muted">倉庫裡沒有這一格能用的裝備。</p>'}
     <button class="btn opt gpick" data-id="">卸下</button><button class="btn wide gback" style="margin-top:8px">返回</button>`);
   document.querySelectorAll('.box .gpick').forEach((b) => b.onclick = () => {
     const id = b.dataset.id, o = id && holder(id);
@@ -1766,7 +1817,7 @@ function gearOffer(store, ids, title, next, nextText = '繼續') {
   if (!ids.length) return next();
   const forWho = (id) => GEAR[id].own ? HEROES[GEAR[id].own].name + '專屬' : GEAR[id].kind === '神器' ? '神族能用' : '魔族能用';
   showBox(`<h2>${title}</h2><p>選一件帶走：</p>
-    ${ids.map((id) => { const it = GEAR[id]; return `<button class="btn opt gget" data-id="${id}"><b style="color:${it.color}">${it.n}</b>（${it.kind}・${SLOT[it.slot]}・${forWho(id)}）<br>${it.d}</button>`; }).join('')}`);
+    ${ids.map((id) => { const it = GEAR[id]; return `<button class="btn opt gget" data-id="${id}" style="border-color:${it.color}"><b style="color:${it.color}">${it.n}</b>（${it.rank}・${it.kind}・${SLOT[it.slot]}・${forWho(id)}）<br>${it.d}</button>`; }).join('')}`);
   document.querySelectorAll('.box .gget').forEach((b) => b.onclick = () => {
     const id = b.dataset.id; store.bag.push(id);
     const hid = store.heroes.find((h) => canUse(h, id, store.anyKind && store.anyKind(h)) && !(store.eq[h] || {})[GEAR[id].slot]);
@@ -2407,7 +2458,7 @@ function renderHelp() {
   <p><b>因果債</b>：斬殺、吞掉這類直接把敵人帶走的招，每帶走一個欠 1 點債。債太多，追債人會找上門。</p>
   <p><b>精英、魔王</b>的特性寫在每層開場，也可以點他們看。典獄長每次行動都先甩出的鎖鏈會剪斷直線和自由線，畫圈不受影響。</p>
   <p><b>裝備</b>：每位神魔有兵器、法寶兩格。神族只能用神器，魔族只能用邪物，專屬兵器只有本人能用。精英層打完可以從三件裡選一件，魔王層有機會掉專屬兵器（試玩版第 1 層也會掉一件）。裝備會改變線的畫法，名字上面的小方塊就是身上的裝備。</p>
-  ${Object.values(GEAR).map((it) => `<p><b>${it.n}</b>（${it.kind}・${SLOT[it.slot]}${it.own ? `・${HEROES[it.own].name}專屬` : ''}）：${it.d}</p>`).join('')}`;
+  ${Object.values(GEAR).sort((a, b) => b.tier - a.tier).map((it) => `<p><b style="color:${it.color}">${it.n}</b>（${it.rank}・${it.kind}・${SLOT[it.slot]}${it.own ? `・${HEROES[it.own].name}專屬` : ''}）：${it.d}</p>`).join('')}`;
 }
 window.__s = () => ({ run, heroes, foes, hits, path, chains, who, skillIdx, busy });
 // 測試用：直接觸發倒下、敵人行動、出招
