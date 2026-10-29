@@ -399,6 +399,11 @@ const JOB_ART = {
   'hachi-ex': { mark: 'hat', atk: 's1', melee: false, color: '#e8e8ff', h: 82, w: { idle: 60, walk: 66, hurt: 78, s1: 100, s2: 81, ult: 142 } },
   'yukionna-ex': { mark: 'snow', atk: 's1', melee: false, color: '#a0e0ff', h: 82, w: { idle: 83, walk: 91, hurt: 93, s1: 112, s2: 87, ult: 103 } },
   'medusa-ex': { mark: 'snake', atk: 's2', melee: true, color: '#70d060', h: 82, w: { idle: 77, walk: 77, hurt: 86, s1: 109, s2: 92, ult: 112 } },
+  'wukong-ex': { mark: 'cloud', atk: 's1', melee: true, color: '#ffc040', h: 82, w: { idle: 107, walk: 107, hurt: 108, s1: 128, s2: 114, ult: 140 } },
+  'houyi-ex': { mark: 'sun', atk: 's1', melee: false, color: '#ff8040', h: 82, w: { idle: 76, walk: 85, hurt: 85, s1: 98, s2: 97, ult: 108 } },
+  'mazu-ex': { mark: 'wave', atk: 's1', melee: false, color: '#ff6a80', h: 82, w: { idle: 71, walk: 71, hurt: 99, s1: 123, s2: 107, ult: 116 } },
+  'yama-ex': { mark: 'book', atk: 's1', melee: false, color: '#8a70ff', h: 82, w: { idle: 115, walk: 107, hurt: 122, s1: 135, s2: 146, ult: 138 } },
+  'kuchisake-ex': { mark: 'scissors', atk: 's1', melee: true, color: '#f06070', h: 82, w: { idle: 94, walk: 95, hurt: 111, s1: 102, s2: 99, ult: 143 } },
 };
 for (const [id, j] of Object.entries(JOB_ART)) {
   const sheet = (n) => [n + '.png', j.w[n], j.h];
@@ -436,7 +441,7 @@ function artAnim(job, name) {
 }
 
 // 圖檔更新時改這個，手機才不會一直用快取的舊圖
-const ASSET_V = '20261026a';
+const ASSET_V = '20261029a';
 const ArtImages = {};
 function artSheet(job, sheet) {
   const a = ART[job], spec = a && a.sheets[sheet];

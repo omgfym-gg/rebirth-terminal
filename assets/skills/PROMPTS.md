@@ -8,7 +8,7 @@ PURE BLACK background (#000000) everywhere, no gradient, no ground, no text, no 
 Layout: exactly 3 rows, evenly spaced, with clear black gaps between rows and between cells.
 Each row = a 5-frame battle hit EFFECT animation of one skill, left to right, equal square cells:
   frame 1 start, frame 2 grow, frame 3 big IMPACT flash, frame 4 sparks/debris flying out, frame 5 fade.
-Effect only: no caster, no target, no icon frame. Glowing bright colors on black, like a fighting-game hit effect.
+Effect only: no caster, no target, no icon frame, no borders, no grid lines. Glowing bright colors on black, like a fighting-game hit effect.
 Main color: {COLOR}.
 Row 1: {S1}
 Row 2: {S2}
@@ -30,5 +30,10 @@ Row 3: {ULT}
 | medusa | snake green #70d060 | 蛇髮: biting green snakes lunging | 石化凝視: a green eye beam turning things to grey stone cracks | 雅典娜的詛咒: an Athena owl & shield symbol with a grey stone shatter explosion |
 | horusshadow | dark gold #e0b850 | 權杖金光: a golden light beam from a scepter | 暗影之眼: a dark shadow Eye of Horus shooting dark bolts | 天空之神的審判: a falcon wing spread with golden sun disk and falling eye shards |
 | redgirl | crimson #ff4050 | 牽手: a small red hand grabbing, red mist puff | 紅霧: rolling red mountain fog ring | 深山迷途: a dark forest path with red fog, spiraling lost footprints |
+| wukong | gold #ffc040 | 金箍橫掃: a golden staff wide horizontal sweep arc with speed lines | 筋斗雲: a small golden cloud dashing with a streak trail | 大鬧天宮: a giant golden staff slamming down, shockwave and golden clouds bursting |
+| houyi | sun orange #ff8040 | 烈日之箭: a single flaming arrow streak hitting, fire burst | 連珠箭: three quick arrows in a row hitting, white feather sparks | 九日墜落: a blazing sun shattering into falling fire shards |
+| mazu | pink coral #ff6a80 + sea blue | 慈航普渡: a soft ocean wave splash with healing sparkles | 護身銅符: a round bronze talisman forming a glowing shield ring | 海神顯聖: a huge ocean wave crashing with pink light rays |
+| yama | violet #8a70ff | 判官硃筆: a red ink brush stroke slash mark | 閻羅審判: an open glowing ledger book flashing purple light | 索命勾魂: a ghostly purple chain hook swinging and pulling, purple wisps |
+| kuchisake | coral red #f06070 | 利剪突襲: a quick scissors snip X-slash | 百米狂奔: a fast dash streak with dust puffs | 撕下口罩: a big crossing scissors slash, red X burst with sparks |
 
 上傳：GitHub 網頁 → 分支 claude/project-thread-x2dd05 → 資料夾 assets/skills/gemini/ → 檔名 <id>.png（例：guangong.png）。
