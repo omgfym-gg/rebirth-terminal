@@ -2166,11 +2166,25 @@ function drawUnit(u, now) {
     const lunging = u.lunge && now - u.lunge < 360;
     const lx = lunging ? -30 * Math.sin((now - u.lunge) / 360 * Math.PI) : 0;
     const pose = u.flash > now ? 2 : lunging ? 1 : 0;
-    if (u.frozen) g.filter = 'saturate(0.3) brightness(1.3) hue-rotate(160deg)';
-    else if (u.tint) g.filter = 'sepia(1) saturate(6) hue-rotate(-50deg) brightness(0.7) contrast(1.3)';
+    const statue = u.stun && !u.stunTxt;
+    // 狀態直接畫在身上：凍住偏藍、石像整隻變灰、燃燒偏紅、現出原形描金邊
+    let f = u.frozen ? 'saturate(0.3) brightness(1.3) hue-rotate(160deg)' : statue ? 'grayscale(1) brightness(0.95) contrast(1.25)' : u.tint ? 'sepia(1) saturate(6) hue-rotate(-50deg) brightness(0.7) contrast(1.3)' : u.burn ? 'sepia(0.35) saturate(1.6) brightness(1.05)' : '';
+    if (u.exposed && !u.dead) { const c = Math.floor(now / 160) % 2 ? '#ffc040' : '#fff0a0'; f += ` drop-shadow(3px 0 0 ${c}) drop-shadow(-3px 0 0 ${c}) drop-shadow(0 -3px 0 ${c})`; }
+    if (f) g.filter = f;
     const bob = u.moving ? Math.abs(Math.sin(now / 90)) * 5 : 0;
-    drawArt(g, 'u:' + u.sprite, 'pose', pose, x + lx * (u.face === 1 ? -1 : 1), y - bob, 1, { flip: u.faceL ? u.face === 1 : u.face !== 1, white });
+    // 恐懼：身體一直發抖
+    const shake = u.fear && !u.dead && !statue && !u.frozen ? (Math.floor(now / 50) % 2 ? 2 : -2) : 0;
+    const sx = x + lx * (u.face === 1 ? -1 : 1) + shake, sy = y - bob, opt = { flip: u.faceL ? u.face === 1 : u.face !== 1, white };
+    drawArt(g, 'u:' + u.sprite, 'pose', pose, sx, sy, 1, opt);
     g.filter = 'none';
+    // 石化層數：從腳往上慢慢變灰
+    if (u.stone && !statue && !u.dead) {
+      const [w, h] = UNIT_ART[u.sprite], ch = Math.round(h * u.stone / 3);
+      g.save(); g.beginPath(); g.rect(sx - w, sy - ch, w * 2, ch + 4); g.clip();
+      g.filter = 'grayscale(1) brightness(0.95) contrast(1.25)'; drawArt(g, 'u:' + u.sprite, 'pose', pose, sx, sy, 1, opt); g.restore();
+      g.fillStyle = '#d8d8d8'; for (let i = -w / 2 + 4; i < w / 2 - 4; i += 8) g.fillRect(Math.round(sx + i), Math.round(sy - ch + ((i * 7) & 4)), 4, 4);
+    }
+    if (!u.dead) statusFx(u, sx, sy, now, statue);
   }
   g.globalAlpha = 1;
   if (u.dead) return;
@@ -2198,6 +2212,93 @@ function drawUnit(u, now) {
     let tx = u.x - tags.reduce((a, t) => a + t[1].length * 14 + 4, 0) / 2;
     for (const [, t, c] of tags) { g.fillStyle = '#000'; g.fillRect(tx - 1, top + 9, t.length * 14 + 2, 16); g.fillStyle = c; g.fillText(t, tx, top + 22); tx += t.length * 14 + 4; }
     g.textAlign = 'center';
+  }
+}
+
+// 敵人身上的狀態特效（全部用 4px 方塊畫，手機上也看得出來）
+function px(x, y, c, n = 1) { g.fillStyle = c; g.fillRect(Math.round(x / 4) * 4, Math.round(y / 4) * 4, 4 * n, 4); }
+function pixGlyph(rows, x, y, c, s = 4) { g.fillStyle = c; rows.forEach((r, j) => { for (let i = 0; i < r.length; i++) if (r[i] === '#') g.fillRect(Math.round(x + i * s), Math.round(y + j * s), s, s); }); }
+const GLYPH_Z = ['####', '..#.', '.#..', '####'], GLYPH_Q = ['.##.', '#..#', '..#.', '.#..', '....', '.#..'], GLYPH_STAR = ['.#.', '###', '.#.'];
+function statusFx(u, x, y, now, statue) {
+  const [w, h] = UNIT_ART[u.sprite], top = y - h, seed = foes.indexOf(u) * 13.7;
+  // 被封印的靈魂：藍色小魂繞著他飄
+  const held = heroes.filter((hh) => hh.sealed && hh.sealedBy === u).length;
+  for (let i = 0; i < held; i++) { const a = now / 700 + i * Math.PI * 2 / held, ox = Math.cos(a) * (w / 2 + 10), oy = Math.sin(a) * 10; const c = Math.sin(a) > 0 ? '#a0d0ff' : '#6090d0'; px(x + ox - 4, top + h * 0.45 + oy, c, 2); px(x + ox - 4, top + h * 0.45 + oy - 4, c, 2); px(x + ox, top + h * 0.45 + oy - 8, '#e0f0ff'); }
+  // 燃燒：身上冒火，輪數越多火越多，再加往上飄的火星
+  if (u.burn) {
+    const n = Math.min(2 + u.burn, 5);
+    g.globalAlpha = 0.9;
+    for (let i = 0; i < n; i++) {
+      const fx = x - w * 0.4 + (w * 0.8) * (i + 0.5) / n, fy = y - h * (0.05 + ((i * 37 + 11) % 45) / 100), rows = 3 + Math.round(2 + 2 * Math.sin(now / 90 + i * 1.9));
+      for (let k = 0; k < rows; k++) {
+        const t = k / rows, bw = t < 0.3 ? 3 : t < 0.65 ? 2 : 1, sway = Math.round(Math.sin(now / 110 + k * 0.7 + i) * t * 1.5) * 4;
+        const cx = fx + sway - bw * 2, cy = fy - k * 4;
+        px(cx, cy, t > 0.7 ? '#ff3a10' : '#ff7a20', bw);
+        if (t < 0.5 && bw > 1) px(cx + 4, cy, '#ffe060');
+      }
+    }
+    g.globalAlpha = 1;
+    for (let i = 0; i < 4; i++) { const k = (now / 700 + i * 0.27 + seed) % 1; g.globalAlpha = 1 - k; px(x + Math.sin(i * 2.3 + k * 4) * w * 0.4, y - h * 0.3 - k * h * 0.9, k < 0.5 ? '#ffd040' : '#ff6020'); }
+    g.globalAlpha = 1;
+  }
+  // 石像：灰色身體上加裂痕，偶爾掉碎石
+  if (statue) {
+    g.fillStyle = '#7a7a7a'; g.fillRect(x - w / 2 - 4, y - 6, w + 8, 10); g.fillStyle = '#a8a8a8'; g.fillRect(x - w / 2 - 4, y - 6, w + 8, 3); g.fillStyle = '#505050'; g.fillRect(x - w / 2 - 4, y + 2, w + 8, 2);
+    g.fillStyle = '#3a3a3a';
+    for (let c = 0; c < 3; c++) { let cx = x - w * 0.25 + c * w * 0.25, cy = top + h * (0.2 + c * 0.2); for (let k = 0; k < 5; k++) { g.fillRect(Math.round(cx), Math.round(cy), 4, 6); cx += (k % 2 ? -4 : 4); cy += 5; } }
+    const k = (now / 900 + seed) % 1; g.globalAlpha = 1 - k; px(x + w * 0.3, top + h * 0.5 + k * h * 0.5, '#909090'); px(x - w * 0.2, top + h * 0.7 + ((k + 0.5) % 1) * h * 0.3, '#b0b0b0'); g.globalAlpha = 1;
+  }
+  // 睡著：頭上飄 Z；被黏住：身上滴黏液
+  if (u.stun && u.stunTxt) {
+    if (u.stunTxt === '黏住了') { for (let i = 0; i < 5; i++) { const dx = x - w * 0.4 + i * w * 0.2, len = 2 + ((now / 300 + i * 1.7) % 3); g.fillStyle = '#90e050'; g.fillRect(Math.round(dx), Math.round(top + h * 0.35), 6, len * 4); g.fillRect(Math.round(dx) - 1, Math.round(top + h * 0.35 + len * 4), 8, 6); } }
+    else for (let i = 0; i < 3; i++) { const k = (now / 1400 + i / 3) % 1; g.globalAlpha = k < 0.8 ? 1 : (1 - k) * 5; pixGlyph(GLYPH_Z, x + w * 0.3 + k * 22, top + 10 - k * 34, '#e0e8ff', 3 + Math.round(k * 2)); }
+    g.globalAlpha = 1;
+  }
+  // 凍住：整隻包在冰塊裡
+  if (u.frozen) {
+    g.fillStyle = 'rgba(170,225,255,0.28)'; g.fillRect(x - w / 2 - 6, top - 6, w + 12, h + 8);
+    g.fillStyle = '#d8f4ff'; g.fillRect(x - w / 2 - 6, top - 6, w + 12, 4); g.fillRect(x - w / 2 - 6, top - 6, 4, h + 8); g.fillRect(x + w / 2 + 2, top - 6, 4, h + 8);
+    g.fillStyle = '#ffffff'; g.fillRect(x - w / 2, top, 4, 16); g.fillRect(x - w / 2 + 6, top, 10, 4);
+    if (Math.floor(now / 400) % 3 === 0) px(x + w * 0.3, top + h * 0.3, '#ffffff');
+  } else if (u.frost) {
+    // 冰霜：身邊飄雪花，腳下結霜
+    for (let i = 0; i < u.frost * 2; i++) { const k = (now / 1600 + i * 0.37 + seed) % 1; px(x - w * 0.5 + ((i * 29) % 100) / 100 * w, top - 10 + k * (h + 10), i % 2 ? '#ffffff' : '#a0e0ff'); }
+    g.fillStyle = '#c8f0ff'; for (let i = -w / 2; i < w / 2; i += 8) g.fillRect(Math.round(x + i), y - 4 - ((i * 3) & 4), 6, 4 + ((i * 3) & 4));
+  }
+  // 恐懼：腳下冒紫黑色的霧，頭邊冒冷汗
+  if (u.fear) {
+    for (let i = 0; i < 5; i++) { const k = (now / 1000 + i * 0.2) % 1; g.globalAlpha = 0.7 * (1 - k); px(x - w * 0.4 + i * w * 0.2 + Math.sin(k * 6 + i) * 6, y - k * h * 0.6, i % 2 ? '#6030a0' : '#a070e0', 2); }
+    g.globalAlpha = 1;
+    const k = (now / 800) % 1; px(x + w * 0.4, top + 14 + k * 14, '#b0e0ff', 2); px(x + w * 0.4, top + 10 + k * 14, '#ffffff');
+  }
+  // 錯亂：頭上轉圈的星星
+  if (u.confused) for (let i = 0; i < 3; i++) { const a = now / 300 + i * Math.PI * 2 / 3; pixGlyph(GLYPH_STAR, x + Math.cos(a) * (w * 0.5 + 6) - 6, top + 8 + Math.sin(a) * 8, Math.sin(a) > 0 ? '#ffe040' : '#c0a020'); }
+  // 迷途：頭上紅色問號，層數越多越多個
+  if (u.lost) for (let i = 0; i < u.lost; i++) { const a = -now / 900 + i * Math.PI * 2 / u.lost; pixGlyph(GLYPH_Q, x + Math.cos(a) * (w / 2 + 10) - 6, top + h * 0.4 + Math.sin(a) * 12 - 9, Math.sin(a) > 0 ? '#ff4050' : '#a02030', 3); }
+  // 紅線：腰上纏著一圈紅線
+  if (u.red) {
+    const cy = top + h * 0.55;
+    for (let i = 0; i <= 24; i++) { const t = i / 24, ex = x - w * 0.45 + t * w * 0.9, ey = cy + Math.sin(t * Math.PI) * 8 + Math.sin(now / 150 + t * 8) * 2; px(ex, ey, '#ff3060'); }
+    const sw = Math.sin(now / 250) * 4; px(x + w * 0.45, cy + 4, '#ff3060'); px(x + w * 0.45 + 4 + sw, cy + 8, '#ff3060'); px(x + w * 0.45 + 6 + sw * 1.5, cy + 12, '#ff5c8d');
+  }
+  // 七日之期：白色的瞄準框框住他
+  if (u.mark) {
+    const p = Math.floor(now / 300) % 2 ? 0 : 3, l = x - w / 2 - 6 - p, r = x + w / 2 + 6 + p, tp = top - 6 - p, bt = y + 2 + p;
+    g.fillStyle = '#e8e8ff';
+    for (const [cx, cy, sx2, sy2] of [[l, tp, 1, 1], [r, tp, -1, 1], [l, bt, 1, -1], [r, bt, -1, -1]]) { g.fillRect(sx2 > 0 ? cx : cx - 14, sy2 > 0 ? cy : cy - 4, 14, 4); g.fillRect(sx2 > 0 ? cx : cx - 4, sy2 > 0 ? cy : cy - 14, 4, 14); }
+  }
+  // 現出原形：身邊閃金光
+  if (u.exposed) for (let i = 0; i < 3; i++) { const k = (now / 500 + i / 3) % 1, a = i * 2.1 + seed; g.globalAlpha = 1 - k; pixGlyph(GLYPH_STAR, x + Math.cos(a) * w * 0.5 - 6, top + h * 0.5 + Math.sin(a) * h * 0.4 - k * 10, '#ffd040'); }
+  g.globalAlpha = 1;
+  // 生死簿：兩團紫色鬼火繞著他
+  if (u.book) for (let i = 0; i < 2; i++) { const a = now / 600 + i * Math.PI, ox = x + Math.cos(a) * (w / 2 + 8), oy = top + h * 0.3 + Math.sin(a) * 8, fl = Math.floor(now / 120 + i) % 2; px(ox - 8, oy, '#5030b0', 4); px(ox - 4, oy - 4, '#8a70ff', 2); px(ox - 4, oy - 8, '#8a70ff', 2); px(ox - 4 + fl * 4, oy - 12, '#c0b0ff'); px(ox - fl * 4, oy - 16, '#e0d8ff'); }
+  // 關在隔間：前面一排紫色隔板
+  if (u.trapped) {
+    g.fillStyle = 'rgba(120,60,170,0.85)';
+    const l = x - w / 2 - 8, r = x + w / 2 + 8;
+    g.fillRect(l, top - 8, r - l, 6); g.fillRect(l, y - 6, r - l, 6);
+    for (let bx = l; bx <= r - 5; bx += Math.max(14, (r - l) / 4)) g.fillRect(Math.round(bx), top - 8, 5, h + 8);
+    g.fillRect(r - 5, top - 8, 5, h + 8);
   }
 }
 
