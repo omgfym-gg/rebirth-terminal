@@ -2150,6 +2150,9 @@ function heroFrame(h, now) {
   return [h.anim.a.sheet, i];
 }
 
+// 殘骸魔王比一般神魔大一圈
+const REMNANT_SCALE = 1.4;
+
 function drawUnit(u, now) {
   if (u.dead && u.side === 'enemy') { const k = (now - u.deadAt) / 600; if (k >= 1) return; g.globalAlpha = 1 - k; }
   if (u.dead && u.side === 'ally') return drawSoul(u, now);
@@ -2168,13 +2171,17 @@ function drawUnit(u, now) {
     const pose = u.flash > now ? 2 : lunging ? 1 : 0;
     if (u.frozen) g.filter = 'saturate(0.3) brightness(1.3) hue-rotate(160deg)';
     else if (u.tint) g.filter = 'sepia(1) saturate(6) hue-rotate(-50deg) brightness(0.7) contrast(1.3)';
+    // 前任神魔的殘骸：借可玩神魔的圖，染成發黑的紫色，和玩家那一位分得出來
+    else if (u.heroArt) g.filter = 'grayscale(0.6) sepia(0.7) hue-rotate(220deg) saturate(2.4) brightness(0.62) contrast(1.35)';
     const bob = u.moving ? Math.abs(Math.sin(now / 90)) * 5 : 0;
-    drawArt(g, 'u:' + u.sprite, 'pose', pose, x + lx * (u.face === 1 ? -1 : 1), y - bob, 1, { flip: u.faceL ? u.face === 1 : u.face !== 1, white });
+    const bx = x + lx * (u.face === 1 ? -1 : 1), flip = u.faceL ? u.face === 1 : u.face !== 1;
+    if (u.heroArt) drawArt(g, u.heroArt, pose === 2 ? 'hurt' : pose === 1 ? 'punch' : 'pose', pose ? 1 : 0, bx, y - bob, REMNANT_SCALE, { flip, white });
+    else drawArt(g, 'u:' + u.sprite, 'pose', pose, bx, y - bob, 1, { flip, white });
     g.filter = 'none';
   }
   g.globalAlpha = 1;
   if (u.dead) return;
-  const top = u.y - (u.side === 'ally' ? ART[u.art].sheets.pose[2] : UNIT_ART[u.sprite][1]) - 12;
+  const top = u.y - (u.side === 'ally' ? ART[u.art].sheets.pose[2] : u.heroArt ? ART[u.heroArt].sheets.pose[2] * REMNANT_SCALE : UNIT_ART[u.sprite][1]) - 12;
   g.fillStyle = '#000'; g.fillRect(u.x - 30, top - 2, 60, 9);
   g.fillStyle = u.side === 'ally' ? '#5fd35f' : '#e05050'; g.fillRect(u.x - 29, top - 1, 58 * u.hp / u.maxHp, 7);
   g.font = 'bold 15px sans-serif'; g.textAlign = 'center';
@@ -2188,7 +2195,7 @@ function drawUnit(u, now) {
     if (aimed) { g.fillStyle = Math.floor(now / 250) % 2 ? '#ff4050' : '#ffb0b0'; g.fillRect(u.x - 52, top - 26, 6, 16); g.fillRect(u.x - 52, top - 7, 6, 5); }
   } else {
     // 敵人頭上只放本名，要打誰看「說明」
-    g.fillStyle = u.boss ? '#ffb040' : u.elite ? '#ffd080' : '#ff8a8a'; g.fillText(u.name, u.x, top - 8);
+    g.fillStyle = u.heroArt ? '#c890ff' : u.boss ? '#ffb040' : u.elite ? '#ffd080' : '#ff8a8a'; g.fillText(u.name, u.x, top - 8);
   }
   if (u.side === 'enemy') {
     // 身上的狀態排成一列小字

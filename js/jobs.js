@@ -382,7 +382,7 @@ function describePassive(p, g = '能量') {
   if (p.dog) out.push('引魂犬生命 +10、攻擊 +3');
   if (p.enemyAtk) out.push(`所有敵人攻擊 -${p.enemyAtk}`);
   if (p.healBoost) out.push(`治療效果 +${pct(p.healBoost - 1)}`);
-  if (p.fragPerKill) out.push(`每擊倒一個敵人，多得 ${p.fragPerKill} 個靈魂碎片`);
+  if (p.fragPerKill) out.push(`每擊倒一個敵人，多得 ${p.fragPerKill} 個記憶碎片`);
   if (p.debtHeal) out.push('每突破一層，因果債 -1');
   return out.join('；');
 }
