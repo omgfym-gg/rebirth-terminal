@@ -1812,18 +1812,28 @@ function gearPickFor(store, hid, sl, back) {
   });
   $('.box .gback').onclick = back;
 }
-// 掉落：從 ids 裡選一件放進背包；那一格空著就直接裝上，接著可以整理裝備
+// 掉落：從 ids 裡選一件放進背包，再自己選要給誰裝上，接著可以整理裝備
 function gearOffer(store, ids, title, next, nextText = '繼續') {
   if (!ids.length) return next();
   const forWho = (id) => GEAR[id].own ? HEROES[GEAR[id].own].name + '專屬' : GEAR[id].kind === '神器' ? '神族能用' : '魔族能用';
   showBox(`<h2>${title}</h2><p>選一件帶走：</p>
     ${ids.map((id) => { const it = GEAR[id]; return `<button class="btn opt gget" data-id="${id}" style="border-color:${it.color}">【${SLOT[it.slot]}】<b style="color:${it.color}">${it.n}</b>（${it.rank}・${it.kind}・${forWho(id)}）<br>${it.d}</button>`; }).join('')}`);
   document.querySelectorAll('.box .gget').forEach((b) => b.onclick = () => {
-    const id = b.dataset.id; store.bag.push(id);
-    const hid = store.heroes.find((h) => canUse(h, id, store.anyKind && store.anyKind(h)) && !(store.eq[h] || {})[GEAR[id].slot]);
-    if (hid) { store.eq[hid] = store.eq[hid] || {}; store.eq[hid][GEAR[id].slot] = id; }
-    store.save();
-    gearBox(store, next, nextText);
+    const id = b.dataset.id; store.bag.push(id); store.save();
+    gearGive(store, id, () => gearBox(store, next, nextText));
+  });
+}
+// 拿到的裝備先進背包，玩家自己點要給誰裝上（或先收著）
+function gearGive(store, id, back) {
+  const it = GEAR[id], sl = it.slot, can = store.heroes.filter((h) => canUse(h, id, store.anyKind && store.anyKind(h)));
+  showBox(`<h2>${SLOT[sl]}：<b style="color:${it.color}">${it.n}</b></h2><p class="muted">已放進背包。要給誰裝上？</p>
+    ${can.map((h) => { const cur = GEAR[(store.eq[h] || {})[sl]];
+      return `<button class="btn opt ggive" data-h="${h}"><b style="color:${HEROES[h].color}">${HEROES[h].name}</b>・${cur ? `換下<b style="color:${cur.color}">${cur.n}</b>` : '這格空著'}</button>`; }).join('') || '<p class="muted">這一隊沒有人能用，先收在背包。</p>'}
+    <button class="btn wide ggive" data-h="" style="margin-top:8px">先放背包</button>`);
+  document.querySelectorAll('.box .ggive').forEach((b) => b.onclick = () => {
+    const h = b.dataset.h;
+    if (h) { store.eq[h] = store.eq[h] || {}; store.eq[h][sl] = id; store.save(); }
+    back();
   });
 }
 // 換了裝備，場上的神魔也要更新（例如出招說明、線的樣子）
