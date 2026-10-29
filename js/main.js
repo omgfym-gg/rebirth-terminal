@@ -150,11 +150,13 @@ const Game = {
     this.persist();
     this.story([
       '你的生命體徵已歸零。',
-      '歡迎來到「靈魂結算終端」。',
-      '人間的祈禱與詛咒堆積如山，神界與魔界都缺人手。',
-      '你被分配為「轉生外包職員」。',
-      '每一世你會成為一位神魔，爬一座十層的塔。你死過的每一世，都會變成「前世之影」陪你上場。',
-      '請選擇升仙、入魔，或者繼續為人。祝你這一世工作順利。',
+      '這裡是「靈魂結算終端」。不過，董事會的名冊上已經沒有你了。',
+      '沒有補給的靈魂，只能往結算塔上爬。',
+      '一隻穿紅西裝的兔子在你手腕上繫了一條紅線：「我是人資月老。死了也沒關係，線會把你拉回來。」',
+      '塔裡守樓層的，是被資遣的前輩，大家叫他們「呆帳靈魂」。打倒他們會掉出記憶碎片。',
+      '你死過的每一世，都會變成「前世之影」陪你上場。',
+      '塔頂有你簽過的那份合約。拿回來，才能真正解約。',
+      '請選擇升仙、入魔，或者繼續為人。',
     ], () => this.showRebirth(), { speaker: '終端廣播', sprite: null });
   },
 
@@ -342,8 +344,9 @@ const Game = {
       ORIGINS[hero] ? `${H.name}：${ORIGINS[hero][1]}` : `${H.name}・${H.role}`,
       ...party.slice(1).map((m) => m.tag === TAGS.shadow ? `第 ${m.life} 世的你，${HEROES[m.id].name}的影子，站到了你身後。` : `終端派來的同事${HEROES[m.id].name}朝你點點頭。`),
       ...lines,
-      `眼前是一座十層的塔。第 5、10 層有魔王，第 3、6、9 層有精英。`,
-    ], () => this.fight(), { speaker: '轉生櫃台', sprite: FORMS[form].sprite });
+      '月老把紅線重新繫在你的手腕上：「去吧，死了線會把你拉回來。」',
+      `眼前是結算塔。這一世爬十層：第 5 層有樓層主管，第 10 層有魔王，第 3、6、9 層有精英。`,
+    ], () => this.fight(), { speaker: '月老・轉生櫃台', sprite: FORMS[form].sprite });
   },
 
   // ───────── 爬塔：一層一場一筆紅線 ─────────
@@ -360,9 +363,20 @@ const Game = {
     const pool = ['zombie', 'wisp', 'shade', 'jinmenken', ...(f >= 2 ? ['mizuki', 'gaki'] : []), ...(f >= 4 ? ['husk', 'printer', 'diaoxigui', 'amanojaku'] : []), ...(f >= 7 ? ['mirror', 'jerseydevil'] : [])];
     const one = (a) => a[randInt(0, a.length - 1)];
     const some = (n) => Array.from({ length: n }, () => one(pool));
-    if (kind === 'boss') return f >= 10 ? [one(['wardenX', 'dullahan', 'wendigo']), ...some(2)] : [one(['judge', 'guhuoniao']), 'wisp'];
+    if (kind === 'boss') return f >= 10 ? [this.remnant(one(['wardenX', 'dullahan', 'wendigo'])), ...some(2)] : [one(['judge', 'guhuoniao']), 'wisp'];
     if (kind === 'elite') return [one(f === 3 ? ['warden', 'lintoujie', 'tengu'] : ['warden', 'hunter', 'lintoujie', 'tengu', 'mothman']), ...some(f === 3 ? 1 : 2)];
     return f === 1 ? ['zombie', 'wisp'] : some(f >= 7 ? 4 : 3);
+  },
+
+  // 第 10 層魔王：被第三勢力改造過的前任神魔殘骸。借一位不在隊上的神魔的樣子，招式沿用原本三種魔王之一
+  remnant(base) {
+    const inParty = this.save.life.party.map((m) => m.id);
+    const ids = Object.keys(HEROES).filter((id) => !inParty.includes(id) && ART[id]);
+    if (!ids.length) return base;
+    const id = ids[randInt(0, ids.length - 1)], key = 'remnant_' + id, B = Redline.FOES[base];
+    Redline.FOES[key] = { ...B, name: `前任${HEROES[id].name}・殘骸`, heroArt: id, remnant: true, record: 'remnant', faceL: false,
+      d: `魔王。被第三勢力改造過的前任${HEROES[id].name}，只剩殘骸還在守這一層。` + B.d.replace(/^魔王。/, '').replace('無頭騎士，頭顱飄在別的地方', '頭被拆了下來，飄在別的地方').replace('永遠飢餓的雪原巨怪。', '被改造成永遠飢餓的樣子。') };
+    return key;
   },
 
   fight() {
@@ -378,11 +392,12 @@ const Game = {
     // 中途離開再回來：同一層重打，敵人重抽
     const debtor = (L.debtFloors || []).includes(f);
     const foes = debtor ? ['debtor', ...this.floorFoes(f).slice(0, 2)] : this.floorFoes(f);
+    this.floorKeys = foes;
     this.battleMusic = kind === 'boss' || debtor ? 'boss' : 'floor';
     this.show('battle');
     Redline.start({
       floor: f,
-      title: `第 ${f} 層${debtor ? '・追債人' : kind === 'boss' ? '・魔王' : kind === 'elite' ? '・精英' : ''}`,
+      title: `第 ${f} 層${debtor ? '・追債人' : kind === 'boss' ? (f >= LIFE_FLOORS ? '・魔王' : '・樓層主管') : kind === 'elite' ? '・精英' : ''}`,
       note: `<p class="muted">第 ${this.lifeNo} 世・一世共 ${LIFE_FLOORS} 層</p>${debtor ? `<p>你的因果債 ${s.debt} 點，追債人找上門了。打倒他，債 -5，還會掉一件裝備。</p>` : ''}`,
       foes, scale: 1 + 0.12 * (f - 1) + 0.1 * (this.lifeNo - 1), up: L.up, debt: s.debt,
       party: this.battleParty(),
@@ -417,6 +432,8 @@ const Game = {
     L.res = Object.assign(L.res || {}, r.res);
     L.floor = f;
     const lines = [`第 ${f} 層　突破！（擊倒 ${r.kills}、經驗 ${r.exp}）`, ...karma];
+    const rec = this.debtRecord();
+    if (rec) lines.push(rec);
     // 經驗給今世和派遣同事；前世之影停在死前的等級
     for (const m of L.party) {
       if (m.tag === TAGS.shadow) continue;
@@ -435,14 +452,26 @@ const Game = {
     const kind = floorKind(f);
     const next = () => {
       Redline.hideBox();
-      if (f >= LIFE_FLOORS) return this.story([...lines, '典獄長本尊的鎖鏈一條一條斷掉。塔頂的門開了。'], () => this.victory(), { speaker: '塔' });
+      if (f >= LIFE_FLOORS) return this.story([...lines, '殘骸散成了灰。往上的樓梯被紅線封住，這一世只能爬到這裡。'], () => this.victory(), { speaker: '結算塔' });
       // 下一層之前的岔路：隨機兩條選一條
       const two = shuffle(Object.keys(EVENTS)).slice(0, 2);
       lines.push('往上的樓梯分成了兩條路。');
-      this.story(lines, null, { speaker: '塔', choices: two.map((k) => ({ label: `${EVENTS[k].name}：${EVENTS[k].desc}`, action: () => this.runEvent(k) })) });
+      this.story(lines, null, { speaker: '結算塔', choices: two.map((k) => ({ label: `${EVENTS[k].name}：${EVENTS[k].desc}`, action: () => this.runEvent(k) })) });
     };
     const go = () => (kind === 'normal' && !r.debtorKilled ? next() : this.drop(kind === 'normal' ? 'elite' : kind, next));
     this.pickPerks(go);
+  },
+
+  // 從這層打倒的呆帳靈魂身上撿一份工單紀錄
+  debtRecord() {
+    const keys = shuffle(this.floorKeys || []);
+    for (const k of keys) {
+      const F = Redline.FOES[k], list = DEBT_RECORDS[(F && F.record) || k];
+      if (!list) continue;
+      const t = list[randInt(0, list.length - 1)].replace('{name}', F.heroArt ? HEROES[F.heroArt].name : '');
+      return `撿到${F.name}的工單紀錄：「${t}」`;
+    }
+    return '';
   },
 
   // Lv3、6、8 的強化二選一：隊上還沒選的一個一個補選（前世之影不能升級，不用選）
@@ -484,7 +513,7 @@ const Game = {
     const ids = (kind === 'boss' ? [...own, ...crew.slice(0, 1), ...charmFirst] : general).slice(0, 3);
     if (!ids.length) {
       s.fragments += 5; this.persist();
-      Redline.showBox('<h2>戰利品</h2><p>能拿的都拿過了。殘骸換成 5 個靈魂碎片。</p><button class="btn primary wide ok">繼續</button>');
+      Redline.showBox('<h2>戰利品</h2><p>能拿的都拿過了。殘骸換成 5 個記憶碎片。</p><button class="btn primary wide ok">繼續</button>');
       $('.box .ok').onclick = next;
       return;
     }
@@ -510,7 +539,7 @@ const Game = {
     if (kind === 'chest') {
       if (Math.random() < 0.6) {
         s.fragments += 3; each((hp, max) => hp + max * 0.3);
-        return go(['箱子裡有一瓶藥和幾片發光的碎片。', '全隊回復三成生命，靈魂碎片 +3。']);
+        return go(['箱子裡有一瓶藥和幾片發光的碎片。', '全隊回復三成生命，記憶碎片 +3。']);
       }
       each((hp, max) => Math.max(1, hp - Math.ceil(max * 0.2)));
       return go(['箱子張開嘴，咬了每個人一口。', '全隊失去兩成生命。']);
@@ -519,7 +548,7 @@ const Game = {
       return this.story(['一個透明的上班族一直在找出口。', '「請問……打卡機在哪裡？我今天好像還沒下班。」'], null, {
         speaker: EVENTS.lost.name,
         choices: [
-          { label: '幫忙：帶他到樓梯口', action: () => { s.nature = clampNature(s.nature - 5); s.fragments += 3; go(['他說謝謝，然後慢慢消失在樓梯上。', '（靈魂碎片 +3，靈魂偏向秩序）']); } },
+          { label: '幫忙：帶他到樓梯口', action: () => { s.nature = clampNature(s.nature - 5); s.fragments += 3; go(['他說謝謝，然後慢慢消失在樓梯上。', '（記憶碎片 +3，靈魂偏向秩序）']); } },
           { label: '保留：繞過他', action: () => go(['你繞了過去。身後一直傳來找東西的聲音。']) },
           { label: '利用：把他吸收掉', cls: 'danger', action: () => { s.debt += 1; s.nature = clampNature(s.nature + 5); each((hp, max) => max); go(['他還來不及喊，就變成了你們的一部分。', '（全隊生命全滿，因果債 +1，靈魂偏向混沌）']); } },
         ],
@@ -564,8 +593,8 @@ const Game = {
       `形態：${FORMS[L.form].name}　今世：${H.name} Lv.${lv}`,
       `爬到：第 ${L.floor} 層（共 ${LIFE_FLOORS} 層）　擊倒：${L.kills}`,
       cause ? `倒在：${cause}` : '死因：天年已盡',
-      outcome === 'victory' ? '你壽終正寢。' : '全隊倒下，你的靈魂被吸回了終端。',
-      `獲得靈魂碎片 ${frag}。`,
+      outcome === 'victory' ? '你壽終正寢。' : '全隊倒下。手腕上的紅線一緊，把你的靈魂拉回了塔底。',
+      `獲得記憶碎片 ${frag}。`,
       ...(paid ? [`壽終正寢，因果債 -${paid}。`] : []),
       `${H.name}會以「前世之影」的身分，在之後的轉生陪著你。`,
     ];
@@ -610,7 +639,7 @@ const Game = {
       const tail = [];
       if (e.boon === 'soulExtra') tail.push('（下一世全隊生命上限 +6。）');
       if (e.boon === 'parcel') tail.push('（下一世今世的神魔先升 1 級。）');
-      if (e.frag) tail.push(`（靈魂碎片 +${e.frag}）`);
+      if (e.frag) tail.push(`（記憶碎片 +${e.frag}）`);
       if (e.debt) tail.push(`（因果債 +${e.debt}）`);
       if (e.nature) tail.push(`（靈魂偏向${e.nature < 0 ? '秩序' : '混沌'}）`);
       this.story([c.result, ...tail], next, { speaker: R.name, sprite: R.sprite, glitch: this.glitch });
@@ -653,7 +682,7 @@ const Game = {
     root.append(el('h2', {}, corrupt('靈魂結算終端・大廳', this.glitch - 2)));
     root.append(el('div', { class: 'stats' },
       el('div', {}, `已經歷：${s.history.length} 世`),
-      el('div', {}, `靈魂碎片：${s.fragments}`),
+      el('div', {}, `記憶碎片：${s.fragments}`),
       el('div', {}, `靈魂本質：${natureLabel(s.nature)}（${s.nature}）`),
       el('div', {}, `因果債：${s.debt}`)));
 
